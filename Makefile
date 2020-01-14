@@ -19,6 +19,7 @@ OBJS = $(patsubst $(SRC_DIR)/%,$(BUILD_DIR)/%,\
 		$(patsubst %.cc,%.o,\
 		$(patsubst %.s,%.o,\
 			$(SRCS)))))
+HEADERS = $(shell find ./include -name '*.h')
 DEPS = $(OBJS:.o=.d)
 
 WARNING_FLAGS = -Wall -Wextra -Wconversion
@@ -76,3 +77,5 @@ $(BUILD_DIR)/%.o: $(SRC_DIR)/%.s
 	@mkdir -p $(dir $@)
 	$(AS) $(ASFLAGS) -o $@ $<
 
+test: test/test.cc $(HEADERS) | $(BUILD_DIR)
+	g++ $(CXXFLAGS) -I $(INCLUDES) -Wall -Wextra -Werror $< -o $(BUILD_DIR)/bin/test && ./$(BUILD_DIR)/bin/test
