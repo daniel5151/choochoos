@@ -21,5 +21,9 @@ int _start() {
 
     // Invoke main
     // TODO? see if redboot supports passing parameters?
-    return main(0, 0);
+    int status = main(0, 0);
+
+    // TODO? global dtors?
+
+    return status;
 }

@@ -17,6 +17,7 @@ int main(int argc, char* argv[]) {
     (void)argc;
     (void)argv;
 
+    bwsetfifo(COM2, false);
     bwprintf(COM2, "Hello from main!\r\n");
 
     return 1;
