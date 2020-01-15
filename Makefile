@@ -30,7 +30,7 @@ LIBRARIES = -lstdc++ -lc -lgcc
 .PHONY: dirs all
 all: $(BIN_DIR)/$(BIN_NAME)
 
-release: EXTRA_FLAGS = -03
+release: EXTRA_FLAGS = -O3
 release: all
 
 .PHONY: clean

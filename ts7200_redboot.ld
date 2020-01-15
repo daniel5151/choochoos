@@ -41,7 +41,7 @@ SECTIONS {
     {
         __INIT_ARRAY_START__ = .;
         *(.init_array);
-        __INIT_ARRAY_END__ = .;
+        __INIT_ARRAY_END__ = ALIGN(4);
     } > ram
 
     __HEAP_START__ = .;
