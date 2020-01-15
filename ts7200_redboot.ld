@@ -1,4 +1,4 @@
-ENTRY(__start)
+ENTRY(_start)
 
 MEMORY {
     /* reserve the bottom 0x01000000 of RAM for RedBoot */

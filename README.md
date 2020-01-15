@@ -6,10 +6,16 @@ Written by [Daniel Prilik](https://prilik.com) and [James Hageman](https://james
 
 ## Building
 
+The final executable will be placed at `bin/choochoos.elf`
+
+### Debug
+
+```bash
+make
+```
+
+### Release
+
 ```bash
 make release
 ```
-
-The output of the Makefile can be found under `build/bin/`.
-
-`choochoos.elf` is the OS itself.

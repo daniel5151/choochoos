@@ -1,3 +1,5 @@
+BIN_NAME = choochoos.elf
+
 XBINDIR = /u/cs452/public/xdev/bin
 XLIBDIR1 = /u/cs452/public/xdev/lib/gcc/arm-none-eabi/9.2.0
 XLIBDIR2 = /u/cs452/public/xdev/arm-none-eabi/lib
@@ -9,28 +11,39 @@ LD = $(XBINDIR)/arm-none-eabi-ld
 
 SRC_DIR = src
 BUILD_DIR = build
-BIN_DIR = $(BUILD_DIR)/bin
-
-BIN_NAME = choochoos.elf
+BIN_DIR = bin
 
 SRCS = $(shell find $(SRC_DIR) -name '*.c' -or -name '*.cc' -or -name '*.s')
-OBJS = $(addprefix $(BUILD_DIR)/,$(notdir $(addsuffix .o,$(basename $(SRCS)))))
+OBJS = $(patsubst $(SRC_DIR)/%,$(BUILD_DIR)/%,\
+		$(patsubst %.c,%.o,\
+		$(patsubst %.cc,%.o,\
+		$(patsubst %.s,%.o,\
+			$(SRCS)))))
 DEPS = $(OBJS:.o=.d)
 
+COMMON_FLAGS = -fPIC -mcpu=arm920t -msoft-float -Wall -Wextra -MP -MMD
 INCLUDES = -I. -I./include
-CFLAGS = -fPIC -mcpu=arm920t -msoft-float -Wall -Wextra
-CCFLAGS = -std=c11
-CXXFLAGS = -std=c++17 -fno-rtti -fno-exceptions
 
-EXTRA_FLAGS = -O1 -g
+CCFLAGS = $(COMMON_FLAGS) -std=c11
+CXXFLAGS = $(COMMON_FLAGS) -std=c++17 -fno-rtti -fno-exceptions
 
-LDFLAGS = -static -nmagic -Tts7200_redboot.ld --orphan-handling=place -Map $(BUILD_DIR)/$(BIN_NAME).map -L $(XLIBDIR1) -L $(XLIBDIR2)
+OPTIMIZE_FLAGS = -Og -g
+RELEASE_FLAGS = -O3
+
+LDFLAGS =                             \
+	-static                           \
+	-nmagic                           \
+	-Tts7200_redboot.ld               \
+	--orphan-handling=place           \
+	-Map $(BUILD_DIR)/$(BIN_NAME).map \
+	-L $(XLIBDIR1)                    \
+	-L $(XLIBDIR2)
 LIBRARIES = -lstdc++ -lc -lgcc
 
 .PHONY: dirs all
 all: $(BIN_DIR)/$(BIN_NAME)
 
-release: EXTRA_FLAGS = -O3
+release: OPTIMIZE_FLAGS = $(RELEASE_FLAGS)
 release: all
 
 .PHONY: clean
@@ -41,21 +54,21 @@ clean:
 .PHONY: dirs
 dirs: $(BIN_DIR)
 
-$(BUILD_DIR):
-	mkdir -p $(BUILD_DIR)
-	mkdir -p $(BIN_DIR)
-
 $(BIN_DIR)/$(BIN_NAME): $(OBJS)
+	@mkdir -p $(dir $@)
 	$(LD) $(LDFLAGS) $(OBJS) -o $@ $(LIBRARIES)
 
 -include $(DEPS)
 
-$(BUILD_DIR)/%.o: $(SRC_DIR)/%.c | $(BUILD_DIR)
-	$(CC) $(CFLAGS) $(CCFLAGS) $(INCLUDES) $(EXTRA_FLAGS) -MP -MMD -c $< -o $@
+$(BUILD_DIR)/%.o: $(SRC_DIR)/%.c
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) $(CCFLAGS) $(INCLUDES) $(OPTIMIZE_FLAGS) -c $< -o $@
 
-$(BUILD_DIR)/%.o: $(SRC_DIR)/%.cc | $(BUILD_DIR)
-	$(CXX) $(CFLAGS) $(CXXFLAGS) $(INCLUDES) $(EXTRA_FLAGS) -MP -MMD -c $< -o $@
+$(BUILD_DIR)/%.o: $(SRC_DIR)/%.cc
+	@mkdir -p $(dir $@)
+	$(CXX) $(CFLAGS) $(CXXFLAGS) $(INCLUDES) $(OPTIMIZE_FLAGS) -c $< -o $@
 
-$(BUILD_DIR)/%.o: $(SRC_DIR)/%.s | $(BUILD_DIR)
-	$(AS) $(ASFLAGS) -o $@ $< -MP -MMD
+$(BUILD_DIR)/%.o: $(SRC_DIR)/%.s
+	@mkdir -p $(dir $@)
+	$(AS) $(ASFLAGS) -o $@ $<
 
