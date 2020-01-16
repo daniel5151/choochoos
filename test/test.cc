@@ -53,6 +53,9 @@ void test_priority_queue() {
 
     int x;
     assert(pq.pop(x) == PQ_OK && x == 200);
+    assert(pq.pop(x) == PQ_OK && x == 100);
+    assert(pq.pop(x) == PQ_OK && x == 101);
+    assert(pq.pop(x) == PQ_EMPTY && x == 101);
 }
 
 int main() {
