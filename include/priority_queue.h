@@ -32,5 +32,13 @@ class PriorityQueue {
         }
     }
 
-    PriorityQueueErr pop(T& dest) {}  // TODO
+    PriorityQueueErr pop(T& dest) {
+        for (int i = MAX_PRIORITY - 1; i >= 0; i--) {
+            if (!queues[i].is_empty()) {
+                queues[i].pop_front(dest);
+                return PQ_OK;
+            }
+        }
+        return PQ_EMPTY;
+    }
 };

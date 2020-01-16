@@ -77,5 +77,8 @@ $(BUILD_DIR)/%.o: $(SRC_DIR)/%.s
 	@mkdir -p $(dir $@)
 	$(AS) $(ASFLAGS) -o $@ $<
 
-test: test/test.cc $(HEADERS) | $(BUILD_DIR)
-	g++ $(CXXFLAGS) -I $(INCLUDES) -Wall -Wextra -Werror $< -o $(BUILD_DIR)/bin/test && ./$(BUILD_DIR)/bin/test
+.PHONY: test
+test: test/test.cc $(HEADERS)
+	@mkdir -p $(BIN_DIR)
+	g++ -std=c++17 -fno-rtti -fno-exceptions -I $(INCLUDES) \
+	 	-Wall -Wextra -Werror $< -o $(BIN_DIR)/test && $(BIN_DIR)/test

@@ -50,6 +50,9 @@ void test_priority_queue() {
     assert(pq.push(100, 1) == PQ_OK);
     assert(pq.push(200, 2) == PQ_OK);
     assert(pq.push(101, 1) == PQ_OK);
+
+    int x;
+    assert(pq.pop(x) == PQ_OK && x == 200);
 }
 
 int main() {
