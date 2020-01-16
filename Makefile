@@ -19,6 +19,7 @@ OBJS = $(patsubst $(SRC_DIR)/%,$(BUILD_DIR)/%,\
 		$(patsubst %.cc,%.o,\
 		$(patsubst %.s,%.o,\
 			$(SRCS)))))
+HEADERS = $(shell find ./include -name '*.h')
 DEPS = $(OBJS:.o=.d)
 
 WARNING_FLAGS = -Wall -Wextra -Wconversion
@@ -30,7 +31,7 @@ CCFLAGS = $(COMMON_FLAGS) -std=c11
 CXXFLAGS = $(COMMON_FLAGS) -std=c++17 -fno-rtti -fno-exceptions
 
 OPTIMIZE_FLAGS = -Og -g
-RELEASE_FLAGS = -O3
+RELEASE_FLAGS = -O3 -Werror
 
 LDFLAGS =                             \
 	-static                           \
@@ -76,3 +77,8 @@ $(BUILD_DIR)/%.o: $(SRC_DIR)/%.s
 	@mkdir -p $(dir $@)
 	$(AS) $(ASFLAGS) -o $@ $<
 
+.PHONY: test
+test: test/test.cc $(HEADERS)
+	@mkdir -p $(BIN_DIR)
+	g++ -std=c++17 -fno-rtti -fno-exceptions -I $(INCLUDES) \
+		$(WARNING_FLAGS) -Werror $< -o $(BIN_DIR)/test && $(BIN_DIR)/test
