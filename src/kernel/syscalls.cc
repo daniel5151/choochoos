@@ -17,16 +17,17 @@ struct TaskDef {
     int parent_tid;
 };
 
-TaskDef tasks[MAX_SCHEDULED_TASKS] = {{0}};
-PriorityQueue<int /* task descriptor */, MAX_PRIORITY, MAX_TASKS_PER_PRIORITY>
+static TaskDef tasks[MAX_SCHEDULED_TASKS] = {{0}};
+static PriorityQueue<int /* task descriptor */, MAX_PRIORITY,
+                     MAX_TASKS_PER_PRIORITY>
     ready_queue;
 
-int current_task = -1;
+static int current_task = -1;
 
 int MyTid() { return current_task; }
 int MyParentTid() { return tasks[MyTid()].parent_tid; }
 
-int next_tid() {
+static int next_tid() {
     for (int tid = 0; tid < MAX_SCHEDULED_TASKS; tid++) {
         if (!tasks[tid].active) return tid;
     }
@@ -61,18 +62,18 @@ void Yield() {
 
 extern void FirstUserTask();
 
-void initialize() {
+static void initialize() {
     int tid = Create(4, FirstUserTask);
     if (tid < 0) kpanic("could not create tasks (error code %d)", tid);
 }
 
-int schedule() {
+static int schedule() {
     int tid;
     if (ready_queue.pop(tid) == PriorityQueueErr::EMPTY) return -1;
     return tid;
 }
 
-void activate(int tid) {
+static void activate(int tid) {
     current_task = tid;
     tasks[tid].resume_ptr();
 }
