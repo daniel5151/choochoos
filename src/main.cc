@@ -17,21 +17,17 @@
 struct TaskDef {
     bool active;
     void (*resume_ptr)();
-
-    // maybe we need these? idk
-    size_t stack_start;
-    size_t stack_end;
+    int parent_tid;
 };
 
-TaskDef tasks[MAX_SCHEDULED_TASKS] = {{.active = false, 0}};
+TaskDef tasks[MAX_SCHEDULED_TASKS] = {{0}};
 PriorityQueue<int /* task descriptor */, MAX_PRIORITY, MAX_TASKS_PER_PRIORITY>
     ready_queue;
 
-int parent_task = -1;
 int current_task = -1;
 
 int MyTid() { return current_task; }
-int MyParentTid() { return parent_task; }
+int MyParentTid() { return tasks[MyTid()].parent_tid; }
 
 int next_tid() {
     for (int tid = 0; tid < MAX_SCHEDULED_TASKS; tid++) {
@@ -49,19 +45,40 @@ int Create(int priority, void (*function)()) {
         kpanic("out of space in ready queue (tid=%d", tid);
     }
 
-    tasks[tid].active = true;
-    tasks[tid].resume_ptr = function;
+    bwprintf(COM2, "Created: %d\r\n", tid);
+
+    tasks[tid] = (TaskDef){
+        .active = true, .resume_ptr = function, .parent_tid = MyTid()};
 
     return tid;
 }
 
-void main_task() {
-    bwprintf(COM2, "Hello from the main task! (MyTid=%d, MyParentTid=%d)\r\n",
-             MyTid(), MyParentTid());
+void Exit() {
+    int tid = MyTid();
+    tasks[tid] = (TaskDef){.active = false, .resume_ptr = 0, .parent_tid = -1};
+}
+
+void Yield() {
+    // TODO context switch back to the kernel
+}
+
+void OtherTask() {
+    bwprintf(COM2, "MyTid=%d MyParentTid=%d\r\n", MyTid(), MyParentTid());
+    Yield();
+    bwprintf(COM2, "MyTid=%d MyParentTid=%d\r\n", MyTid(), MyParentTid());
+}
+
+void FirstUserTask() {
+    Create(3, OtherTask);
+    Create(3, OtherTask);
+    Create(5, OtherTask);
+    Create(5, OtherTask);
+    bwputstr(COM2, "FirstUserTask: exiting\r\n");
+    Exit();
 }
 
 void initialize() {
-    int tid = Create(1, main_task);
+    int tid = Create(4, FirstUserTask);
     if (tid < 0) kpanic("could not create tasks (error code %d)", tid);
 }
 
@@ -71,7 +88,7 @@ int schedule() {
     return tid;
 }
 
-void resume(int tid) {
+void activate(int tid) {
     current_task = tid;
     tasks[tid].resume_ptr();
 }
@@ -86,9 +103,9 @@ int main(int argc, char* argv[]) {
     initialize();
 
     while (true) {
-        int tid = schedule();
-        if (tid < 0) kpanic("Out of tasks to run, shutting down");
-        resume(tid);
+        int curtask = schedule();
+        if (curtask < 0) break;
+        activate(curtask);
     }
 
     return 0;
