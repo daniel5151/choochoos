@@ -62,11 +62,13 @@ $(BIN_DIR)/$(BIN_NAME): $(OBJS)
 
 $(BUILD_DIR)/%.o: $(SRC_DIR)/%.c
 	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) $(CCFLAGS) $(INCLUDES) $(OPTIMIZE_FLAGS) -c $< -o $@
+	$(CC) $(CFLAGS) $(CCFLAGS) $(INCLUDES) $(OPTIMIZE_FLAGS) -c -S $< -o $@.s
+	$(AS) $(ASFLAGS) -o $@ $@.s
 
 $(BUILD_DIR)/%.o: $(SRC_DIR)/%.cc
 	@mkdir -p $(dir $@)
-	$(CXX) $(CFLAGS) $(CXXFLAGS) $(INCLUDES) $(OPTIMIZE_FLAGS) -c $< -o $@
+	$(CXX) $(CFLAGS) $(CXXFLAGS) $(INCLUDES) $(OPTIMIZE_FLAGS) -c -S $< -o $@.s
+	$(AS) $(ASFLAGS) -o $@ $@.s
 
 $(BUILD_DIR)/%.o: $(SRC_DIR)/%.s
 	@mkdir -p $(dir $@)
