@@ -5,6 +5,7 @@ void OtherTask() {
     bwprintf(COM2, "MyTid=%d MyParentTid=%d\r\n", MyTid(), MyParentTid());
     Yield();
     bwprintf(COM2, "MyTid=%d MyParentTid=%d\r\n", MyTid(), MyParentTid());
+    Exit();
 }
 
 void FirstUserTask() {
