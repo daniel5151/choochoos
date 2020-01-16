@@ -3,7 +3,7 @@
 #include <cassert>
 #include "queue.h"
 
-enum PriorityQueueErr { PQ_OK, PQ_FULL, PQ_EMPTY, PQ_BAD_PRIORITY };
+enum class PriorityQueueErr : uint8_t { OK, FULL, EMPTY, BAD_PRIORITY };
 
 template <class T, size_t MAX_PRIORITY, unsigned int N>
 class PriorityQueue {
@@ -20,13 +20,13 @@ class PriorityQueue {
     }
 
     PriorityQueueErr push(T t, size_t priority) {
-        if (priority >= MAX_PRIORITY) return PQ_BAD_PRIORITY;
+        if (priority >= MAX_PRIORITY) return PriorityQueueErr::BAD_PRIORITY;
 
         switch (queues[priority].push_back(t)) {
-            case OK:
-                return PQ_OK;
-            case FULL:
-                return PQ_FULL;
+            case QueueErr::OK:
+                return PriorityQueueErr::OK;
+            case QueueErr::FULL:
+                return PriorityQueueErr::FULL;
             default:
                 assert(false);
         }
@@ -36,9 +36,9 @@ class PriorityQueue {
         for (int i = MAX_PRIORITY - 1; i >= 0; i--) {
             if (!queues[i].is_empty()) {
                 queues[i].pop_front(dest);
-                return PQ_OK;
+                return PriorityQueueErr::OK;
             }
         }
-        return PQ_EMPTY;
+        return PriorityQueueErr::EMPTY;
     }
 };

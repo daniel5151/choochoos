@@ -81,4 +81,4 @@ $(BUILD_DIR)/%.o: $(SRC_DIR)/%.s
 test: test/test.cc $(HEADERS)
 	@mkdir -p $(BIN_DIR)
 	g++ -std=c++17 -fno-rtti -fno-exceptions -I $(INCLUDES) \
-	 	-Wall -Wextra -Werror $< -o $(BIN_DIR)/test && $(BIN_DIR)/test
+	 	-Wall -Wextra -Werror -Wconversion $< -o $(BIN_DIR)/test && $(BIN_DIR)/test
