@@ -31,7 +31,7 @@ CCFLAGS = $(COMMON_FLAGS) -std=c11
 CXXFLAGS = $(COMMON_FLAGS) -std=c++17 -fno-rtti -fno-exceptions
 
 OPTIMIZE_FLAGS = -Og -g
-RELEASE_FLAGS = -O3
+RELEASE_FLAGS = -O3 -Werror
 
 LDFLAGS =                             \
 	-static                           \
@@ -81,4 +81,4 @@ $(BUILD_DIR)/%.o: $(SRC_DIR)/%.s
 test: test/test.cc $(HEADERS)
 	@mkdir -p $(BIN_DIR)
 	g++ -std=c++17 -fno-rtti -fno-exceptions -I $(INCLUDES) \
-	 	-Wall -Wextra -Werror -Wconversion $< -o $(BIN_DIR)/test && $(BIN_DIR)/test
+		$(WARNING_FLAGS) -Werror $< -o $(BIN_DIR)/test && $(BIN_DIR)/test
