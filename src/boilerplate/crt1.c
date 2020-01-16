@@ -11,7 +11,7 @@ typedef void (*ctr_fn)();
 extern char __BSS_START__, __BSS_END__;
 extern ctr_fn __INIT_ARRAY_START__, __INIT_ARRAY_END__;
 
-void* redboot_return_addr;
+static void* redboot_return_addr;
 
 void kexit(int status) {
     __asm__ volatile("mov r0, %0" ::"r"(status));
@@ -35,6 +35,9 @@ void kpanic(const char* fmt, ...) {
 int main(int argc, char* argv[]);
 
 int _start() {
+    // Saves the LR into redboot_return_addr, allowing kexit() to jump straight
+    // back to RedBoot. This line must be executed before any functions are
+    // called to ensure that the LR isn't modified.
     __asm__ volatile("mov %0, lr" : "=r"(redboot_return_addr));
 
     // Zero out .bss
