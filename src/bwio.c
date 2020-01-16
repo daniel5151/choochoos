@@ -1,3 +1,6 @@
+#pragma GCC diagnostic ignored "-Wconversion"
+#pragma GCC diagnostic ignored "-Wsign-conversion"
+
 /*
  * bwio.c - busy-wait I/O routines for diagnosis
  *

@@ -21,7 +21,9 @@ OBJS = $(patsubst $(SRC_DIR)/%,$(BUILD_DIR)/%,\
 			$(SRCS)))))
 DEPS = $(OBJS:.o=.d)
 
-COMMON_FLAGS = -fPIC -mcpu=arm920t -msoft-float -Wall -Wextra -MP -MMD
+WARNING_FLAGS = -Wall -Wextra -Wconversion
+
+COMMON_FLAGS = -fPIC -mcpu=arm920t -msoft-float -MP -MMD $(WARNING_FLAGS)
 INCLUDES = -I. -I./include
 
 CCFLAGS = $(COMMON_FLAGS) -std=c11

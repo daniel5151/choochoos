@@ -13,7 +13,7 @@ int main(int argc, char* argv[]);
 
 int _start() {
     // Zero out .bss
-    memset(&__BSS_START__, 0, &__BSS_END__ - &__BSS_START__);
+    memset(&__BSS_START__, 0, (size_t)(&__BSS_END__ - &__BSS_START__));
 
     // Run C++ global constructors
     for (ctr_fn* ctr = &__INIT_ARRAY_START__; ctr < &__INIT_ARRAY_END__; ctr++)
