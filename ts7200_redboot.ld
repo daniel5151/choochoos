@@ -6,6 +6,7 @@ MEMORY {
 }
 
 __HEAP_SIZE__ = 1M;
+__KERNEL_STACK_SIZE__ = 512K;
 
 SECTIONS {
     . = 0x01000000;
@@ -42,7 +43,7 @@ SECTIONS {
     } > ram
 
     /* align the heap to the nearest 0x10000, just to make section sizes saner */
-    .heap (NOLOAD) : ALIGN(0x10000)
+    .heap (NOLOAD) : ALIGN(1M)
     {
          __HEAP_START__ = .;
         . = . + __HEAP_SIZE__;
@@ -50,15 +51,19 @@ SECTIONS {
     } > ram
 
     __RAM_END__ = ORIGIN(ram) + LENGTH(ram);
-    __STACK_SIZE__ = __RAM_END__ - __HEAP_END__;
+    __USER_STACKS_SIZE__ = __RAM_END__ - __HEAP_END__ - __KERNEL_STACK_SIZE__;
 
     /* NOTE: RedBoot seems to seart its stack from __STACK_END__ as well  */
     /* It's probably best to just re-use the SP RedBoot hands us... */
     .stack (NOLOAD) : ALIGN(4)
     {
-        __STACK_START__ = .;
-        . = . + __STACK_SIZE__;
-        __STACK_END__ = ALIGN(4);
+        __USER_STACKS_START__ = .;
+        . = . + __USER_STACKS_SIZE__;
+        __USER_STACKS_END__ = ALIGN(4);
+
+        __KERNEL_STACK_START__ = .;
+        . = . + __KERNEL_STACK_SIZE__;
+        __KERNEL_STACK_END__ = ALIGN(4);
     } > ram
 
     /DISCARD/ :

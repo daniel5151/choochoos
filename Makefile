@@ -75,7 +75,7 @@ $(BUILD_DIR)/%.o: $(SRC_DIR)/%.cc
 
 $(BUILD_DIR)/%.o: $(SRC_DIR)/%.s
 	@mkdir -p $(dir $@)
-	$(AS) $(ASFLAGS) -o $@ $<
+	$(AS) $(ASFLAGS) -g -o $@ $<
 
 .PHONY: test
 test: test/test.cc $(HEADERS)

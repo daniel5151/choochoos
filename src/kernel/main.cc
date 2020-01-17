@@ -1,8 +1,8 @@
 #include <cstddef>
 
-#include "kernel.h"
+#include "bwio.h"
+#include "kernel/kernel.h"
 #include "priority_queue.h"
-#include "syscalls.h"
 #include "ts7200.h"
 
 extern int kmain();

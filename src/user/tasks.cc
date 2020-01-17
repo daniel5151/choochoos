@@ -1,5 +1,5 @@
 #include "bwio.h"
-#include "syscalls.h"
+#include "user/syscalls.h"
 
 void OtherTask() {
     bwprintf(COM2, "MyTid=%d MyParentTid=%d\r\n", MyTid(), MyParentTid());
@@ -15,4 +15,9 @@ void FirstUserTask() {
     Create(5, OtherTask);
     bwputstr(COM2, "FirstUserTask: exiting\r\n");
     Exit();
+}
+
+void DummyTask() {
+    bwprintf(COM2, "hello from the dummy task!\r\n");
+    Yield();
 }
