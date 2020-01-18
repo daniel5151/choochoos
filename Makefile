@@ -13,7 +13,14 @@ SRC_DIR = src
 BUILD_DIR = build
 BIN_DIR = bin
 
-SRCS = $(shell find $(SRC_DIR) -name '*.c' -or -name '*.cc' -or -name '*.s')
+USER_FOLDER ?= k1
+ALL_USER_SRCS_GLOB = $(SRC_DIR)/user/*/**
+USER_SRC_DIR = $(SRC_DIR)/user/$(USER_FOLDER)
+
+SRCS = $(shell find $(SRC_DIR) \
+						 	\( -name '*.c' -or -name '*.cc' -or -name '*.s' \) \
+							! -path "$(ALL_USER_SRCS_GLOB)" \
+							-or -path "$(USER_SRC_DIR)/**" )
 OBJS = $(patsubst $(SRC_DIR)/%,$(BUILD_DIR)/%,\
 		$(patsubst %.c,%.o,\
 		$(patsubst %.cc,%.o,\
