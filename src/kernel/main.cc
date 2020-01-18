@@ -11,8 +11,8 @@ int main(int argc, char* argv[]) {
     (void)argc;
     (void)argv;
 
+    // hardware init
     bwsetfifo(COM2, false);
-    bwprintf(COM2, "Hello from the kernel!\r\n");
 
     return kmain();
 }

@@ -7,7 +7,7 @@ extern "C" {
 int Create(int priority, void (*function)());
 int MyTid();
 int MyParentTid();
-int Exit();
+void Exit();
 void Yield();
 
 #ifdef __cplusplus

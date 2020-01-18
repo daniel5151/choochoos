@@ -5,19 +5,24 @@ void OtherTask() {
     bwprintf(COM2, "MyTid=%d MyParentTid=%d\r\n", MyTid(), MyParentTid());
     Yield();
     bwprintf(COM2, "MyTid=%d MyParentTid=%d\r\n", MyTid(), MyParentTid());
-    Exit();
+    // Exit();
 }
 
 void FirstUserTask() {
-    Create(3, OtherTask);
-    Create(3, OtherTask);
-    Create(5, OtherTask);
-    Create(5, OtherTask);
-    bwputstr(COM2, "FirstUserTask: exiting\r\n");
-    Exit();
-}
+    int tid;
+    tid = Create(3, OtherTask);
+    bwprintf(COM2, "Created: %d\r\n", tid);
 
-void DummyTask() {
-    bwprintf(COM2, "hello from the dummy task!\r\n");
-    Yield();
+    tid = Create(3, OtherTask);
+    bwprintf(COM2, "Created: %d\r\n", tid);
+
+    tid = Create(5, OtherTask);
+    bwprintf(COM2, "Created: %d\r\n", tid);
+
+    tid = Create(5, OtherTask);
+    bwprintf(COM2, "Created: %d\r\n", tid);
+
+    bwputstr(COM2, "FirstUserTask: exiting\r\n");
+
+    // Exit();
 }

@@ -1,4 +1,9 @@
-int Create(int priority, void (*function)()){
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+#pragma GCC diagnostic ignored "-Wreturn-type"
+
+int Create(int priority, void (*function)()) {
+    (void)(priority);
+    (void)(function);
     __asm__ volatile ("swi #4");
 }
 
@@ -10,7 +15,7 @@ int MyParentTid(){
     __asm__ volatile ("swi #2");
 }
 
-int Exit(){
+void Exit(){
     __asm__ volatile ("swi #1");
 }
 

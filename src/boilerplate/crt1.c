@@ -1,6 +1,4 @@
-#include <ctype.h>
-#include <stddef.h>
-#include <stdio.h>
+
 #include <string.h>
 
 #include "bwio.h"
@@ -13,22 +11,10 @@ extern ctr_fn __INIT_ARRAY_START__, __INIT_ARRAY_END__;
 
 static void* redboot_return_addr;
 
+// TODO: move this out of crt0
 void kexit(int status) {
     __asm__ volatile("mov r0, %0" ::"r"(status));
     __asm__ volatile("mov pc, %0" ::"r"(redboot_return_addr));
-}
-
-void kpanic(const char* fmt, ...) {
-    char buf[1000];
-    va_list va;
-
-    va_start(va, fmt);
-    vsnprintf(buf, 1000, fmt, va);
-    va_end(va);
-
-    bwprintf(COM2, "Kernel panic: %s\r\n", buf);
-
-    kexit(1);
 }
 
 // forward-declaration of main

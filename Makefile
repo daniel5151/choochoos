@@ -31,7 +31,7 @@ CCFLAGS = $(COMMON_FLAGS) -std=c11
 CXXFLAGS = $(COMMON_FLAGS) -std=c++17 -fno-rtti -fno-exceptions -fno-unwind-tables
 
 OPTIMIZE_FLAGS = -Og -g
-RELEASE_FLAGS = -O3 -Werror
+RELEASE_FLAGS = -O3 -Werror -DRELEASE_MODE
 
 LDFLAGS =                             \
 	-static                           \
