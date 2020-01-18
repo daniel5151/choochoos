@@ -28,12 +28,26 @@ extern size_t __USER_STACK_SIZE__;
 #define OUT_OF_TASK_DESCRIPTORS -2
 
 class Kernel {
+    enum class TaskState { UNUSED, READY, BLOCKED_ON_RECEIVE };
+
+    struct Message {
+        int tid;
+        const char* msg;
+        int msglen;
+    };
+    typedef Queue<Message, 16> Mailbox;
+
     struct TaskDescriptor {
         int priority;
-        bool active;
+        TaskState state;
         int parent_tid;
 
         void* sp;
+
+        // message passing state
+        char* recv_buf;
+        size_t recv_buf_len;
+        Mailbox mailbox;
     };
 
     /// Helper POD struct to init new user task stacks
@@ -52,7 +66,7 @@ class Kernel {
 
     int next_tid() {
         for (int tid = 0; tid < MAX_SCHEDULED_TASKS; tid++) {
-            if (!tasks[tid].active) return tid;
+            if (tasks[tid].state == TaskState::UNUSED) return tid;
         }
         return -1;
     }
@@ -101,37 +115,106 @@ class Kernel {
                function);
 
         tasks[tid] = (TaskDescriptor){.priority = priority,
-                                      .active = true,
+                                      .state = TaskState::READY,
                                       .parent_tid = MyTid(),
-                                      .sp = stack};
+                                      .sp = stack,
+                                      .recv_buf = nullptr,
+                                      .recv_buf_len = 0,
+                                      .mailbox = Mailbox()};
         return tid;
     }
 
     void Exit() {
         kdebug("Called Exit");
         int tid = MyTid();
-        tasks[tid].active = false;
+        tasks[tid].state = TaskState::UNUSED;
+        tasks[tid].mailbox = Mailbox();
     }
 
     void Yield() { kdebug("Called Yield"); }
 
-    int Send(int tid, const char* msg, int msglen, char* reply, int rplen) {
-        kdebug("Called Send (tid=%d msg=%s msglen=%d reply=%p rplen=%d)", tid,
-               msg, msglen, reply, rplen);
-        // TODO
-        return 0;
+    int Send(int receiver_tid, const char* msg, int msglen, char* reply,
+             int rplen) {
+        kdebug("Called Send(tid=%d msg=%s msglen=%d reply=%p rplen=%d)",
+               receiver_tid, msg, msglen, reply, rplen);
+        if (receiver_tid < 0 || receiver_tid >= MAX_SCHEDULED_TASKS)
+            return -1;  // invalid tid
+        int sender_tid = MyTid();
+        auto sender = &tasks[sender_tid];
+        auto receiver = &tasks[receiver_tid];
+        switch (receiver->state) {
+            case TaskState::UNUSED:
+                return -1;  // no running task with tid
+            case TaskState::READY: {
+                Message message = {
+                    .tid = sender_tid,
+                    .msg = msg,
+                    .msglen = msglen,
+                };
+                if (receiver->mailbox.push_back(message) == QueueErr::FULL) {
+                    kdebug("mailbox full for task %d", receiver_tid);
+                    return -2;
+                }
+                sender->recv_buf = reply;
+                sender->recv_buf_len = (size_t)rplen;
+                sender->state = TaskState::BLOCKED_ON_RECEIVE;
+                return 0;
+            }
+            case TaskState::BLOCKED_ON_RECEIVE:
+                // TODO
+                return -1;
+            default:
+                kpanic("invalid state %d for task %d",
+                       (int)tasks[receiver_tid].state, receiver_tid);
+        }
     }
 
+    int min(int a, int b) { return a < b ? a : b; }
+
     int Receive(int* tid, char* msg, int msglen) {
-        kdebug("Called Receive (tid=%p msg=%s msglen=%d)", tid, msg, msglen);
-        // TODO
+        kdebug("Called Receive(tid=%p msg=%s msglen=%d)", tid, msg, msglen);
+
+        auto task = &tasks[MyTid()];
+
+        if (task->mailbox.is_empty()) {
+            task->recv_buf = msg;
+            task->recv_buf_len = msglen;
+            task->state = TaskState::BLOCKED_ON_RECEIVE;
+            return 0;
+        }
+
+        Message m;
+        task->mailbox.pop_front(m);
+        *tid = m.tid;
+        strncpy(msg, m.msg, min(msglen, m.msglen));
         return 0;
     }
 
     int Reply(int tid, const char* reply, int rplen) {
-        kdebug("Called Reply (tid=%d reply=%p rplen=%d)", tid, reply, rplen);
-        // TODO
-        return 0;
+        kdebug("Called Reply(tid=%d reply=%p rplen=%d)", tid, reply, rplen);
+        if (tid < 0 || tid >= MAX_SCHEDULED_TASKS) return -1;
+        auto receiver = &tasks[tid];
+        switch (receiver->state) {
+            case TaskState::UNUSED:
+                return -1;
+            case TaskState::BLOCKED_ON_RECEIVE:
+                strncpy(receiver->recv_buf, reply,
+                        min(receiver->recv_buf_len, rplen));
+                receiver->state = TaskState::READY;
+                ready_queue.push(tid, receiver->priority);
+                return 0;
+            case TaskState::READY: {
+                Message message =
+                    (Message){.tid = MyTid(), .msg = reply, .msglen = rplen};
+                if (receiver->mailbox.push_back(message) == QueueErr::FULL) {
+                    return -2;
+                }
+                return 0;
+            }
+            default:
+                kpanic("invalid state %d for task %d", (int)receiver->state,
+                       tid);
+        }
     }
 
     /// Helper POD struct which can should be casted from a void* that points to
@@ -189,12 +272,17 @@ class Kernel {
         current_task = tid;
         void* next_sp = _activate_task(tasks[tid].sp);
 
-        if (tasks[tid].active) {
-            tasks[tid].sp = next_sp;
-            if (ready_queue.push(tid, tasks[tid].priority) ==
-                PriorityQueueErr::FULL) {
-                kpanic("out of space in ready queue (tid=%d)", tid);
-            }
+        switch (tasks[tid].state) {
+            case TaskState::READY:
+                tasks[tid].sp = next_sp;
+                if (ready_queue.push(tid, tasks[tid].priority) ==
+                    PriorityQueueErr::FULL) {
+                    kpanic("out of space in ready queue (tid=%d)", tid);
+                }
+                break;
+            case TaskState::BLOCKED_ON_RECEIVE:
+            case TaskState::UNUSED:
+                break;
         }
     }
 
