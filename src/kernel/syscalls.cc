@@ -115,6 +115,25 @@ class Kernel {
 
     void Yield() { kdebug("Called Yield"); }
 
+    int Send(int tid, const char* msg, int msglen, char* reply, int rplen) {
+        kdebug("Called Send (tid=%d msg=%s msglen=%d reply=%p rplen=%d)", tid,
+               msg, msglen, reply, rplen);
+        // TODO
+        return 0;
+    }
+
+    int Receive(int* tid, char* msg, int msglen) {
+        kdebug("Called Receive (tid=%p msg=%s msglen=%d)", tid, msg, msglen);
+        // TODO
+        return 0;
+    }
+
+    int Reply(int tid, const char* reply, int rplen) {
+        kdebug("Called Reply (tid=%d reply=%p rplen=%d)", tid, reply, rplen);
+        // TODO
+        return 0;
+    }
+
     /// Helper POD struct which can should be casted from a void* that points to
     /// a user's stack.
     struct SwiUserStack {
@@ -143,6 +162,18 @@ class Kernel {
                 return MyTid();
             case 4:
                 return Create(user_stack->regs[0], (void*)user_stack->regs[1]);
+            case 5:
+                return Send(user_stack->regs[0],
+                            (const char*)user_stack->regs[1],
+                            user_stack->regs[2], (char*)user_stack->regs[3],
+                            user_stack->additional_params[0]);
+            case 6:
+                return Receive((int*)user_stack->regs[0],
+                               (char*)user_stack->regs[1], user_stack->regs[1]);
+            case 7:
+                return Reply(user_stack->regs[0],
+                             (const char*)user_stack->regs[1],
+                             user_stack->regs[1]);
             default:
                 kpanic("invalid syscall %lu", no);
         }
