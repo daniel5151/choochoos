@@ -66,7 +66,7 @@ struct FreshStack {
 };
 
 int Create(int priority, void* function) {
-    kdebug("Called Create(%d, %p)", priority, function);
+    kdebug("Called Create(priority=%d, function=%p)", priority, function);
 
     if (priority < 0 || priority >= MAX_PRIORITY) return INVALID_PRIORITY;
     int tid = next_tid();
@@ -88,7 +88,7 @@ int Create(int priority, void* function) {
         stack->regs[i] = i;
     stack->lr = (void*)User::Exit;  // implicit Exit() calls!
 
-    kdebug("Created: %d", tid);
+    kdebug("Created: tid=%d priority=%d function=%p", tid, priority, function);
 
     tasks[tid] = (TaskDescriptor){.priority = priority,
                                   .active = true,

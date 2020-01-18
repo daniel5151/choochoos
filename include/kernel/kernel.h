@@ -15,7 +15,9 @@ void kprintf(const char* fmt, ...) __attribute__((format(printf, 1, 2)));
 #define kdebug(...)
 #else
 #include "vt_escapes.h"
-#define kdebug(fmt, ...) kprintf(VT_BLUE "[kdebug:%s:%d] " VT_NOFMT fmt, __FILE__, __LINE__, ##__VA_ARGS__)
+#define kdebug(fmt, ...)                                                       \
+    kprintf(VT_BLUE "[kdebug:%s:%d tid=%d] " VT_NOFMT fmt, __FILE__, __LINE__, \
+            MyTid(), ##__VA_ARGS__)
 #endif
 
 #ifdef __cplusplus
