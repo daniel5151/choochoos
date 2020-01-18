@@ -13,6 +13,7 @@ void OtherTask() {
     // Exit();
 }
 
+// FirstUserTask has a priority of 4
 void FirstUserTask() {
     int tid;
     tid = Create(3, OtherTask);
