@@ -5,11 +5,9 @@
 #include "kernel/kernel.h"
 #include "priority_queue.h"
 
-#define USER_STACK_SIZE 0x40000
-
-// TODO optimize this, taking into account our available RAM and the amount of
-// stack we need for the kernel.
-#define MAX_SCHEDULED_TASKS 16
+namespace User {
+#include "user/syscalls.h"
+}
 
 // defined in the linker script
 extern "C" {
@@ -19,6 +17,12 @@ extern size_t __MAX_USER_STACKS__;
 // Individual task stack sisze
 extern size_t __USER_STACK_SIZE__;
 }
+
+#define USER_STACK_SIZE 0x40000
+
+// TODO optimize this, taking into account our available RAM and the amount of
+// stack we need for the kernel.
+#define MAX_SCHEDULED_TASKS 16
 
 #define MAX_PRIORITY 8  // 0 <= priority < 8
 #define MAX_TASKS_PER_PRIORITY 8
@@ -31,42 +35,6 @@ struct TaskDescriptor {
     int parent_tid;
 
     void* sp;
-};
-
-namespace User {
-#include "user/syscalls.h"
-}
-
-/// Helper POD struct to init new user task stacks
-struct FreshStack {
-    uint32_t dummy_syscall_val;
-    uint32_t spsr;
-    void* start_addr;
-    uint32_t regs[13];
-    void* lr;
-
-    static FreshStack init(void* start_addr) {
-        FreshStack stack = FreshStack();
-
-        stack.dummy_syscall_val = 0xdeadbeef;
-        stack.spsr = 0xc0;
-        stack.start_addr = start_addr;
-        for (uint32_t i = 0; i < 13; i++) stack.regs[i] = i;
-        stack.lr = (void*)User::Exit;  // implicit Exit() calls!
-        return stack;
-    }
-};
-
-/// Helper POD struct which can should be casted from a void* that points to a
-/// user's stack.
-struct SwiUserStack {
-    uint32_t spsr;
-    void* start_addr;
-    uint32_t regs[13];
-    void* lr;
-    // C++ doesn't support flexible array members, so instead, we use an array
-    // of size 1, and just do "OOB" memory access lol
-    uint32_t additional_params[1];
 };
 
 static TaskDescriptor tasks[MAX_SCHEDULED_TASKS];
@@ -84,8 +52,18 @@ static int next_tid() {
 }
 
 namespace Handlers {
+
 int MyTid() { return current_task; }
 int MyParentTid() { return tasks[MyTid()].parent_tid; }
+
+/// Helper POD struct to init new user task stacks
+struct FreshStack {
+    uint32_t dummy_syscall_response;
+    void* start_addr;
+    uint32_t spsr;
+    uint32_t regs[13];
+    void* lr;
+};
 
 int Create(int priority, void* function) {
     kdebug("Called Create(%d, %p)", priority, function);
@@ -99,20 +77,23 @@ int Create(int priority, void* function) {
     }
 
     // set up memory for the initial user stack
-    // TODO: do some shenanigans to enable "implicit returns" via Exit
-    FreshStack initial_stack = FreshStack::init(function);
+    char* start_of_stack =
+        &__USER_STACKS_START__ + (USER_STACK_SIZE * (tid + 1));
 
-    char* stack_start = &__USER_STACKS_START__ + (USER_STACK_SIZE * (tid + 1));
-    memcpy((stack_start - sizeof(FreshStack)), &initial_stack,
-           sizeof(FreshStack));
+    FreshStack* stack = (FreshStack*)(start_of_stack - sizeof(FreshStack));
+    stack->dummy_syscall_response = 0xdeadbeef;
+    stack->spsr = 0xc0;
+    stack->start_addr = function;
+    for (uint32_t i = 0; i < 13; i++)  // set regs to their own vals, for debug
+        stack->regs[i] = i;
+    stack->lr = (void*)User::Exit;  // implicit Exit() calls!
 
     kdebug("Created: %d", tid);
 
     tasks[tid] = (TaskDescriptor){.priority = priority,
                                   .active = true,
                                   .parent_tid = MyTid(),
-                                  .sp = stack_start - sizeof(FreshStack)};
-
+                                  .sp = stack};
     return tid;
 }
 
@@ -127,6 +108,18 @@ void Yield() { kdebug("Called Yield"); }
 }  // namespace Handlers
 
 // ---------------------------------------------
+
+/// Helper POD struct which can should be casted from a void* that points to a
+/// user's stack.
+struct SwiUserStack {
+    void* start_addr;
+    uint32_t spsr;
+    uint32_t regs[13];
+    void* lr;
+    // C++ doesn't support flexible array members, so instead, we use an array
+    // of size 1, and just do "OOB" memory access lol
+    uint32_t additional_params[1];
+};
 
 extern "C" int handle_syscall(uint32_t no, SwiUserStack& user_sp) {
     switch (no) {

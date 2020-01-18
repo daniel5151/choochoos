@@ -1,6 +1,11 @@
 #include "bwio.h"
 #include "user/syscalls.h"
 
+// Note to the TAs:
+// We set up the stack such that the initial LR passed to a task points to the
+// "Exit" syscall method. This enables omitting a trailing Exit() call, as it
+// will be implicitly invoked once the task return.
+
 void OtherTask() {
     bwprintf(COM2, "MyTid=%d MyParentTid=%d\r\n", MyTid(), MyParentTid());
     Yield();

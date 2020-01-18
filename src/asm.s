@@ -14,13 +14,12 @@ _swi_handler:
     // This banks in the kernel's SP and LR.
     msr     cpsr_c, #0xd3
 
-    // get user mode lr (which is in lr_svc)
+    // get user mode return address (which is in lr_svc)
     mov     r0,lr
     // get user mode spsr
     mrs     r1,spsr
     // and stack both of them on the user stack
-    stmfd   r4!,{r0}
-    stmfd   r4!,{r1}
+    stmfd   r4!,{r0,r1}
 
     // r0 = khandlesyscall 1st param = syscall number
     ldr     r0,[r0, #-4]      // Load the last-executed SWI instr into r0...
@@ -32,15 +31,20 @@ _swi_handler:
     // we'll store it alongside the rest of the user's state
     stmfd   r4!, {r0}
 
-    // -------- HIGH mem
-    // ... rest of user's stack
-    // [ r0   ]
-    // [ r... ]
-    // [ r12  ]
-    // [ lr   ]
-    // [ spsr ]
-    // [ r0   ] (syscall retval)
-    // -------- LOW mem (sp)
+    // At this point, the user's stack looks like this:
+    //
+    // +----------- hi mem -----------+
+    // | ... rest of user's stack ... |
+    // |   [ lr                   ]   |
+    // |   [ r0                   ]   |
+    // |   ...                        |
+    // |   [ r12                  ]   |
+    // |   [ spsr                 ]   |
+    // |   [ ret addr             ]   |
+    // |   [ syscall response     ]   |
+    // |         <--- sp --->         |
+    // | ....... unused stack ....... |
+    // +----------- lo mem -----------+
 
     // Return the final user SP via r0
     mov     r0, r4
@@ -59,14 +63,13 @@ _activate_task:
     // move provided SP into sp
     mov     sp,r0
 
-    ldmfd sp!,{r0} // syscall return value
-    ldmfd sp!,{r1} // spsr
-    ldmfd sp!,{r2} // swi return address
+    // r0=syscall return value, r1=swi return address, r2=spsr
+    ldmfd   sp!,{r0-r2}
 
     // restore user registers from stack
-    add   sp,sp,#16 // skip popping r0 through r3
-    ldmfd sp!,{r4-r12,lr}
+    add     sp,sp,#16 // skip popping r0 through r3
+    ldmfd   sp!,{r4-r12,lr}
 
     // set the spsr to the user's saved spsr
-    msr   spsr,r1
-    movs  pc,r2
+    msr     spsr,r2
+    movs    pc,r1
