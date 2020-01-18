@@ -14,7 +14,7 @@ extern "C" {
 // Designate region of memory to use for user stacks
 extern char __USER_STACKS_START__, __USER_STACKS_SIZE__;
 extern size_t __MAX_USER_STACKS__;
-// Individual task stack sisze
+// Individual task stack size
 extern size_t __USER_STACK_SIZE__;
 }
 
@@ -81,12 +81,23 @@ int Create(int priority, void* function) {
         &__USER_STACKS_START__ + (USER_STACK_SIZE * (tid + 1));
 
     FreshStack* stack = (FreshStack*)(start_of_stack - sizeof(FreshStack));
+
+    // GCC complains that writing *anything* to `stack` is an out-of-bounds
+    // error,  because `&__USER_STACKS_START__` is simply a `char*` with no
+    // bounds information (and hence, `start_of_stack` also has no bounds
+    // information). We know that `start_of_stack` is actually then high address
+    // of a block of memory implicitly allocated for the user task stack (with
+    // more than enough space for a FreshStack struct), but GCC doesn't, so we
+    // must squelch -Warray-bounds.
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Warray-bounds"
     stack->dummy_syscall_response = 0xdeadbeef;
     stack->spsr = 0xc0;
     stack->start_addr = function;
     for (uint32_t i = 0; i < 13; i++)  // set regs to their own vals, for debug
         stack->regs[i] = i;
     stack->lr = (void*)User::Exit;  // implicit Exit() calls!
+#pragma GCC diagnostic pop
 
     kdebug("Created: tid=%d priority=%d function=%p", tid, priority, function);
 
