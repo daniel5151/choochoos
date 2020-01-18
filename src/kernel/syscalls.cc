@@ -137,7 +137,6 @@ extern "C" int handle_syscall(uint32_t no, SwiUserStack& user_sp) {
             return Handlers::Create(user_sp.regs[0], (void*)user_sp.regs[1]);
         default:
             kpanic("invalid syscall %lu", no);
-            return 0;  // never called
     }
 }
 

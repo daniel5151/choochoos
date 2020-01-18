@@ -4,8 +4,9 @@
 extern "C" {
 #endif
 
-void kexit(int status);
-void kpanic(const char* fmt, ...) __attribute__((format(printf, 1, 2)));
+void kexit(int status) __attribute__((noreturn));
+void kpanic(const char* fmt, ...) __attribute__((format(printf, 1, 2)))
+__attribute__((noreturn));
 void kprintf(const char* fmt, ...) __attribute__((format(printf, 1, 2)));
 
 // #define DISABLE_KDEBUG_PRINTS // TODO: make this a build-time flag
