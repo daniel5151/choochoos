@@ -35,22 +35,41 @@ struct TaskDescriptor {
     void* sp;
 };
 
-struct UserStack {
+namespace User {
+    #include "user/syscalls.h"
+}
+
+/// Helper POD struct to init new user task stacks
+struct FreshStack {
+    uint32_t dummy_syscall_val;
     uint32_t spsr;
+    void* start_addr;
+    uint32_t regs [13];
     void* lr;
-    uint32_t r0to11 [12];
+
+    static FreshStack init(void (*start_addr)()) {
+        FreshStack stack = FreshStack();
+
+        stack.dummy_syscall_val = 0xdeadbeef;
+        stack.spsr = 0xc0;
+        stack.start_addr = (void*)start_addr;
+        for (uint32_t i = 0; i < 13; i++)
+            stack.regs[i] = i;
+        stack.lr = (void*)User::Exit; // implicit Exit() calls!
+        return stack;
+    }
+};
+
+/// Helper POD struct which can should be casted from a void* that points to a
+/// user's stack.
+struct SwiUserStack {
+    uint32_t spsr;
+    void* start_addr;
+    uint32_t regs [13];
+    void* lr;
     // C++ doesn't support flexible array members, so instead, we use an array
     // of size 1, and just do "OOB" memory access lol
     uint32_t additional_params [1];
-
-    // spsr set to user mode, IRQs disabled
-    // lr is set to start address
-    static UserStack fresh_stack(void (*start_addr)()) {
-        UserStack stack = UserStack();
-        stack.spsr = 0xc0;
-        stack.lr = (void*)start_addr;
-        return stack;
-    }
 };
 
 static TaskDescriptor tasks[MAX_SCHEDULED_TASKS];
@@ -82,17 +101,12 @@ namespace Handlers {
 
         // set up memory for the initial user stack
         // TODO: do some shenanigans to enable "implicit returns" via Exit
-        UserStack initial_stack = UserStack::fresh_stack(function);
-        const size_t INIT_STACK_SIZE = (sizeof(UserStack) - 4);
+        FreshStack initial_stack = FreshStack::init(function);
+        const size_t INIT_STACK_SIZE = (sizeof(FreshStack));
 
         char* stack_start = &__USER_STACKS_START__ + (USER_STACK_SIZE * (tid + 1));
-        memcpy((stack_start - INIT_STACK_SIZE), &initial_stack, INIT_STACK_SIZE);
 
-
-
-        // dummy r0 value
-        *((uint32_t*)(stack_start - INIT_STACK_SIZE - 4)) = 3;
-
+        memcpy((stack_start - sizeof(FreshStack)), &initial_stack, sizeof(FreshStack));
 
         bwprintf(COM2, "Created: %d\r\n", tid);
 
@@ -100,9 +114,7 @@ namespace Handlers {
             .priority = priority,
             .active = true,
             .parent_tid = MyTid(),
-            // one -4 for the dummy r0 value
-            // another -4 for the actual stack pointer decrement
-            .sp = stack_start - INIT_STACK_SIZE - 4
+            .sp = stack_start - sizeof(FreshStack)
         };
 
         return tid;
@@ -120,7 +132,7 @@ namespace Handlers {
 
 // ---------------------------------------------
 
-extern "C" int handle_syscall(uint32_t no, UserStack* user_sp) {
+extern "C" int handle_syscall(uint32_t no, SwiUserStack* user_sp) {
     // TODO
     bwprintf(COM2, "Hello from handle_syscall!\n\r");
     bwprintf(COM2, "  Called Syscall %d, SP is at 0x%x!\n\r", no, user_sp);

@@ -28,7 +28,7 @@ COMMON_FLAGS = -fPIC -mcpu=arm920t -msoft-float -MP -MMD $(WARNING_FLAGS)
 INCLUDES = -I. -I./include
 
 CCFLAGS = $(COMMON_FLAGS) -std=c11
-CXXFLAGS = $(COMMON_FLAGS) -std=c++17 -fno-rtti -fno-exceptions
+CXXFLAGS = $(COMMON_FLAGS) -std=c++17 -fno-rtti -fno-exceptions -fno-unwind-tables
 
 OPTIMIZE_FLAGS = -Og -g
 RELEASE_FLAGS = -O3 -Werror
