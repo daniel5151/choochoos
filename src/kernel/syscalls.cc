@@ -218,8 +218,8 @@ class Kernel {
             case TaskState::UNUSED:
                 return -1;
             case TaskState::BLOCKED_ON_RECEIVE:
-                strncpy(receiver->recv_buf, reply,
-                        min(receiver->recv_buf_len, rplen));
+                memcpy(receiver->recv_buf, reply,
+                       min(receiver->recv_buf_len, rplen));
                 if (receiver->recv_tid != nullptr) {
                     *(receiver->recv_tid) = sender_tid;
                 }
