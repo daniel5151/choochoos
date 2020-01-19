@@ -45,6 +45,7 @@ class Kernel {
         void* sp;
 
         // message passing state
+        int* recv_tid;
         char* recv_buf;
         size_t recv_buf_len;
         Mailbox mailbox;
@@ -118,6 +119,7 @@ class Kernel {
                                       .state = TaskState::READY,
                                       .parent_tid = MyTid(),
                                       .sp = stack,
+                                      .recv_tid = nullptr,
                                       .recv_buf = nullptr,
                                       .recv_buf_len = 0,
                                       .mailbox = Mailbox()};
@@ -151,48 +153,66 @@ class Kernel {
                     .msg = msg,
                     .msglen = msglen,
                 };
+
                 if (receiver->mailbox.push_back(message) == QueueErr::FULL) {
                     kdebug("mailbox full for task %d", receiver_tid);
                     return -2;
                 }
-                sender->recv_buf = reply;
-                sender->recv_buf_len = (size_t)rplen;
-                sender->state = TaskState::BLOCKED_ON_RECEIVE;
-                return 0;
+
+                break;
             }
-            case TaskState::BLOCKED_ON_RECEIVE:
-                // TODO
-                return -1;
+            case TaskState::BLOCKED_ON_RECEIVE: {
+                memcpy(receiver->recv_buf, msg,
+                       min(msglen, receiver->recv_buf_len));
+                receiver->state = TaskState::READY;
+                if (receiver->recv_tid != nullptr) {
+                    *(receiver->recv_tid) = sender_tid;
+                }
+
+                ready_queue.push(receiver_tid, receiver->priority);
+
+                break;
+            }
             default:
                 kpanic("invalid state %d for task %d",
                        (int)tasks[receiver_tid].state, receiver_tid);
         }
+
+        // Send() doesn't care which tid sends the reply
+        sender->recv_tid = nullptr;
+        sender->recv_buf = reply;
+        sender->recv_buf_len = (size_t)rplen;
+        sender->state = TaskState::BLOCKED_ON_RECEIVE;
+
+        return 0;
     }
 
     int min(int a, int b) { return a < b ? a : b; }
 
     int Receive(int* tid, char* msg, int msglen) {
-        kdebug("Called Receive(tid=%p msg=%s msglen=%d)", tid, msg, msglen);
+        kdebug("Called Receive(tid=%p msg=%p msglen=%d)", tid, msg, msglen);
 
         auto task = &tasks[MyTid()];
 
         if (task->mailbox.is_empty()) {
+            task->recv_tid = tid;
             task->recv_buf = msg;
             task->recv_buf_len = msglen;
             task->state = TaskState::BLOCKED_ON_RECEIVE;
             return 0;
         }
 
-        Message m;
+        Message m{.tid = -1, .msg = nullptr, .msglen = 0};
         task->mailbox.pop_front(m);
         *tid = m.tid;
-        strncpy(msg, m.msg, min(msglen, m.msglen));
+        memcpy(msg, m.msg, min(msglen, m.msglen));
         return 0;
     }
 
     int Reply(int tid, const char* reply, int rplen) {
         kdebug("Called Reply(tid=%d reply=%p rplen=%d)", tid, reply, rplen);
         if (tid < 0 || tid >= MAX_SCHEDULED_TASKS) return -1;
+        int sender_tid = MyTid();
         auto receiver = &tasks[tid];
         switch (receiver->state) {
             case TaskState::UNUSED:
@@ -200,12 +220,15 @@ class Kernel {
             case TaskState::BLOCKED_ON_RECEIVE:
                 strncpy(receiver->recv_buf, reply,
                         min(receiver->recv_buf_len, rplen));
+                if (receiver->recv_tid != nullptr) {
+                    *(receiver->recv_tid) = sender_tid;
+                }
                 receiver->state = TaskState::READY;
                 ready_queue.push(tid, receiver->priority);
                 return 0;
             case TaskState::READY: {
                 Message message =
-                    (Message){.tid = MyTid(), .msg = reply, .msglen = rplen};
+                    (Message){.tid = sender_tid, .msg = reply, .msglen = rplen};
                 if (receiver->mailbox.push_back(message) == QueueErr::FULL) {
                     return -2;
                 }
@@ -252,11 +275,11 @@ class Kernel {
                             user_stack->additional_params[0]);
             case 6:
                 return Receive((int*)user_stack->regs[0],
-                               (char*)user_stack->regs[1], user_stack->regs[1]);
+                               (char*)user_stack->regs[1], user_stack->regs[2]);
             case 7:
                 return Reply(user_stack->regs[0],
                              (const char*)user_stack->regs[1],
-                             user_stack->regs[1]);
+                             user_stack->regs[2]);
             default:
                 kpanic("invalid syscall %lu", no);
         }
@@ -270,11 +293,10 @@ class Kernel {
 
     void activate(int tid) {
         current_task = tid;
-        void* next_sp = _activate_task(tasks[tid].sp);
+        tasks[tid].sp = _activate_task(tasks[tid].sp);
 
         switch (tasks[tid].state) {
             case TaskState::READY:
-                tasks[tid].sp = next_sp;
                 if (ready_queue.push(tid, tasks[tid].priority) ==
                     PriorityQueueErr::FULL) {
                     kpanic("out of space in ready queue (tid=%d)", tid);
