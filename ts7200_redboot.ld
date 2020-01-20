@@ -42,16 +42,8 @@ SECTIONS {
         end = __BSS_END__;
     } > ram
 
-    /* align the heap to the nearest 0x10000, just to make section sizes saner */
-    .heap (NOLOAD) : ALIGN(1M)
-    {
-         __HEAP_START__ = .;
-        . = . + __HEAP_SIZE__;
-        __HEAP_END__ = ALIGN(4);
-    } > ram
-
-    __RAM_END__ = ORIGIN(ram) + LENGTH(ram);
-    __USER_STACKS_SIZE__ = __RAM_END__ - __HEAP_END__ - __KERNEL_STACK_SIZE__;
+    __RAM_END__ = ORIGIN(ram) + LENGTH(ram) - 4;
+    __USER_STACKS_SIZE__ = __RAM_END__ - __BSS_END__ - __KERNEL_STACK_SIZE__;
 
     /* NOTE: RedBoot seems to seart its stack from __STACK_END__ as well  */
     /* It's probably best to just re-use the SP RedBoot hands us... */
