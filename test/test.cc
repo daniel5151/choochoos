@@ -43,7 +43,7 @@ void test_queue() {
 }
 
 void test_priority_queue() {
-    PriorityQueue<int, 3, 10> pq;
+    PriorityQueue<int, 10> pq;
 
     assert(pq.is_empty());
 

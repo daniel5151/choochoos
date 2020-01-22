@@ -1,44 +1,59 @@
 #pragma once
 
+#include <algorithm>
 #include <cassert>
 #include "queue.h"
 
 enum class PriorityQueueErr : uint8_t { OK, FULL, EMPTY, BAD_PRIORITY };
 
-template <class T, size_t MAX_PRIORITY, unsigned int N>
+template <class T, unsigned int N>
 class PriorityQueue {
-    Queue<T, N> queues[MAX_PRIORITY];
+    struct Element {
+        size_t priority;
+        T data;
+
+        Element() : priority(0) {}
+        Element(T data, size_t priority) : priority(priority), data(data) {}
+
+        bool operator<(const Element& other) const {
+            return priority < other.priority;
+        }
+    };
+
+    Element arr[N];
+    size_t len;
 
    public:
-    PriorityQueue() : queues() {}
+    PriorityQueue() : len(0) {}
 
-    bool is_empty() const {
-        for (size_t i = 0; i < MAX_PRIORITY; i++) {
-            if (!queues[i].is_empty()) return false;
-        }
-        return true;
-    }
+    bool is_empty() const { return len == 0; }
 
     PriorityQueueErr push(T t, size_t priority) {
-        if (priority >= MAX_PRIORITY) return PriorityQueueErr::BAD_PRIORITY;
+        if (len >= N) return PriorityQueueErr::FULL;
 
-        switch (queues[priority].push_back(t)) {
-            case QueueErr::OK:
-                return PriorityQueueErr::OK;
-            case QueueErr::FULL:
-                return PriorityQueueErr::FULL;
-            default:
-                assert(false);
-        }
+        len++;
+
+        Element* first = &arr[0];
+        Element* last = &arr[len];
+
+        arr[len - 1] = Element(t, priority);
+
+        std::push_heap(first, last);
+
+        return PriorityQueueErr::OK;
     }
 
     PriorityQueueErr pop(T& dest) {
-        for (int i = MAX_PRIORITY - 1; i >= 0; i--) {
-            if (!queues[i].is_empty()) {
-                queues[i].pop_front(dest);
-                return PriorityQueueErr::OK;
-            }
-        }
-        return PriorityQueueErr::EMPTY;
+        if (len == 0) return PriorityQueueErr::EMPTY;
+
+        Element* first = &arr[0];
+        Element* last = &arr[len];
+
+        std::pop_heap(first, last);
+
+        dest = arr[len - 1].data;
+        len--;
+
+        return PriorityQueueErr::OK;
     }
 };
