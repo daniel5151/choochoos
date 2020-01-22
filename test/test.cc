@@ -40,6 +40,14 @@ void test_queue() {
     assert(q.push_back(42) == QueueErr::FULL);
 
     assert(q.peek_front(x) == QueueErr::OK && x == 100);
+
+    q.clear();
+
+    assert(q.is_empty());
+    assert(q.pop_front(x) == QueueErr::EMPTY);
+
+    assert(q.push_back(1) == QueueErr::OK);
+    assert(q.size() == 1);
 }
 
 void test_priority_queue() {
