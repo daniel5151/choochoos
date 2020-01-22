@@ -7,9 +7,11 @@
 // will be implicitly invoked once the task return.
 
 void OtherTask() {
-    bwprintf(COM2, "MyTid=%d MyParentTid=%d\r\n", MyTid(), MyParentTid());
+    int me = MyTid();
+    int parent = MyParentTid();
+    bwprintf(COM2, "MyTid=%d MyParentTid=%d\r\n", me, parent);
     Yield();
-    bwprintf(COM2, "MyTid=%d MyParentTid=%d\r\n", MyTid(), MyParentTid());
+    bwprintf(COM2, "MyTid=%d MyParentTid=%d\r\n", me, parent);
     // Exit();
 }
 
