@@ -37,6 +37,8 @@ struct Message {
     int msglen;
 };
 
+typedef Queue<Message, 16> Mailbox;
+
 class TaskDescriptor {
    public:
     int priority;
@@ -49,7 +51,7 @@ class TaskDescriptor {
     int* recv_tid;
     char* recv_buf;
     size_t recv_buf_len;
-    Queue<Message, 16> mailbox;
+    Mailbox mailbox;
 
     // TODO add a constructor
 };
