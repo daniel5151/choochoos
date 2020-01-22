@@ -27,30 +27,34 @@ extern size_t __USER_STACK_SIZE__;
 #define INVALID_PRIORITY -1
 #define OUT_OF_TASK_DESCRIPTORS -2
 
+static inline int min(int a, int b) { return a < b ? a : b; }
+
+enum class TaskState { UNUSED, READY, BLOCKED_ON_RECEIVE };
+
+struct Message {
+    int tid;
+    const char* msg;
+    int msglen;
+};
+
+class TaskDescriptor {
+   public:
+    int priority;
+    TaskState state;
+    int parent_tid;
+
+    void* sp;
+
+    // message passing state
+    int* recv_tid;
+    char* recv_buf;
+    size_t recv_buf_len;
+    Queue<Message, 16> mailbox;
+
+    // TODO add a constructor
+};
+
 class Kernel {
-    enum class TaskState { UNUSED, READY, BLOCKED_ON_RECEIVE };
-
-    struct Message {
-        int tid;
-        const char* msg;
-        int msglen;
-    };
-    typedef Queue<Message, 16> Mailbox;
-
-    struct TaskDescriptor {
-        int priority;
-        TaskState state;
-        int parent_tid;
-
-        void* sp;
-
-        // message passing state
-        int* recv_tid;
-        char* recv_buf;
-        size_t recv_buf_len;
-        Mailbox mailbox;
-    };
-
     /// Helper POD struct to init new user task stacks
     struct FreshStack {
         uint32_t dummy_syscall_response;
@@ -186,8 +190,6 @@ class Kernel {
 
         return 0;
     }
-
-    int min(int a, int b) { return a < b ? a : b; }
 
     int Receive(int* tid, char* msg, int msglen) {
         kdebug("Called Receive(tid=%p msg=%p msglen=%d)", tid, msg, msglen);

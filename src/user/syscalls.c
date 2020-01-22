@@ -1,34 +1,15 @@
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #pragma GCC diagnostic ignored "-Wreturn-type"
 
-int Reply(int tid, const char* reply, int rplen) {
-    (void)(tid);
-    (void)(reply);
-    (void)(rplen);
-    __asm__ volatile("swi #7");
-}
+int Reply(int tid, const char* reply, int rplen) { __asm__ volatile("swi #7"); }
 
-int Receive(int* tid, char* msg, int msglen) {
-    (void)(tid);
-    (void)(msg);
-    (void)(msglen);
-    __asm__ volatile("swi #6");
-}
+int Receive(int* tid, char* msg, int msglen) { __asm__ volatile("swi #6"); }
 
 int Send(int tid, const char* msg, int msglen, char* reply, int rplen) {
-    (void)(tid);
-    (void)(msg);
-    (void)(msglen);
-    (void)(reply);
-    (void)(rplen);
     __asm__ volatile("swi #5");
 }
 
-int Create(int priority, void (*function)()) {
-    (void)(priority);
-    (void)(function);
-    __asm__ volatile("swi #4");
-}
+int Create(int priority, void (*function)()) { __asm__ volatile("swi #4"); }
 
 int MyTid() { __asm__ volatile("swi #3"); }
 

@@ -23,12 +23,12 @@ void FirstUserTask() {
     // send to the lower priority task first
     {
         char resp[100] = {'\0'};
-        Send(pong_tid_1, "ping1", 6, resp, 99);
+        Send(pong_tid_1, "ping1", 6, resp, sizeof(resp) - 1);
         bwprintf(COM2, "FirstUserTask recieved reply '%s'\r\n", resp);
     }
     {
         char resp[100] = {'\0'};
-        Send(pong_tid_2, "ping2", 6, resp, 99);
+        Send(pong_tid_2, "ping2", 6, resp, sizeof(resp) - 1);
         bwprintf(COM2, "FirstUserTask recieved reply '%s'\r\n", resp);
     }
 
@@ -38,12 +38,12 @@ void FirstUserTask() {
     // send to the higher priority task first
     {
         char resp[100] = {'\0'};
-        Send(pong_tid_2, "ping2", 6, resp, 99);
+        Send(pong_tid_2, "ping2", 6, resp, sizeof(resp) - 1);
         bwprintf(COM2, "FirstUserTask recieved reply '%s'\r\n", resp);
     }
     {
         char resp[100] = {'\0'};
-        Send(pong_tid_1, "ping1", 6, resp, 99);
+        Send(pong_tid_1, "ping1", 6, resp, sizeof(resp) - 1);
         bwprintf(COM2, "FirstUserTask recieved reply '%s'\r\n", resp);
     }
 }
