@@ -29,6 +29,8 @@ extern size_t __USER_STACK_SIZE__;
 
 static inline int min(int a, int b) { return a < b ? a : b; }
 
+namespace kernel {
+
 enum class TaskState { UNUSED, READY, BLOCKED_ON_RECEIVE };
 
 struct Message {
@@ -41,7 +43,7 @@ typedef Queue<Message, 16> Mailbox;
 
 class TaskDescriptor {
    public:
-    int priority;
+    size_t priority;
     TaskState state;
     int parent_tid;
 
@@ -53,7 +55,27 @@ class TaskDescriptor {
     size_t recv_buf_len;
     Mailbox mailbox;
 
-    // TODO add a constructor
+    TaskDescriptor() : state(TaskState::UNUSED), parent_tid(-2) {}
+
+    TaskDescriptor(size_t priority, int parent_tid, void* stack_ptr)
+        : priority(priority),
+          state(TaskState::READY),
+          parent_tid(parent_tid),
+          sp(stack_ptr),
+          recv_tid(nullptr),
+          recv_buf(nullptr),
+          recv_buf_len(0),
+          mailbox() {}
+
+    void reset() {
+        state = TaskState::UNUSED;
+        sp = nullptr;
+        parent_tid = -2;
+        recv_tid = nullptr;
+        recv_buf = nullptr;
+        recv_buf_len = 0;
+        mailbox.clear();
+    }
 };
 
 class Kernel {
@@ -121,22 +143,14 @@ class Kernel {
         kdebug("Created: tid=%d priority=%d function=%p", tid, priority,
                function);
 
-        tasks[tid] = (TaskDescriptor){.priority = priority,
-                                      .state = TaskState::READY,
-                                      .parent_tid = MyTid(),
-                                      .sp = stack,
-                                      .recv_tid = nullptr,
-                                      .recv_buf = nullptr,
-                                      .recv_buf_len = 0,
-                                      .mailbox = Mailbox()};
+        tasks[tid] = TaskDescriptor((size_t)priority, MyTid(), (void*)stack);
         return tid;
     }
 
     void Exit() {
         kdebug("Called Exit");
         int tid = MyTid();
-        tasks[tid].state = TaskState::UNUSED;
-        tasks[tid].mailbox = Mailbox();
+        tasks[tid].reset();
     }
 
     void Yield() { kdebug("Called Yield"); }
@@ -257,6 +271,8 @@ class Kernel {
     };
 
    public:
+    Kernel() : tasks{TaskDescriptor()}, ready_queue() {}
+
     int handle_syscall(uint32_t no, void* user_sp) {
         SwiUserStack* user_stack = (SwiUserStack*)user_sp;
         switch (no) {
@@ -319,24 +335,25 @@ class Kernel {
         if (tid < 0) kpanic("could not create tasks (error code %d)", tid);
     }
 };  // class Kernel
+}  // namespace kernel
 
 extern void FirstUserTask();
 
-static Kernel kernel;
+static kernel::Kernel kern;
 
 extern "C" int handle_syscall(uint32_t no, void* user_sp) {
-    return kernel.handle_syscall(no, user_sp);
+    return kern.handle_syscall(no, user_sp);
 }
 
 int kmain() {
     kprintf("Hello from the choochoos kernel!");
 
-    kernel.initialize(FirstUserTask);
+    kern.initialize(FirstUserTask);
 
     while (true) {
-        int next_task = kernel.schedule();
+        int next_task = kern.schedule();
         if (next_task < 0) break;
-        kernel.activate(next_task);
+        kern.activate(next_task);
     }
 
     kprintf("Goodbye from choochoos kernel!");
