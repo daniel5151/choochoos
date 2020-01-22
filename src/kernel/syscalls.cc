@@ -29,6 +29,8 @@ extern size_t __USER_STACK_SIZE__;
 #define INVALID_PRIORITY -1
 #define OUT_OF_TASK_DESCRIPTORS -2
 
+namespace kernel {
+
 class Kernel {
     struct TaskDescriptor {
         int priority;
@@ -45,18 +47,6 @@ class Kernel {
         uint32_t spsr;
         uint32_t regs[13];
         void* lr;
-    };
-
-    /// Helper POD struct which can should be casted from a void* that points to
-    /// a user's stack.
-    struct SwiUserStack {
-        void* start_addr;
-        uint32_t spsr;
-        uint32_t regs[13];
-        void* lr;
-        // C++ doesn't support flexible array members, so instead, we use an
-        // array of size 1, and just do "OOB" memory access lol
-        uint32_t additional_params[1];
     };
 
     TaskDescriptor tasks[MAX_SCHEDULED_TASKS];
@@ -131,6 +121,18 @@ class Kernel {
 
     void Yield() { kdebug("Called Yield"); }
 
+    /// Helper POD struct which can should be casted from a void* that points to
+    /// a user's stack.
+    struct SwiUserStack {
+        void* start_addr;
+        uint32_t spsr;
+        uint32_t regs[13];
+        void* lr;
+        // C++ doesn't support flexible array members, so instead, we use an
+        // array of size 1, and just do "OOB" memory access lol
+        uint32_t additional_params[1];
+    };
+
    public:
     int handle_syscall(uint32_t no, void* user_sp) {
         SwiUserStack* user_stack = (SwiUserStack*)user_sp;
@@ -179,23 +181,25 @@ class Kernel {
     }
 };  // class Kernel
 
+}  // namespace kernel
+
 extern void FirstUserTask();
 
-static Kernel kernel;
+static kernel::Kernel kern;
 
 extern "C" int handle_syscall(uint32_t no, void* user_sp) {
-    return kernel.handle_syscall(no, user_sp);
+    return kern.handle_syscall(no, user_sp);
 }
 
 int kmain() {
     kprintf("Hello from the choochoos kernel!");
 
-    kernel.initialize(FirstUserTask);
+    kern.initialize(FirstUserTask);
 
     while (true) {
-        int next_task = kernel.schedule();
+        int next_task = kern.schedule();
         if (next_task < 0) break;
-        kernel.activate(next_task);
+        kern.activate(next_task);
     }
 
     kprintf("Goodbye from choochoos kernel!");
