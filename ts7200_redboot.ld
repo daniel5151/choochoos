@@ -15,48 +15,61 @@ SECTIONS {
     {
         __TEXT_START__ = .;
         *(.text*);
-        *(.rodata*);
-        *(.got);
-        *(.got.plt);
+        . = ALIGN(4);
+        __TEXT_END__ = .;
 
         __INIT_ARRAY_START__ = .;
         *(.init_array*)
-        __INIT_ARRAY_END__   = ALIGN(4);
+        __INIT_ARRAY_END__ = .;
+    } > ram
 
-        __TEXT_END__ = ALIGN(4);
+    .got : ALIGN(4)
+    {
+        *(.got*);
     } > ram
 
     .data : ALIGN(4)
     {
         __DATA_START__ = .;
         *(.data*);
-        __DATA_END__ = ALIGN(4);
+        *(.rodata*);
+        __DATA_END__ = .;
     } > ram
 
     .bss : ALIGN(4)
     {
         __BSS_START__ = .;
         *(.bss*);
-        __BSS_END__ = ALIGN(4);
+        . = ALIGN(4);
+        __BSS_END__ = .;
         /* needed for certain newlib routines that (potentially) call _sbrk */
         end = __BSS_END__;
     } > ram
 
-    __RAM_END__ = ORIGIN(ram) + LENGTH(ram) - 4;
-    __USER_STACKS_SIZE__ = __RAM_END__ - __BSS_END__ - __KERNEL_STACK_SIZE__;
+    /* Block-out memory regions for the heap, kernel stack, and user stacks */
 
-    /* NOTE: RedBoot seems to seart its stack from __STACK_END__ as well  */
+    /* This _could_ be done via magic numbers in the kernel code itself, but
+       it's nice to leverage the linker's understanding of how things are layed
+       out in memory to demarcate section boundaries */
+
+    /* align the heap to the nearest 0x10000, just to make section sizes saner */
+    . = ALIGN(1M);
+    __HEAP_START__ = .;
+    . = . + __HEAP_SIZE__;
+    __HEAP_END__ = .;
+
+    __RAM_END__ = ORIGIN(ram) + LENGTH(ram);
+    __USER_STACKS_SIZE__ = __RAM_END__ - __HEAP_END__ - __KERNEL_STACK_SIZE__;
+
+    /* NOTE: RedBoot seems to start its' stack from __STACK_END__ as well */
     /* It's probably best to just re-use the SP RedBoot hands us... */
-    .stack (NOLOAD) : ALIGN(4)
-    {
-        __USER_STACKS_START__ = .;
-        . = . + __USER_STACKS_SIZE__;
-        __USER_STACKS_END__ = ALIGN(4);
+    __USER_STACKS_START__ = .;
+    . = . + __USER_STACKS_SIZE__;
+    __USER_STACKS_END__ = .;
 
-        __KERNEL_STACK_START__ = .;
-        . = . + __KERNEL_STACK_SIZE__;
-        __KERNEL_STACK_END__ = ALIGN(4);
-    } > ram
+    __KERNEL_STACK_START__ = .;
+    . = . + __KERNEL_STACK_SIZE__;
+    __KERNEL_STACK_END__ = .;
 
     /DISCARD/ :
     {
