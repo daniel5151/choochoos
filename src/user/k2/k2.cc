@@ -1,8 +1,8 @@
-#include <functional>
+#include <random>
 #include "bwio.h"
 #include "user/syscalls.h"
 
-enum class RPS { NONE, ROCK, PAPER, SCISSORS };
+enum class RPS { NONE = 0, ROCK = 1, PAPER = 2, SCISSORS = 3 };
 
 struct Message {
     enum { DONE, SIGNUP, SIGNUP_ACK, OUT_OF_SPACE, PLAY } tag;
@@ -147,6 +147,16 @@ void Client() {
             bwprintf(COM2, "tid=%d received non-ack response %d\r\n", MyTid(),
                      res.tag);
             Exit();
+    }
+
+    std::random_device rd("");  // TODO figure out randomness
+    std::uniform_int_distribution<int> dist(1, 3);
+
+    for (int i = 0; i < 4; i++) {
+        RPS choice = (RPS)dist(rd);
+        req = (Message){.tag = Message::PLAY,
+                        .data = {.play = {.choice = choice}}};
+        Send(server, (char*)&req, sizeof(req), (char*)&res, sizeof(res));
     }
 }
 
