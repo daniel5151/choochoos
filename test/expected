@@ -1,0 +1,15 @@
+Hello from the choochoos kernel!
+Created: 1
+Created: 2
+MyTid=3 MyParentTid=0
+MyTid=3 MyParentTid=0
+Created: 3
+MyTid=3 MyParentTid=0
+MyTid=3 MyParentTid=0
+Created: 3
+FirstUserTask: exiting
+MyTid=1 MyParentTid=0
+MyTid=2 MyParentTid=0
+MyTid=1 MyParentTid=0
+MyTid=2 MyParentTid=0
+Goodbye from choochoos kernel!

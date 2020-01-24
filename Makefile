@@ -84,8 +84,8 @@ $(BUILD_DIR)/%.o: $(SRC_DIR)/%.s
 	@mkdir -p $(dir $@)
 	$(AS) $(ASFLAGS) -g -o $@ $<
 
-.PHONY: test
-test: test/test.cc $(HEADERS)
+.PHONY: unit_tests
+unit_tests: test/test.cc $(HEADERS)
 	@mkdir -p $(BIN_DIR)
 	g++ -std=c++17 -fno-rtti -fno-exceptions -I $(INCLUDES) \
 		$(WARNING_FLAGS) -Werror $< -o $(BIN_DIR)/test && $(BIN_DIR)/test

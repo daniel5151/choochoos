@@ -86,5 +86,5 @@ int main() {
     test_queue();
     test_priority_queue();
 
-    std::cout << "all tests passed" << std::endl;
+    std::cout << "unit tests passed" << std::endl;
 }
