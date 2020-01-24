@@ -231,29 +231,29 @@ class Kernel {
         kdebug("Called Reply(tid=%d reply=%p rplen=%d)", tid, reply, rplen);
         if (tid < 0 || tid >= MAX_SCHEDULED_TASKS) return -1;
         int sender_tid = MyTid();
-        auto receiver = &tasks[tid];
-        switch (receiver->state) {
+        TaskDescriptor& receiver = tasks[tid];
+        switch (receiver.state) {
             case TaskState::UNUSED:
                 return -1;
             case TaskState::BLOCKED_ON_RECEIVE:
-                memcpy(receiver->recv_buf, reply,
-                       min(receiver->recv_buf_len, rplen));
-                if (receiver->recv_tid != nullptr) {
-                    *(receiver->recv_tid) = sender_tid;
+                memcpy(receiver.recv_buf, reply,
+                       min(receiver.recv_buf_len, rplen));
+                if (receiver.recv_tid != nullptr) {
+                    *(receiver.recv_tid) = sender_tid;
                 }
-                receiver->state = TaskState::READY;
-                ready_queue.push(tid, receiver->priority);
+                receiver.state = TaskState::READY;
+                ready_queue.push(tid, receiver.priority);
                 return 0;
             case TaskState::READY: {
                 Message message =
                     (Message){.tid = sender_tid, .msg = reply, .msglen = rplen};
-                if (receiver->mailbox.push_back(message) == QueueErr::FULL) {
+                if (receiver.mailbox.push_back(message) == QueueErr::FULL) {
                     return -2;
                 }
                 return 0;
             }
             default:
-                kpanic("invalid state %d for task %d", (int)receiver->state,
+                kpanic("invalid state %d for task %d", (int)receiver.state,
                        tid);
         }
     }
