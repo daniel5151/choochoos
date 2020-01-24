@@ -4,16 +4,16 @@ set -e
 
 echo "building k1..."
 
-make clean
-make $@ release
+make clean >/dev/null
+make $@ release >/dev/null
 
 echo "running k1..."
 ts7200 bin/choochoos.elf > "test/k1.actual"
 
 echo "building k2..."
 
-make clean
-make $@ USER_FOLDER=k2 release
+make clean >/dev/null
+make $@ USER_FOLDER=k2 release >/dev/null
 
 echo "running k2..."
 
