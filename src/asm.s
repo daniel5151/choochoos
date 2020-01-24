@@ -1,6 +1,4 @@
-.global _activate_task
 .global _swi_handler
-
 _swi_handler:
     // Switch to system mode (IRQs disabled)
     // This banks in the user's LR and SP
@@ -54,6 +52,7 @@ _swi_handler:
 
 // void* _activate_task(void* next_sp)
 // returns final SP after _swi_handler is finished
+.global _activate_task
 _activate_task:
     // save the kernel's context
     stmfd   sp!,{r4-r12,lr}
@@ -73,3 +72,27 @@ _activate_task:
     // set the spsr to the user's saved spsr
     msr     spsr,r2
     movs    pc,r1
+
+// http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.ddi0363g/Chdhgibd.html
+.global _enable_caches
+_enable_caches:
+    mrc     p15, 0, r1, c1, c0, 0  // read config register
+    orr     r1, r1, #0x1 << 12     // enable instruction cache
+    orr     r1, r1, #0x1 << 2      // enable data cache
+
+    mcr     p15, 0, r0, c15, c5, 0 // Invalidate entire data cache
+    mcr     p15, 0, r0, c7, c5, 0  // Invalidate entire instruction cache
+    mcr     p15, 0, r1, c1, c0, 0  // enable caches
+
+    bx      lr
+
+// http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.ddi0363g/Chdhgibd.html
+.global _disable_caches
+_disable_caches:
+    mrc     p15, 0, r1, c1, c0, 0 // Read config register
+    bic     r1, r1, #0x1 << 12    // instruction cache disable
+    bic     r1, r1, #0x1 << 2     // data cache disable
+
+    mcr     p15, 0, r1, c1, c0, 0  // disable caches
+
+    bx      lr

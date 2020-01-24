@@ -32,8 +32,12 @@ DEPS = $(OBJS:.o=.d)
 WARNING_FLAGS = -Wall -Wextra -Wconversion
 
 COMMON_FLAGS = -fPIC -mcpu=arm920t -msoft-float -MP -MMD $(WARNING_FLAGS)
-INCLUDES = -I. -I./include
 
+ifdef ENABLE_CACHES
+	COMMON_FLAGS += -DENABLE_CACHES
+endif
+
+INCLUDES = -I. -I./include
 CCFLAGS = $(COMMON_FLAGS) -std=c11
 CXXFLAGS = $(COMMON_FLAGS) -std=c++17 -fno-rtti -fno-exceptions -fno-unwind-tables
 
