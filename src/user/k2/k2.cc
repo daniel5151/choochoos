@@ -1,5 +1,4 @@
 #include <cstdlib>
-#include "bwio.h"
 #include "user/syscalls.h"
 
 enum class RPS { NONE = 0, ROCK = 1, PAPER = 2, SCISSORS = 3 };
@@ -48,9 +47,8 @@ struct Game {
 
     void set(int tid, RPS choice) {
         if (!has(tid)) {
-            bwprintf(COM2, "set(tid=%d, choice=%d) on game without tid\r\n",
-                     tid, (int)choice);
-            Exit();
+            panic("set(tid=%d, choice=%d) on game without tid", tid,
+                  (int)choice);
         }
 
         if (tid == tid1) {
@@ -62,8 +60,7 @@ struct Game {
 
     void add(int tid) {
         if (remaining() == 0) {
-            bwprintf(COM2, "add() to full game\r\n");
-            Exit();
+            panic("add() to full game");
         }
 
         if (tid1 == -1) {
@@ -76,8 +73,7 @@ struct Game {
     // returns the tid of the winner, or -1 on a draw
     int winner() {
         if (remaining() != 0) {
-            bwprintf(COM2, "winner() called on non-full game\r\n");
-            Exit();
+            panic("winner() called on non-full game");
         }
         if (choice1 == choice2) {
             return -1;
@@ -100,6 +96,7 @@ void Server() {
 
     while (true) {
         Receive(&tid, (char*)&req, sizeof(req));
+        log("received message tag=%d", req.tag);
         switch (req.tag) {
             case Message::DONE:
                 return;
@@ -166,40 +163,34 @@ void Server() {
             } break;
 
             default:
-                bwprintf(
-                    COM2,
-                    "RPSServer: invalid message tag %x, shutting down.\r\n",
-                    req.tag);
-                Exit();
+                panic("RPSServer: invalid message tag %x, shutting down",
+                      req.tag);
         }
     }
 }
 
 void Client() {
     int server = 1;  // TODO get this from the name server
-    int my_tid = MyTid();
 
     Message req;
     Message res;
 
-    req = (Message){.tag = Message::SIGNUP, .data = {.empty = {}}};
+    req = (Message){.tag = Message::SIGNUP, .data = {}};
     int code = Send(server, (char*)&req, sizeof(req), (char*)&res, sizeof(res));
     assert(code >= 0);
     switch (res.tag) {
         case Message::SIGNUP_ACK:
-            bwprintf(COM2, "tid=%d received signup ack\r\n", my_tid);
+            log("received signup ack");
             break;
         default:
-            bwprintf(COM2, "tid=%d received non-ack response %d\r\n", my_tid,
-                     res.tag);
-            Exit();
+            panic("received non-ack response");
     }
 
     for (int i = 0; i < 4; i++) {
         RPS choice = (RPS)((rand() % 3) + 1);
         req = (Message){.tag = Message::PLAY,
                         .data = {.play = {.choice = choice}}};
-        bwprintf(COM2, "tid=%d sending choice %d\r\n", my_tid, (int)choice);
+        log("sending choice %d", (int)choice);
         int code =
             Send(server, (char*)&req, sizeof(req), (char*)&res, sizeof(res));
         assert(code >= 0);
@@ -207,26 +198,22 @@ void Client() {
         switch (res.tag) {
             case Message::PLAY_RESP: {
                 Result result = res.data.play_resp.result;
-                bwprintf(
-                    COM2, "tid=%d %s\r\n", my_tid,
+                log("%s",
                     result == Result::DRAW
                         ? "draw"
                         : result == Result::I_WON ? "I won!" : "I lost :(");
             } break;
             case Message::OTHER_PLAYER_QUIT: {
-                bwprintf(COM2, "tid=%d other player quit, time to go home\r\n",
-                         my_tid);
+                log("other player quit, time to go home");
                 break;
             }
             default: {
-                bwprintf(COM2, "tid=%d invalid reply from server. (tag=%d)\r\n",
-                         my_tid, (int)res.tag);
-                Exit();
+                panic("invalid reply from server: tag=%d", res.tag);
             }
         }
 
         req = (Message){.tag = Message::QUIT, .data = {}};
-        bwprintf(COM2, "tid=%d sending quit\r\n", my_tid);
+        log("sending quit");
         code = Send(server, (char*)&req, sizeof(req), (char*)&res, sizeof(res));
         assert(code >= 0);
     }

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "bwio.h"
 #include "vt_escapes.h"
 
 #ifdef __cplusplus
@@ -27,6 +28,17 @@ int Reply(int tid, const char* reply, int rplen);
             Exit();                                                 \
         }                                                           \
     }
+
+#define log(fmt, args...)                                                  \
+    bwprintf(COM2,                                                         \
+             VT_GREEN "[log:" __FILE__ ":%d tid=%d] " VT_NOFMT fmt "\r\n", \
+             __LINE__, MyTid(), ##args)
+
+#define panic(fmt, args...)                                                \
+    bwprintf(COM2,                                                         \
+             VT_RED "[panic:" __FILE__ ":%d tid=%d] " VT_NOFMT fmt "\r\n", \
+             __LINE__, MyTid(), ##args);                                   \
+    Exit()
 
 #ifdef __cplusplus
 }
