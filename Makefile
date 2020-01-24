@@ -13,7 +13,14 @@ SRC_DIR = src
 BUILD_DIR = build
 BIN_DIR = bin
 
-SRCS = $(shell find $(SRC_DIR) -name '*.c' -or -name '*.cc' -or -name '*.s')
+USER_FOLDER ?= k1
+ALL_USER_SRCS_GLOB = $(SRC_DIR)/user/*/**
+USER_SRC_DIR = $(SRC_DIR)/user/$(USER_FOLDER)
+
+SRCS = $(shell find $(SRC_DIR) \
+						 	\( -name '*.c' -or -name '*.cc' -or -name '*.s' \) \
+							! -path "$(ALL_USER_SRCS_GLOB)" \
+							-or -path "$(USER_SRC_DIR)/**" )
 OBJS = $(patsubst $(SRC_DIR)/%,$(BUILD_DIR)/%,\
 		$(patsubst %.c,%.o,\
 		$(patsubst %.cc,%.o,\
@@ -28,10 +35,10 @@ COMMON_FLAGS = -fPIC -mcpu=arm920t -msoft-float -MP -MMD $(WARNING_FLAGS)
 INCLUDES = -I. -I./include
 
 CCFLAGS = $(COMMON_FLAGS) -std=c11
-CXXFLAGS = $(COMMON_FLAGS) -std=c++17 -fno-rtti -fno-exceptions
+CXXFLAGS = $(COMMON_FLAGS) -std=c++17 -fno-rtti -fno-exceptions -fno-unwind-tables
 
 OPTIMIZE_FLAGS = -Og -g
-RELEASE_FLAGS = -O3 -Werror
+RELEASE_FLAGS = -O3 -g -Werror -DRELEASE_MODE
 
 LDFLAGS =                             \
 	-static                           \
@@ -75,7 +82,7 @@ $(BUILD_DIR)/%.o: $(SRC_DIR)/%.cc
 
 $(BUILD_DIR)/%.o: $(SRC_DIR)/%.s
 	@mkdir -p $(dir $@)
-	$(AS) $(ASFLAGS) -o $@ $<
+	$(AS) $(ASFLAGS) -g -o $@ $<
 
 .PHONY: test
 test: test/test.cc $(HEADERS)

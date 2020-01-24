@@ -43,7 +43,7 @@ void test_queue() {
 }
 
 void test_priority_queue() {
-    PriorityQueue<int, 3, 10> pq;
+    PriorityQueue<int, 10> pq;
 
     assert(pq.is_empty());
 
@@ -56,6 +56,22 @@ void test_priority_queue() {
     assert(pq.pop(x) == PriorityQueueErr::OK && x == 100);
     assert(pq.pop(x) == PriorityQueueErr::OK && x == 101);
     assert(pq.pop(x) == PriorityQueueErr::EMPTY && x == 101);
+
+    pq.push(0, 4);
+    pq.push(1, 3);
+    pq.push(2, 3);
+    pq.push(3, 5);
+
+    assert(pq.peek(x) == PriorityQueueErr::OK && x == 3);
+    assert(pq.pop(x) == PriorityQueueErr::OK && x == 3);
+    pq.push(3, 5);
+    assert(pq.pop(x) == PriorityQueueErr::OK && x == 3);
+
+    assert(pq.pop(x) == PriorityQueueErr::OK && x == 0);
+    assert(pq.pop(x) == PriorityQueueErr::OK && x == 1);
+    pq.push(1, 3);
+    assert(pq.pop(x) == PriorityQueueErr::OK && x == 2);
+    assert(pq.pop(x) == PriorityQueueErr::OK && x == 1);
 }
 
 int main() {
