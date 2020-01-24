@@ -27,8 +27,6 @@ extern size_t __USER_STACK_SIZE__;
 #define INVALID_PRIORITY -1
 #define OUT_OF_TASK_DESCRIPTORS -2
 
-namespace kernel {
-
 class Kernel {
     struct TaskDescriptor {
         int priority;
@@ -177,25 +175,23 @@ class Kernel {
     }
 };  // class Kernel
 
-}  // namespace kernel
-
 extern void FirstUserTask();
 
-static kernel::Kernel kern;
+static Kernel kernel;
 
 extern "C" int handle_syscall(uint32_t no, void* user_sp) {
-    return kern.handle_syscall(no, user_sp);
+    return kernel.handle_syscall(no, user_sp);
 }
 
 int kmain() {
     kprintf("Hello from the choochoos kernel!");
 
-    kern.initialize(FirstUserTask);
+    kernel.initialize(FirstUserTask);
 
     while (true) {
-        int next_task = kern.schedule();
+        int next_task = kernel.schedule();
         if (next_task < 0) break;
-        kern.activate(next_task);
+        kernel.activate(next_task);
     }
 
     kprintf("Goodbye from choochoos kernel!");
