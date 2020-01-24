@@ -2,26 +2,20 @@
 
 set -e
 
-echo "building k1..."
+folders=(k1 pingpong)
 
-make clean >/dev/null
-make $@ release >/dev/null
+for folder in "${folders[@]}"; do
+  echo "building ${folder}..."
 
-echo "running k1..."
-ts7200 bin/choochoos.elf > "test/k1.actual"
+  make clean >/dev/null
+  make $@ USER_FOLDER="${folder}" release >/dev/null
 
-echo "building k2..."
+  echo "running ${folder}..."
+  ts7200 bin/choochoos.elf > "test/${folder}.actual"
+done
 
-make clean >/dev/null
-make $@ USER_FOLDER=k2 release >/dev/null
-
-echo "running k2..."
-
-ts7200 bin/choochoos.elf > "test/k2.actual"
-
-echo -n "checking k1: "
-diff --strip-trailing-cr "test/k1.actual" "test/k1.expected"
-echo "outputs match"
-echo -n "checking k2: "
-diff --strip-trailing-cr "test/k2.actual" "test/k2.expected"
-echo "outputs match"
+for folder in "${folders[@]}"; do
+  echo -n "checking $folder: "
+  diff --strip-trailing-cr "test/$folder.actual" "test/$folder.expected"
+  echo "outputs match"
+done
