@@ -24,8 +24,6 @@ extern size_t __USER_STACK_SIZE__;
 // stack we need for the kernel.
 #define MAX_SCHEDULED_TASKS 16
 
-#define MAX_PRIORITY 8  // 0 <= priority < 8
-#define MAX_TASKS_PER_PRIORITY 8
 #define INVALID_PRIORITY -1
 #define OUT_OF_TASK_DESCRIPTORS -2
 
@@ -50,9 +48,7 @@ class Kernel {
     };
 
     TaskDescriptor tasks[MAX_SCHEDULED_TASKS];
-    PriorityQueue<int /* task descriptor */, MAX_PRIORITY,
-                  MAX_TASKS_PER_PRIORITY>
-        ready_queue;
+    PriorityQueue<int /* task descriptor */, MAX_SCHEDULED_TASKS> ready_queue;
 
     int current_task = -1;
 
@@ -71,7 +67,7 @@ class Kernel {
     int Create(int priority, void* function) {
         kdebug("Called Create(priority=%d, function=%p)", priority, function);
 
-        if (priority < 0 || priority >= MAX_PRIORITY) return INVALID_PRIORITY;
+        if (priority < 0) return INVALID_PRIORITY;
         int tid = next_tid();
         if (tid < 0) return OUT_OF_TASK_DESCRIPTORS;
 
