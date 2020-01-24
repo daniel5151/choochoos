@@ -132,7 +132,7 @@ class Kernel {
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Warray-bounds"
         stack->dummy_syscall_response = 0xdeadbeef;
-        stack->spsr = 0xc0;
+        stack->spsr = 0xd0;
         stack->start_addr = function;
         for (uint32_t i = 0; i < 13;
              i++)  // set regs to their own vals, for debug
