@@ -40,4 +40,9 @@ class Queue {
         dest = buf[start];
         return QueueErr::OK;
     }
+
+    void clear() {
+        start = 0;
+        len = 0;
+    }
 };
