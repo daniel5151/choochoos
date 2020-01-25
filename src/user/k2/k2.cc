@@ -4,8 +4,21 @@
 enum class RPS { NONE = 0, ROCK = 1, PAPER = 2, SCISSORS = 3 };
 enum class Result { DRAW, I_WON, I_LOST };
 
+const char* str_of_rps(const RPS rps) {
+    switch (rps) {
+        case RPS::ROCK:
+            return "rock";
+        case RPS::PAPER:
+            return "paper";
+        case RPS::SCISSORS:
+            return "scissors";
+        default:
+            panic("unknown RPS %d", (int)rps);
+    }
+}
+
 struct Message {
-    enum {
+    enum uint8_t {
         DONE,
         SIGNUP,
         SIGNUP_ACK,
@@ -13,6 +26,7 @@ struct Message {
         PLAY,
         PLAY_RESP,
         QUIT,
+        QUIT_ACK,
         OTHER_PLAYER_QUIT,
     } tag;
     union {
@@ -26,7 +40,7 @@ struct Message {
         struct {
             Result result;
         } play_resp;
-    } data;
+    };
 };
 
 namespace rps {
@@ -46,6 +60,8 @@ struct Game {
     bool has(int tid) { return tid1 == tid || tid2 == tid; }
 
     void set(int tid, RPS choice) {
+        assert(tid >= 0);
+        assert(choice != RPS::NONE);
         if (!has(tid)) {
             panic("set(tid=%d, choice=%d) on game without tid", tid,
                   (int)choice);
@@ -59,6 +75,7 @@ struct Game {
     }
 
     void add(int tid) {
+        assert(tid >= 0);
         if (remaining() == 0) {
             panic("add() to full game");
         }
@@ -70,6 +87,16 @@ struct Game {
         }
     }
 
+    void remove(int tid) {
+        assert(tid >= 0);
+        assert(has(tid));
+        if (tid1 == tid) {
+            tid1 = -1;
+        } else {
+            tid2 = -1;
+        }
+    }
+
     // returns the tid of the winner, or -1 on a draw
     int winner() {
         if (remaining() != 0) {
@@ -78,8 +105,16 @@ struct Game {
         if (choice1 == choice2) {
             return -1;
         }
-        // TODO actually follow the game rules
-        return tid1;
+        switch (choice1) {
+            case RPS::ROCK:
+                return choice2 == RPS::PAPER ? tid2 : tid1;
+            case RPS::PAPER:
+                return choice2 == RPS::SCISSORS ? tid2 : tid1;
+            case RPS::SCISSORS:
+                return choice2 == RPS::ROCK ? tid2 : tid1;
+            default:
+                assert(false);
+        }
     }
 
     bool is_over() { return choice1 != RPS::NONE && choice2 != RPS::NONE; }
@@ -96,7 +131,7 @@ void Server() {
 
     while (true) {
         Receive(&tid, (char*)&req, sizeof(req));
-        log("received message tag=%d", req.tag);
+        debug("received message tag=%d from tid=%d ", req.tag, tid);
         switch (req.tag) {
             case Message::DONE:
                 return;
@@ -112,7 +147,7 @@ void Server() {
                 if (game != nullptr) {
                     game->add(tid);
                     // we have a full game, send ACKS to both clients
-                    res = (Message){.tag = Message::SIGNUP_ACK, .data = {}};
+                    res = (Message){.tag = Message::SIGNUP_ACK, .empty = {}};
                     Reply(game->tid1, (char*)&res, sizeof(res));
                     Reply(game->tid2, (char*)&res, sizeof(res));
                     break;
@@ -127,17 +162,21 @@ void Server() {
                 if (game != nullptr) {
                     game->add(tid);
                 } else {
-                    res = (Message){.tag = Message::OUT_OF_SPACE, .data = {}};
+                    res = (Message){.tag = Message::OUT_OF_SPACE, .empty = {}};
                     Reply(tid, (char*)&res, sizeof(res));
                 }
             } break;
 
             case Message::PLAY: {
+                RPS choice = req.play.choice;
+                assert(choice != RPS::NONE);
                 for (int i = 0; i < NUM_GAMES; i++) {
                     Game& game = games[i];
                     if (game.has(tid)) {
-                        game.set(tid, res.data.play.choice);
+                        debug("game.set(tid=%d, choice=%d)", tid, (int)choice);
+                        game.set(tid, choice);
                         if (game.is_over()) {
+                            debug("game is over");
                             int winner = game.winner();
                             Result r1 = Result::DRAW;
                             Result r2 = Result::DRAW;
@@ -148,18 +187,29 @@ void Server() {
                                 r1 = Result::I_LOST;
                                 r2 = Result::I_WON;
                             }
-                            res = (Message){
-                                .tag = Message::PLAY_RESP,
-                                .data = {.play_resp = {.result = r1}}};
+                            res = (Message){.tag = Message::PLAY_RESP,
+                                            .play_resp = {.result = r1}};
                             Reply(game.tid1, (char*)&res, sizeof(res));
-                            res.data.play_resp.result = r2;
+                            res.play_resp.result = r2;
                             Reply(game.tid2, (char*)&res, sizeof(res));
                             game.choice1 = RPS::NONE;
                             game.choice2 = RPS::NONE;
+                            bwgetc(COM2);
                         }
                         break;
                     }
                 }
+            } break;
+
+            case Message::QUIT: {
+                for (int i = 0; i < NUM_GAMES; i++) {
+                    Game& game = games[i];
+                    if (game.has(tid)) {
+                        game.remove(tid);
+                    }
+                }
+                res = {Message::QUIT_ACK, .empty = {}};
+                Reply(tid, (char*)&res, sizeof(res));
             } break;
 
             default:
@@ -175,7 +225,8 @@ void Client() {
     Message req;
     Message res;
 
-    req = (Message){.tag = Message::SIGNUP, .data = {}};
+    log("sending signup");
+    req = (Message){.tag = Message::SIGNUP, .empty = {}};
     int code = Send(server, (char*)&req, sizeof(req), (char*)&res, sizeof(res));
     assert(code >= 0);
     switch (res.tag) {
@@ -188,19 +239,18 @@ void Client() {
 
     for (int i = 0; i < 4; i++) {
         RPS choice = (RPS)((rand() % 3) + 1);
-        req = (Message){.tag = Message::PLAY,
-                        .data = {.play = {.choice = choice}}};
-        log("sending choice %d", (int)choice);
+        req = (Message){.tag = Message::PLAY, .play = {.choice = choice}};
+        log("sending %s", str_of_rps(req.play.choice));
         int code =
             Send(server, (char*)&req, sizeof(req), (char*)&res, sizeof(res));
         assert(code >= 0);
 
         switch (res.tag) {
             case Message::PLAY_RESP: {
-                Result result = res.data.play_resp.result;
+                Result result = res.play_resp.result;
                 log("%s",
                     result == Result::DRAW
-                        ? "draw"
+                        ? "it's a draw"
                         : result == Result::I_WON ? "I won!" : "I lost :(");
             } break;
             case Message::OTHER_PLAYER_QUIT: {
@@ -211,12 +261,12 @@ void Client() {
                 panic("invalid reply from server: tag=%d", res.tag);
             }
         }
-
-        req = (Message){.tag = Message::QUIT, .data = {}};
-        log("sending quit");
-        code = Send(server, (char*)&req, sizeof(req), (char*)&res, sizeof(res));
-        assert(code >= 0);
     }
+    req = (Message){.tag = Message::QUIT, .empty = {}};
+    log("sending quit");
+    code = Send(server, (char*)&req, sizeof(req), (char*)&res, sizeof(res));
+    assert(code >= 0);
+    log("exiting");
 }
 
 }  // namespace rps

@@ -20,9 +20,9 @@ void kprintf(const char* fmt, ...) __attribute__((format(printf, 1, 2)));
 // we'd have a singleton Kernel instance in scope, and we'd always call MyTid()
 // (or perhaps a new function, like last_active_tid()) on that instance.
 
-#define kdebug(fmt, ...)                                                       \
-    kprintf(VT_BLUE "[kdebug:%s:%d tid=%d] " VT_NOFMT fmt, __FILE__, __LINE__, \
-            MyTid(), ##__VA_ARGS__)
+#define kdebug(fmt, ...)                                               \
+    kprintf(VT_YELLOW "[kdebug:%s:%d tid=%d] " VT_NOFMT fmt, __FILE__, \
+            __LINE__, MyTid(), ##__VA_ARGS__)
 #endif
 
 #ifdef __cplusplus
