@@ -133,11 +133,10 @@ class Game {
     }
 };
 
-#define QUEUE_SIZE 32
 #define NUM_GAMES 16
 
 void Server() {
-    Queue<int, QUEUE_SIZE> queue;
+    Queue<int, 2> queue;
     Game games[NUM_GAMES];
 
     int tid;
@@ -175,7 +174,8 @@ void Server() {
 
                 // otherwise, assign the clients to a game and  send ACKS to
                 // both clients
-                log("RPSServer: matching tids %d and %d", tid, other_tid);
+                printf("[RPSServer] matching tids %d and %d" ENDL, tid,
+                       other_tid);
                 *game = Game(tid, other_tid);
                 res = {.tag = Message::ACK, .empty = {}};
                 Reply(tid, (char*)&res, sizeof(res));
@@ -210,7 +210,9 @@ void Server() {
                             res.play_resp.result = r2;
                             Reply(game.player2(), (char*)&res, sizeof(res));
                             game.reset();
-                            log("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~");
+                            printf(
+                                "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
+                                "~" ENDL);
                             bwgetc(COM2);
                         }
                         break;
@@ -234,8 +236,9 @@ void Server() {
                             // clear the game. If the player sends PLAY at this
                             // point, they will receive OTHER_PLAYER_QUIT.
                             *game = Game();
-                            log("RPSServer: tid %d quit, but no players are "
-                                "waiting",
+                            printf(
+                                "[RPSServer] tid %d quit, but no players are "
+                                "waiting." ENDL,
                                 tid);
                         } else {
                             // if there is a player waiting, match them up, and
@@ -244,8 +247,9 @@ void Server() {
                             assert(queue.pop_front(waiting_tid) ==
                                    QueueErr::OK);
                             RPS other_choice = game->choice_for(other_tid);
-                            log("RPSServer: tid %d quit, but tid %d is "
-                                "waiting. Matching tids %d and %d",
+                            printf(
+                                "[RPSServer] tid %d quit, but tid %d is "
+                                "waiting. Matching tids %d and %d" ENDL,
                                 tid, waiting_tid, other_tid, waiting_tid);
                             *game = Game(other_tid, waiting_tid);
                             if (other_choice != RPS::NONE) {
@@ -271,6 +275,8 @@ void Server() {
 
 void Client() {
     int server = 1;  // TODO get this from the name server
+    char prefix[32];
+    snprintf(prefix, 32, "[Client %d] ", MyTid());
 
     Message req;
     Message res;
@@ -283,24 +289,25 @@ void Client() {
     res = {Message::ACK, .empty = {}};
     Reply(tid, (char*)&res, sizeof(res));
 
-    log("I want to play %u games. Sending signup...", num_games);
+    printf("%sI want to play %u games. Sending signup..." ENDL, prefix,
+           num_games);
     req = (Message){.tag = Message::SIGNUP, .empty = {}};
     code = Send(server, (char*)&req, sizeof(req), (char*)&res, sizeof(res));
     assert(code >= 0);
     switch (res.tag) {
         case Message::ACK:
-            log("received signup ack");
+            printf("%sreceived signup ack" ENDL, prefix);
             break;
         default:
-            panic("received non-ack response");
+            panic("received non-ack response" ENDL);
     }
 
     for (size_t i = 0; i < num_games; i++) {
         RPS choice = (RPS)((rand() % 3) + 1);
         req = (Message){.tag = Message::PLAY, .play = {.choice = choice}};
-        log("I want to play %u more %s. Sending %s...", num_games - i,
-            (num_games - i) > 1 ? "games" : "game",
-            str_of_rps(req.play.choice));
+        printf("%sI want to play %u more %s. Sending %s..." ENDL, prefix,
+               num_games - i, (num_games - i) > 1 ? "games" : "game",
+               str_of_rps(req.play.choice));
         int code =
             Send(server, (char*)&req, sizeof(req), (char*)&res, sizeof(res));
         assert(code >= 0);
@@ -308,28 +315,47 @@ void Client() {
         switch (res.tag) {
             case Message::PLAY_RESP: {
                 Result result = res.play_resp.result;
-                log("%s",
-                    result == Result::DRAW
-                        ? "it's a draw"
-                        : result == Result::I_WON ? "I won!" : "I lost :(");
+                printf("%s%s" ENDL, prefix,
+                       result == Result::DRAW
+                           ? "it's a draw"
+                           : result == Result::I_WON ? "I won!" : "I lost :(");
             } break;
             case Message::OTHER_PLAYER_QUIT: {
-                log("other player quit, time to go home");
+                printf("%sother player quit, time to go home" ENDL, prefix);
                 Exit();
             }
             default: {
-                panic("invalid reply from server: tag=%d", res.tag);
+                panic("invalid reply from server: tag=%d" ENDL, res.tag);
             }
         }
     }
     req = (Message){.tag = Message::QUIT, .empty = {}};
-    log("sending quit");
+    printf("%ssending quit" ENDL, prefix);
     code = Send(server, (char*)&req, sizeof(req), (char*)&res, sizeof(res));
     assert(code >= 0);
-    log("exiting");
+    printf("%sexiting" ENDL, prefix);
 }
 
 }  // namespace rps
+
+void bwgetline(char* line, size_t len) {
+    size_t i = 0;
+    while (i < len - 1) {
+        char c = (char)bwgetc(COM2);
+        if (c == '\r') break;
+        if (c == '\n') continue;
+        if (c == '\b' && i > 0) {
+            i--;
+            // bwputstr(COM2, "\033[K\033D");
+            bwputstr(COM2, "\b \b");
+            continue;
+        }
+        line[i++] = c;
+        bwputc(COM2, c);
+    }
+    bwputstr(COM2, ENDL);
+    line[i] = '\0';
+}
 
 void FirstUserTask() {
     struct {
@@ -338,6 +364,11 @@ void FirstUserTask() {
     } players[3] = {{.priority = 1, .num_games = 3},
                     {.priority = 2, .num_games = 5},
                     {.priority = 3, .num_games = 3}};
+
+    char line[100];
+    bwgetline(line, 100);
+    log("'%s'", line);
+    // TODO use sscanf to read config things from the user
 
     // TODO we should provide a mechanism to set the seed, (at build time or
     // at runtime by accepting input), including a fully random option that

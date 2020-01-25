@@ -19,6 +19,8 @@ int Reply(int tid, const char* reply, int rplen);
 
 #define LOG_BUFFER_SIZE 128
 
+#define ENDL "\r\n"
+
 #undef assert
 #define assert(expr)                                                \
     do {                                                            \
@@ -71,6 +73,21 @@ int Reply(int tid, const char* reply, int rplen);
                  VT_RED "[panic:" __FILE__ ":%d tid=%d] " VT_NOFMT fmt "\r\n", \
                  __LINE__, MyTid(), ##args);                                   \
         Exit();                                                                \
+    } while (false)
+
+// the (null-terminated) output has been completely written if and only if the
+// returned value is nonnegative and less than buf_size
+#define PRINTF_BUF_SIZE 1024
+#define printf(fmt, args...)                                            \
+    do {                                                                \
+        char buf[PRINTF_BUF_SIZE];                                      \
+        int n = snprintf(buf, PRINTF_BUF_SIZE, fmt, ##args);            \
+        if (n < 0 || n >= PRINTF_BUF_SIZE) {                            \
+            panic("printf: short write (n=%d, buf_size=%d)  [" __FILE__ \
+                  ":%d]",                                               \
+                  n, PRINTF_BUF_SIZE, __LINE__);                        \
+        }                                                               \
+        bwputstr(COM2, buf);                                            \
     } while (false)
 
 #ifdef __cplusplus
