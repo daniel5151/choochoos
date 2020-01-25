@@ -6,16 +6,16 @@ Written by [Daniel Prilik](https://prilik.com) and [James Hageman](https://james
 
 ## Building
 
-The final executable will be placed at `bin/choochoos.elf`
-
-### Debug
-
 ```bash
-make
+make release USER_FOLDER=<assignment> # e.g: make release USER_FOLDER=k1
 ```
 
-### Release
+The final executable is output at `bin/choochoos.elf`.
 
-```bash
-make release
-```
+_Note_: omiting `release` from the `make` command will enable debug logging and assertions.
+
+## Documentation
+
+Documentation for each assignment can be found under the `docs` folder. Each assignment has it's own directory with associated documentation.
+
+e.g: for assignment K1, the documentation is under `docs/k1/`.
