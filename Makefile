@@ -29,7 +29,7 @@ OBJS = $(patsubst $(SRC_DIR)/%,$(BUILD_DIR)/%,\
 HEADERS = $(shell find ./include -name '*.h')
 DEPS = $(OBJS:.o=.d)
 
-WARNING_FLAGS = -Wall -Wextra -Wconversion
+WARNING_FLAGS = -Wall -Wextra -Wconversion -Wsign-conversion
 
 COMMON_FLAGS = -fPIC -mcpu=arm920t -msoft-float -MP -MMD $(WARNING_FLAGS)
 

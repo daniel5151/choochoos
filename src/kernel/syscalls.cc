@@ -27,7 +27,7 @@ extern size_t __USER_STACK_SIZE__;
 #define INVALID_PRIORITY -1
 #define OUT_OF_TASK_DESCRIPTORS -2
 
-static inline int min(int a, int b) { return a < b ? a : b; }
+static inline size_t min(size_t a, size_t b) { return a < b ? a : b; }
 
 namespace kernel {
 
@@ -61,7 +61,7 @@ struct TaskState {
 
 class TaskDescriptor {
    public:
-    size_t priority;
+    int priority;
     TaskState state;
     int parent_tid;
 
@@ -69,7 +69,7 @@ class TaskDescriptor {
 
     TaskDescriptor() : state{TaskState::UNUSED, .unused = {}}, parent_tid(-2) {}
 
-    TaskDescriptor(size_t priority, int parent_tid, void* stack_ptr)
+    TaskDescriptor(int priority, int parent_tid, void* stack_ptr)
         : priority(priority),
           state{TaskState::READY, .ready = {.mailbox = Mailbox()}},
           parent_tid(parent_tid),
@@ -147,7 +147,7 @@ class Kernel {
         kdebug("Created: tid=%d priority=%d function=%p", tid, priority,
                function);
 
-        tasks[tid] = TaskDescriptor((size_t)priority, MyTid(), (void*)stack);
+        tasks[tid] = TaskDescriptor(priority, MyTid(), (void*)stack);
         return tid;
     }
 
@@ -159,8 +159,8 @@ class Kernel {
 
     void Yield() { kdebug("Called Yield"); }
 
-    int Send(int receiver_tid, const char* msg, int msglen, char* reply,
-             int rplen) {
+    int Send(int receiver_tid, const char* msg, size_t msglen, char* reply,
+             size_t rplen) {
         kdebug("Called Send(tid=%d msg=%s msglen=%d reply=%p rplen=%d)",
                receiver_tid, msg, msglen, reply, rplen);
         if (receiver_tid < 0 || receiver_tid >= MAX_SCHEDULED_TASKS)
@@ -209,8 +209,8 @@ class Kernel {
         return 0;
     }
 
-    int Receive(int* tid, char* msg, int msglen) {
-        kdebug("Called Receive(tid=%p msg=%p msglen=%d)", tid, msg, msglen);
+    int Receive(int* tid, char* msg, size_t msglen) {
+        kdebug("Called Receive(tid=%p msg=%p msglen=%lu)", tid, msg, msglen);
 
         TaskDescriptor& task = tasks[MyTid()];
 
@@ -234,8 +234,8 @@ class Kernel {
         }
     }
 
-    int Reply(int tid, const char* reply, int rplen) {
-        kdebug("Called Reply(tid=%d reply=%p rplen=%d)", tid, reply, rplen);
+    int Reply(int tid, const char* reply, size_t rplen) {
+        kdebug("Called Reply(tid=%d reply=%p rplen=%lu)", tid, reply, rplen);
         if (tid < 0 || tid >= MAX_SCHEDULED_TASKS) return -1;
         TaskDescriptor& receiver = tasks[tid];
         switch (receiver.state.tag) {
@@ -282,9 +282,10 @@ class Kernel {
             case 3:
                 return MyTid();
             case 4:
-                return Create(user_stack->regs[0], (void*)user_stack->regs[1]);
+                return Create((int)user_stack->regs[0],
+                              (void*)user_stack->regs[1]);
             case 5:
-                return Send(user_stack->regs[0],
+                return Send((int)user_stack->regs[0],
                             (const char*)user_stack->regs[1],
                             user_stack->regs[2], (char*)user_stack->regs[3],
                             user_stack->additional_params[0]);
@@ -292,7 +293,7 @@ class Kernel {
                 return Receive((int*)user_stack->regs[0],
                                (char*)user_stack->regs[1], user_stack->regs[2]);
             case 7:
-                return Reply(user_stack->regs[0],
+                return Reply((int)user_stack->regs[0],
                              (const char*)user_stack->regs[1],
                              user_stack->regs[2]);
             default:
