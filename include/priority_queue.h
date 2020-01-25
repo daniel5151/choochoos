@@ -15,12 +15,12 @@ class PriorityQueue {
         // ties when priorities are equal. An element with a lower 'ticket' is
         // considered higher priority than an element with equal priority but
         // a higher ticket. This helps preserve FIFO within a given priority.
-        size_t ticket;
+        uint64_t ticket;
 
         T data;
 
         Element() = default;
-        Element(T data, int priority, size_t ticket)
+        Element(T data, int priority, uint64_t ticket)
             : priority(priority), ticket(ticket), data(data) {}
 
         bool operator<(const Element& other) const {
@@ -33,7 +33,7 @@ class PriorityQueue {
 
     Element arr[N];
     size_t len;
-    size_t ticket_counter;
+    uint64_t ticket_counter;
 
    public:
     PriorityQueue() : len(0), ticket_counter(0) {}
