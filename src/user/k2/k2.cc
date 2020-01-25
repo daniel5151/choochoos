@@ -1,4 +1,5 @@
 #include <cstdlib>
+#include "queue.h"
 #include "user/syscalls.h"
 
 enum class RPS { NONE = 0, ROCK = 1, PAPER = 2, SCISSORS = 3 };
@@ -19,14 +20,13 @@ const char* str_of_rps(const RPS rps) {
 
 struct Message {
     enum uint8_t {
-        DONE,
+        ACK,
+        PLAYER_CONFIG,
         SIGNUP,
-        SIGNUP_ACK,
         OUT_OF_SPACE,
         PLAY,
         PLAY_RESP,
         QUIT,
-        QUIT_ACK,
         OTHER_PLAYER_QUIT,
     } tag;
     union {
@@ -38,26 +38,57 @@ struct Message {
         } play;
 
         struct {
+            size_t num_games;
+        } player_config;
+
+        struct {
             Result result;
         } play_resp;
     };
 };
 
 namespace rps {
-struct Game {
+class Game {
     int tid1, tid2;
     RPS choice1, choice2;
 
+   public:
     Game() : tid1(-1), tid2(-1), choice1(RPS::NONE), choice2(RPS::NONE) {}
-
-    int remaining() {
-        int count = 0;
-        if (tid1 == -1) count++;
-        if (tid2 == -1) count++;
-        return count;
+    Game(int tid1, int tid2)
+        : tid1(tid1), tid2(tid2), choice1(RPS::NONE), choice2(RPS::NONE) {
+        assert(tid1 >= 0);
+        assert(tid2 >= 0);
+        assert(tid1 != tid2);
     }
 
-    bool has(int tid) { return tid1 == tid || tid2 == tid; }
+    int empty() const {
+        if (tid1 == -1 || tid2 == -1) return true;
+        assert(tid1 >= 0);
+        assert(tid2 >= 0);
+        return false;
+    }
+
+    int player1() const {
+        assert(!empty());
+        return tid1;
+    }
+
+    int player2() const {
+        assert(!empty());
+        return tid2;
+    }
+
+    bool has(int tid) const { return tid1 == tid || tid2 == tid; }
+
+    int other_tid(int tid) const {
+        assert(has(tid));
+        return tid1 == tid ? tid2 : tid1;
+    }
+
+    RPS choice_for(int tid) const {
+        assert(has(tid));
+        return tid == tid1 ? choice1 : choice2;
+    }
 
     void set(int tid, RPS choice) {
         assert(tid >= 0);
@@ -74,34 +105,9 @@ struct Game {
         }
     }
 
-    void add(int tid) {
-        assert(tid >= 0);
-        if (remaining() == 0) {
-            panic("add() to full game");
-        }
-
-        if (tid1 == -1) {
-            tid1 = tid;
-        } else {
-            tid2 = tid;
-        }
-    }
-
-    void remove(int tid) {
-        assert(tid >= 0);
-        assert(has(tid));
-        if (tid1 == tid) {
-            tid1 = -1;
-        } else {
-            tid2 = -1;
-        }
-    }
-
     // returns the tid of the winner, or -1 on a draw
-    int winner() {
-        if (remaining() != 0) {
-            panic("winner() called on non-full game");
-        }
+    int winner() const {
+        assert(!empty());
         if (choice1 == choice2) {
             return -1;
         }
@@ -117,12 +123,21 @@ struct Game {
         }
     }
 
-    bool is_over() { return choice1 != RPS::NONE && choice2 != RPS::NONE; }
+    bool is_over() const {
+        return choice1 != RPS::NONE && choice2 != RPS::NONE;
+    }
+
+    void reset() {
+        choice1 = RPS::NONE;
+        choice2 = RPS::NONE;
+    }
 };
 
+#define QUEUE_SIZE 32
 #define NUM_GAMES 16
 
 void Server() {
+    Queue<int, QUEUE_SIZE> queue;
     Game games[NUM_GAMES];
 
     int tid;
@@ -133,46 +148,48 @@ void Server() {
         Receive(&tid, (char*)&req, sizeof(req));
         debug("received message tag=%d from tid=%d ", req.tag, tid);
         switch (req.tag) {
-            case Message::DONE:
-                return;
             case Message::SIGNUP: {
-                // first, look for nearly full games
-                Game* game = nullptr;
-                for (int i = 0; i < NUM_GAMES; i++) {
-                    if (games[i].remaining() == 1) {
-                        game = &games[i];
-                        break;
-                    }
-                }
-                if (game != nullptr) {
-                    game->add(tid);
-                    // we have a full game, send ACKS to both clients
-                    res = (Message){.tag = Message::SIGNUP_ACK, .empty = {}};
-                    Reply(game->tid1, (char*)&res, sizeof(res));
-                    Reply(game->tid2, (char*)&res, sizeof(res));
+                if (queue.is_empty()) {
+                    assert(queue.push_back(tid) == QueueErr::OK);
                     break;
                 }
-                // otherwise, find the first empty game
+
+                int other_tid;
+                assert(queue.pop_front(other_tid) == QueueErr::OK);
+
+                // first, look for empty games
+                Game* game = nullptr;
                 for (int i = 0; i < NUM_GAMES; i++) {
-                    if (games[i].remaining() == 2) {
+                    if (games[i].empty()) {
                         game = &games[i];
                         break;
                     }
                 }
-                if (game != nullptr) {
-                    game->add(tid);
-                } else {
+                // if we're out of free games, return OUT_OF_SPACE to both
+                // clients
+                if (game == nullptr) {
                     res = (Message){.tag = Message::OUT_OF_SPACE, .empty = {}};
                     Reply(tid, (char*)&res, sizeof(res));
+                    Reply(other_tid, (char*)&res, sizeof(res));
                 }
+
+                // otherwise, assign the clients to a game and  send ACKS to
+                // both clients
+                log("RPSServer: matching tids %d and %d", tid, other_tid);
+                *game = Game(tid, other_tid);
+                res = {.tag = Message::ACK, .empty = {}};
+                Reply(tid, (char*)&res, sizeof(res));
+                Reply(other_tid, (char*)&res, sizeof(res));
             } break;
 
             case Message::PLAY: {
                 RPS choice = req.play.choice;
                 assert(choice != RPS::NONE);
+                bool found = false;
                 for (int i = 0; i < NUM_GAMES; i++) {
                     Game& game = games[i];
                     if (game.has(tid)) {
+                        found = true;
                         debug("game.set(tid=%d, choice=%d)", tid, (int)choice);
                         game.set(tid, choice);
                         if (game.is_over()) {
@@ -180,35 +197,68 @@ void Server() {
                             int winner = game.winner();
                             Result r1 = Result::DRAW;
                             Result r2 = Result::DRAW;
-                            if (winner == game.tid1) {
+                            if (winner == game.player1()) {
                                 r1 = Result::I_WON;
                                 r2 = Result::I_LOST;
-                            } else if (winner == game.tid2) {
+                            } else if (winner == game.player2()) {
                                 r1 = Result::I_LOST;
                                 r2 = Result::I_WON;
                             }
                             res = (Message){.tag = Message::PLAY_RESP,
                                             .play_resp = {.result = r1}};
-                            Reply(game.tid1, (char*)&res, sizeof(res));
+                            Reply(game.player1(), (char*)&res, sizeof(res));
                             res.play_resp.result = r2;
-                            Reply(game.tid2, (char*)&res, sizeof(res));
-                            game.choice1 = RPS::NONE;
-                            game.choice2 = RPS::NONE;
+                            Reply(game.player2(), (char*)&res, sizeof(res));
+                            game.reset();
+                            log("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~");
                             bwgetc(COM2);
                         }
                         break;
                     }
                 }
+
+                if (!found) {
+                    // the other player must have quit, so send
+                    // OTHER_PLAYER_QUIT to tid
+                    res = {Message::OTHER_PLAYER_QUIT, .empty = {}};
+                    Reply(tid, (char*)&res, sizeof(res));
+                }
             } break;
 
             case Message::QUIT: {
                 for (int i = 0; i < NUM_GAMES; i++) {
-                    Game& game = games[i];
-                    if (game.has(tid)) {
-                        game.remove(tid);
+                    Game* game = &games[i];
+                    if (game->has(tid)) {
+                        int other_tid = game->other_tid(tid);
+                        if (queue.is_empty()) {
+                            // clear the game. If the player sends PLAY at this
+                            // point, they will receive OTHER_PLAYER_QUIT.
+                            *game = Game();
+                            log("RPSServer: tid %d quit, but no players are "
+                                "waiting",
+                                tid);
+                        } else {
+                            // if there is a player waiting, match them up, and
+                            // send ACK to the waiting player.
+                            int waiting_tid;
+                            assert(queue.pop_front(waiting_tid) ==
+                                   QueueErr::OK);
+                            RPS other_choice = game->choice_for(other_tid);
+                            log("RPSServer: tid %d quit, but tid %d is "
+                                "waiting. Matching tids %d and %d",
+                                tid, waiting_tid, other_tid, waiting_tid);
+                            *game = Game(other_tid, waiting_tid);
+                            if (other_choice != RPS::NONE) {
+                                game->set(other_tid, other_choice);
+                            }
+                            res = {Message::ACK, .empty = {}};
+                            Reply(waiting_tid, (char*)&res, sizeof(res));
+                        }
+
+                        break;
                     }
                 }
-                res = {Message::QUIT_ACK, .empty = {}};
+                res = {Message::ACK, .empty = {}};
                 Reply(tid, (char*)&res, sizeof(res));
             } break;
 
@@ -225,22 +275,32 @@ void Client() {
     Message req;
     Message res;
 
-    log("sending signup");
+    int tid;
+    int code = Receive(&tid, (char*)&req, sizeof(req));
+    assert(code >= 0);
+    assert(req.tag == Message::PLAYER_CONFIG);
+    size_t num_games = req.player_config.num_games;
+    res = {Message::ACK, .empty = {}};
+    Reply(tid, (char*)&res, sizeof(res));
+
+    log("I want to play %u games. Sending signup...", num_games);
     req = (Message){.tag = Message::SIGNUP, .empty = {}};
-    int code = Send(server, (char*)&req, sizeof(req), (char*)&res, sizeof(res));
+    code = Send(server, (char*)&req, sizeof(req), (char*)&res, sizeof(res));
     assert(code >= 0);
     switch (res.tag) {
-        case Message::SIGNUP_ACK:
+        case Message::ACK:
             log("received signup ack");
             break;
         default:
             panic("received non-ack response");
     }
 
-    for (int i = 0; i < 4; i++) {
+    for (size_t i = 0; i < num_games; i++) {
         RPS choice = (RPS)((rand() % 3) + 1);
         req = (Message){.tag = Message::PLAY, .play = {.choice = choice}};
-        log("sending %s", str_of_rps(req.play.choice));
+        log("I want to play %u more %s. Sending %s...", num_games - i,
+            (num_games - i) > 1 ? "games" : "game",
+            str_of_rps(req.play.choice));
         int code =
             Send(server, (char*)&req, sizeof(req), (char*)&res, sizeof(res));
         assert(code >= 0);
@@ -255,7 +315,7 @@ void Client() {
             } break;
             case Message::OTHER_PLAYER_QUIT: {
                 log("other player quit, time to go home");
-                break;
+                Exit();
             }
             default: {
                 panic("invalid reply from server: tag=%d", res.tag);
@@ -272,10 +332,21 @@ void Client() {
 }  // namespace rps
 
 void FirstUserTask() {
-    int priorities[3] = {1, 2, 3};
+    struct {
+        int priority;
+        size_t num_games;
+    } players[3] = {{.priority = 1, .num_games = 3},
+                    {.priority = 2, .num_games = 5},
+                    {.priority = 3, .num_games = 3}};
+
+    srand(2);
     int server = Create(0, rps::Server);
     (void)server;  // TODO register this with the name server
     for (int i = 0; i < 3; i++) {
-        Create(priorities[i % 3], rps::Client);
+        auto& config = players[i];
+        int tid = Create(config.priority, rps::Client);
+        Message m = {Message::PLAYER_CONFIG,
+                     .player_config = {.num_games = config.num_games}};
+        Send(tid, (char*)&m, sizeof(m), /* ignore response */ nullptr, 0);
     }
 }
