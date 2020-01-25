@@ -332,7 +332,9 @@ void Client() {
                            : result == Result::I_WON ? "I won!" : "I lost :(");
             } break;
             case Message::OTHER_PLAYER_QUIT: {
-                printf("%sother player quit, time to go home" ENDL, prefix);
+                printf("%sother player quit! I guess I'll go home :(" ENDL,
+                       prefix);
+                printf("%sexiting" ENDL, prefix);
                 Exit();
             }
             default: {
@@ -356,7 +358,6 @@ void bwgetline(char* line, size_t len) {
         if (c == '\r') break;
         if (c == '\b' && i > 0) {
             i--;
-            // bwputstr(COM2, "\033[K\033D");
             bwputstr(COM2, "\b \b");
             continue;
         }
@@ -368,33 +369,48 @@ void bwgetline(char* line, size_t len) {
 }
 
 void FirstUserTask() {
-    struct {
-        int priority;
-        size_t num_games;
-    } players[3] = {{.priority = 1, .num_games = 3},
-                    {.priority = 2, .num_games = 5},
-                    {.priority = 3, .num_games = 3}};
-
-    unsigned int seed;
+    int seed;
     char c;
     bool pause_after_each = false;
 
     char line[100];
     printf("random seed (>= 0): ");
     bwgetline(line, 100);
-    sscanf(line, "%u", &seed);
+    sscanf(line, "%d", &seed);
+    assert(seed >= 0);
 
     printf("pause after each game (y/n)? ");
     bwgetline(line, 100);
     sscanf(line, "%c", &c);
     pause_after_each = (c == 'y');
 
-    // TODO use sscanf to read config things from the user
+    size_t num_players;
+    printf("num players (0-32): ");
+    bwgetline(line, 100);
+    sscanf(line, "%u", &num_players);
+    assert(num_players <= 32);
 
-    // TODO we should provide a mechanism to set the seed, (at build time or
-    // at runtime by accepting input), including a fully random option that
-    // uses the wall clock or something.
-    srand(seed);
+    struct {
+        int priority;
+        size_t num_games;
+    } players[num_players];
+
+    for (size_t i = 0; i < num_players; i++) {
+        int priority = 1;
+        printf("player %u priority  (default 1): ", i + 1);
+        bwgetline(line, 100);
+        sscanf(line, "%d", &priority);
+        size_t num_games = 3;
+        printf("player %u num games (default 3): ", i + 1);
+        bwgetline(line, 100);
+        sscanf(line, "%u", &num_games);
+        assert(num_games < 100);
+
+        players[i].priority = priority;
+        players[i].num_games = num_games;
+    }
+
+    srand((unsigned int)seed);
     int server = Create(0, rps::Server);
     Message m = {Message::SERVER_CONFIG,
                  .server_config = {.pause_after_each = pause_after_each}};

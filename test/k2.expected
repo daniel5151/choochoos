@@ -1,6 +1,13 @@
 Hello from the choochoos kernel!
 random seed (>= 0): 2
 pause after each game (y/n)? n
+num players (0-32): 3
+player 1 priority  (default 1): 1
+player 1 num games (default 3): 3
+player 2 priority  (default 1): 2
+player 2 num games (default 3): 5
+player 3 priority  (default 1): 3
+player 3 num games (default 3): 3
 [Client 4] I want to play 3 games. Sending signup...
 [Client 3] I want to play 5 games. Sending signup...
 [Client 2] I want to play 3 games. Sending signup...
@@ -40,5 +47,6 @@ pause after each game (y/n)? n
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 [RPSServer] tid 3 quit, but no players are waiting.
 [Client 3] exiting
-[Client 2] other player quit, time to go home
+[Client 2] other player quit! I guess I'll go home :(
+[Client 2] exiting
 Goodbye from choochoos kernel!
