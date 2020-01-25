@@ -40,7 +40,7 @@ struct Message {
 typedef Queue<Message, 16> Mailbox;
 
 struct TaskState {
-    enum { UNUSED, READY, RECV_WAIT, REPLY_WAIT } tag;
+    enum uint8_t { UNUSED, READY, RECV_WAIT, REPLY_WAIT } tag;
     union {
         struct {
         } unused;
