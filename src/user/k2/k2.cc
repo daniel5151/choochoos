@@ -339,6 +339,9 @@ void FirstUserTask() {
                     {.priority = 2, .num_games = 5},
                     {.priority = 3, .num_games = 3}};
 
+    // TODO we should provide a mechanism to set the seed, (at build time or
+    // at runtime by accepting input), including a fully random option that
+    // uses the wall clock or something.
     srand(2);
     int server = Create(0, rps::Server);
     (void)server;  // TODO register this with the name server
