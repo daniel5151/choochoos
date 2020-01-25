@@ -342,8 +342,7 @@ void FirstUserTask() {
     srand(2);
     int server = Create(0, rps::Server);
     (void)server;  // TODO register this with the name server
-    for (int i = 0; i < 3; i++) {
-        auto& config = players[i];
+    for (auto& config : players) {
         int tid = Create(config.priority, rps::Client);
         Message m = {Message::PLAYER_CONFIG,
                      .player_config = {.num_games = config.num_games}};

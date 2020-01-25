@@ -21,7 +21,7 @@ int Reply(int tid, const char* reply, int rplen);
 
 #undef assert
 #define assert(expr)                                                \
-    {                                                               \
+    do {                                                            \
         if (!(expr)) {                                              \
             bwprintf(COM2,                                          \
                      VT_RED "[assert:" __FILE__                     \
@@ -30,46 +30,48 @@ int Reply(int tid, const char* reply, int rplen);
                      __LINE__, MyTid());                            \
             Exit();                                                 \
         }                                                           \
-    }
+    } while (false)
 
 #if defined(DISABLE_KDEBUG_PRINTS) || defined(RELEASE_MODE)
 #define debug(fmt, args...)
 #else
 #define debug(fmt, args...)                                             \
-    {                                                                   \
+    do {                                                                \
         char buf[LOG_BUFFER_SIZE];                                      \
         snprintf(buf, LOG_BUFFER_SIZE,                                  \
                  VT_CYAN "[debug:" __FILE__ ":%d tid=%d] " VT_NOFMT fmt \
                          "\r\n",                                        \
                  __LINE__, MyTid(), ##args);                            \
         bwputstr(COM2, buf);                                            \
-    }
+    } while (false)
 #endif
 
 #if defined(DISABLE_KDEBUG_PRINTS) || defined(RELEASE_MODE)
 #define log(fmt, args...)                                                    \
-    {                                                                        \
+    do {                                                                     \
         char buf[LOG_BUFFER_SIZE];                                           \
         snprintf(buf, LOG_BUFFER_SIZE,                                       \
                  VT_GREEN "[tid=%d] " VT_NOFMT fmt "\r\n", MyTid(), ##args); \
         bwputstr(COM2, buf);                                                 \
-    }
+    } while (false)
 #else
 #define log(fmt, args...)                                                      \
-    {                                                                          \
+    do {                                                                       \
         char buf[LOG_BUFFER_SIZE];                                             \
         snprintf(buf, LOG_BUFFER_SIZE,                                         \
                  VT_GREEN "[log:" __FILE__ ":%d tid=%d] " VT_NOFMT fmt "\r\n", \
                  __LINE__, MyTid(), ##args);                                   \
         bwputstr(COM2, buf);                                                   \
-    }
+    } while (false)
 #endif
 
-#define panic(fmt, args...)                                                \
-    bwprintf(COM2,                                                         \
-             VT_RED "[panic:" __FILE__ ":%d tid=%d] " VT_NOFMT fmt "\r\n", \
-             __LINE__, MyTid(), ##args);                                   \
-    Exit()
+#define panic(fmt, args...)                                                    \
+    do {                                                                       \
+        bwprintf(COM2,                                                         \
+                 VT_RED "[panic:" __FILE__ ":%d tid=%d] " VT_NOFMT fmt "\r\n", \
+                 __LINE__, MyTid(), ##args);                                   \
+        Exit();                                                                \
+    } while (false)
 
 #ifdef __cplusplus
 }
