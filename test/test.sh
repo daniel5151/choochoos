@@ -16,7 +16,7 @@ for folder in "${folders[@]}"; do
 
   input="test/${folder}.input"
   if [[ -f $input ]]; then
-      ts7200 bin/choochoos.elf < "$input" > "test/${folder}.actual";
+       tr '\n' '\r' < "$input" | ts7200 bin/choochoos.elf > "test/${folder}.actual";
     else
       ts7200 bin/choochoos.elf > "test/${folder}.actual";
     fi

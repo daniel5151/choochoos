@@ -28,6 +28,7 @@ struct Message {
         PLAY_RESP,
         QUIT,
         OTHER_PLAYER_QUIT,
+        SERVER_CONFIG,
     } tag;
     union {
         struct {
@@ -44,6 +45,10 @@ struct Message {
         struct {
             Result result;
         } play_resp;
+
+        struct {
+            bool pause_after_each;
+        } server_config;
     };
 };
 
@@ -143,6 +148,12 @@ void Server() {
     Message req;
     Message res;
 
+    Message config_msg;
+    Receive(&tid, (char*)&config_msg, sizeof(config_msg));
+    assert(config_msg.tag == Message::SERVER_CONFIG);
+    bool pause_after_each = config_msg.server_config.pause_after_each;
+    Reply(tid, nullptr, 0);
+
     while (true) {
         Receive(&tid, (char*)&req, sizeof(req));
         debug("received message tag=%d from tid=%d ", req.tag, tid);
@@ -213,7 +224,7 @@ void Server() {
                             printf(
                                 "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
                                 "~" ENDL);
-                            bwgetc(COM2);
+                            if (pause_after_each) bwgetc(COM2);
                         }
                         break;
                     }
@@ -343,7 +354,6 @@ void bwgetline(char* line, size_t len) {
     while (i < len - 1) {
         char c = (char)bwgetc(COM2);
         if (c == '\r') break;
-        if (c == '\n') continue;
         if (c == '\b' && i > 0) {
             i--;
             // bwputstr(COM2, "\033[K\033D");
@@ -365,21 +375,36 @@ void FirstUserTask() {
                     {.priority = 2, .num_games = 5},
                     {.priority = 3, .num_games = 3}};
 
+    unsigned int seed;
+    char c;
+    bool pause_after_each = false;
+
     char line[100];
+    printf("random seed (>= 0): ");
     bwgetline(line, 100);
-    log("'%s'", line);
+    sscanf(line, "%u", &seed);
+
+    printf("pause after each game (y/n)? ");
+    bwgetline(line, 100);
+    sscanf(line, "%c", &c);
+    pause_after_each = (c == 'y');
+
     // TODO use sscanf to read config things from the user
 
     // TODO we should provide a mechanism to set the seed, (at build time or
     // at runtime by accepting input), including a fully random option that
     // uses the wall clock or something.
-    srand(2);
+    srand(seed);
     int server = Create(0, rps::Server);
+    Message m = {Message::SERVER_CONFIG,
+                 .server_config = {.pause_after_each = pause_after_each}};
+    Send(server, (char*)&m, sizeof(m), nullptr, 0);
+
     (void)server;  // TODO register this with the name server
     for (auto& config : players) {
         int tid = Create(config.priority, rps::Client);
-        Message m = {Message::PLAYER_CONFIG,
-                     .player_config = {.num_games = config.num_games}};
+        m = {Message::PLAYER_CONFIG,
+             .player_config = {.num_games = config.num_games}};
         Send(tid, (char*)&m, sizeof(m), /* ignore response */ nullptr, 0);
     }
 }
