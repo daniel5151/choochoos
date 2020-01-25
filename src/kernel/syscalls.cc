@@ -71,7 +71,7 @@ class TaskDescriptor {
 
     TaskDescriptor(size_t priority, int parent_tid, void* stack_ptr)
         : priority(priority),
-          state{.tag = TaskState::READY, .ready = {.mailbox = Mailbox()}},
+          state{TaskState::READY, .ready = {.mailbox = Mailbox()}},
           parent_tid(parent_tid),
           sp(stack_ptr) {}
 
