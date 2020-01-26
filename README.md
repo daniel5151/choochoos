@@ -6,15 +6,13 @@ Written by [Daniel Prilik](https://prilik.com) and [James Hageman](https://james
 
 ## Building
 
-From the repository root, run:
+The default target is updated according the the most-recent assignment, so building is as straightforward as running:
 
 ```bash
-make release USER_FOLDER=<assignment> # e.g: make release USER_FOLDER=k1
+make
 ```
 
-The final executable is output at `bin/choochoos.elf`.
-
-_Note_: omiting `release` from the `make` command will enable debug logging and assertions.
+Additional debug statements can be enabled by invoking `make DEBUG=1`.
 
 ## Documentation
 
