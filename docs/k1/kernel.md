@@ -63,7 +63,7 @@ We have a `ready_queue`, which is a FIFO priority queue of `Tid`s. Tasks that
 are ready to be executed are on the queue, and `schedule()` simply grabs the
 next one.
 
-Our priority queue is implemented as a template class in [include/priority_queue.h](../../include/priority_queue.h). A `PriorityQueue<T, N>` is a fixed size object containing up to `N` elements of type `T`, implemented as a modified binary max-heap. Usually, when implementing a priority queue as a binary heap, the elements within the heap are compared only by their priority, to ensure that elements of higher priority are popped first. However, only using an element's priority does not guarantee FIFO ordering _within_ a priority. 
+Our priority queue is implemented as a template class in [include/priority_queue.h](../../include/priority_queue.h). A `PriorityQueue<T, N>` is a fixed size object containing up to `N` elements of type `T`, implemented as a modified binary max-heap. Usually, when implementing a priority queue as a binary heap, the elements within the heap are compared only by their priority, to ensure that elements of higher priority are popped first. However, only using an element's priority does not guarantee FIFO ordering _within_ a priority.
 
 Instead, we extend each element in the priority queue to have a `ticket` counter. As elements are pushed onto the queue, they are assigned a monotonically increasing `ticket`. When elements with the same priority are compared, the element with the lower `ticket` is given priority over the element with the higher `ticket`. This has the effect of always prioritizing elements that were added to the queue first, and gives us the desired per-priority FIFO.
 
@@ -71,8 +71,38 @@ Using this ticketed binary heap has both drawbacks and benefits over a fixed-pri
 
 The drawback is that we lose FIFO if the ticket counter overflows. Right now, the ticket counter is a `size_t` (a 32-bit unsigned integer), so we would have to push `2^32` `Tid`s onto `ready_queue` in order to see an overflow. This definitely won't happen in our `k1` demo, but it doesn't seem impossible in a longer running program that is rapidly switching tasks. We're experimenting with using the non-native `uint64_t`, and we will profile such a change as we wrap up `k2`.
 
+### Context Switching - Task Activation
 
-### Context Switching
+Once the scheduler has returned a Tid, the `kern.activate()` method is called with the Tid. This method updates the kernel's `current_task` with the provided Tid, fetch the task's saved stack pointer from its Task Descriptor, and hand the stack pointer to the `_activate_task` Assembly routine.
 
-### Handling syscalls
+This assembly routine performs the following steps in sequence:
+- Saves the kernel's register context onto the kernel's stack (i.e: r4-r12,lr)
+    - r0-r3 are not saved, as per the ARM C-ABI calling convention
+    - _Note:_ this does mean that in the future, when implementing interrupt-handling into our kernel, this routine will either have to be modified and/or supplemented by a second routine which saves / restores the entirety of a user's registers.
+- Switches to System mode, banking in the last user tasks's SP and LR
+- Moves the new task's SP from r0 to SP
+- Pops the saved user context from the SP into the CPU
+    - Pops the SWI return value into r0, the SWI return address into r1, and the user SPSR into r2
+    - Registers r4-12 and LR are restored via a single ldmfd instruction (r0 through r3 are _not_ restored, as the ARM C ABI doesn't require preserving those registers between method calls)
+- Moves the saved SPSR from r2 into the SPSR register
+- Calls the `movs` instruction to jump execution back to the saved swi return address (stored in r1), updating the CPSR register with the just-updated SPSR value
 
+The task will then continue its execution until it performs a syscall, at which point the "second-half" of context-switching is triggered.
+
+### Context Switching - SWI Handling
+
+Invoking a syscall switches the CPU to Supervisor mode, and jumps execution to the SWI handler. Our SWI handler is written entirely in Assembly, and was given the extremely original name `_swi_handler`.
+
+This routine is a bit more involved than the `_activate_task` routine, mainly due to some tricky register / system-mode juggling, but in a nutshell, the `_swi_handler` routine preforms the following steps in sequence:
+- Save the user's r0 through r12 on the user's stack (requires temporarily switching back to System mode from supervisor mode)
+    - Keep a copy of the user's SP in r4, which is used to stack additional data onto the user stack
+- Save the SWI return address & user SPSR from the _Supervisor_ mode LR and SPSR onto the _User_ mode SP (using the SP saved in r4)
+- Use the SWI return address offset by -4 to retrieve the SWI instruction that was executed, and perform a bitmask to retrieve it's immediate value (i.e: the syscall number)
+- Call the `handle_syscall` routine (implemented in C) with the syscall number and the user's SP
+    - See the "Handling Syscalls" section below for more details
+- Push the `handle_syscall` return value onto the user stack
+- Restore the saved kernel context from the kernel stack, returning execution back to the instruction immediately after the most recently executed `_activate_task` call (i.e: back to the `kern.activate()` method)
+
+The `kern.activate()` method proceeds to check to see what state the last-executed task is in, and queues it up to be re-scheduled if it's READY. This completes a single context switch, and execution flow is returned back to the scheduler.
+
+### Handling Syscalls
