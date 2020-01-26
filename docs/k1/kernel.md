@@ -16,7 +16,7 @@ For details on building the project, see the [README.md](`../../README.md`) at t
 
 ## Architectural Overview
 
-Our entry point is not actually `main`, but `_start` defined in [src/boilerplate/crt1.cc](../../src/boilerplate/crt1.cc). `_start` does couple key things for the initialization of the kernel:
+Our entry point is not actually `main`, but `_start` defined in [src/boilerplate/crt1.c](../../src/boilerplate/crt1.c). `_start` does couple key things for the initialization of the kernel:
 - The link register is stored in the `redboot_return_addr` variable, so we can exit from any point in the kernel's execution by jumping directly to `redboot_return_addr`
 - The BSS is zeroed
 - All global variable constructors are run
