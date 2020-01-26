@@ -1,4 +1,4 @@
-BIN_NAME = choochoos.elf
+CURRENT_ASSIGNMENT = k1
 
 XBINDIR = /u/cs452/public/xdev/bin
 XLIBDIR1 = /u/cs452/public/xdev/lib/gcc/arm-none-eabi/9.2.0
@@ -13,7 +13,12 @@ SRC_DIR = src
 BUILD_DIR = build
 BIN_DIR = bin
 
-USER_FOLDER ?= k1
+# XXX: this ain't great, and aught to be rewritten
+ifeq ($(MAKECMDGOALS),)
+	USER_FOLDER = $(CURRENT_ASSIGNMENT)
+else
+	USER_FOLDER = $(MAKECMDGOALS)
+endif
 ALL_USER_SRCS_GLOB = $(SRC_DIR)/user/*/**
 USER_SRC_DIR = $(SRC_DIR)/user/$(USER_FOLDER)
 
@@ -41,8 +46,11 @@ INCLUDES = -I. -I./include
 CCFLAGS = $(COMMON_FLAGS) -std=c11
 CXXFLAGS = $(COMMON_FLAGS) -std=c++17 -fno-rtti -fno-exceptions -fno-unwind-tables
 
-OPTIMIZE_FLAGS = -Og -g
-RELEASE_FLAGS = -O3 -g -Werror -DRELEASE_MODE
+OPTIMIZE_FLAGS = -O3 -g -Werror -DRELEASE_MODE
+
+ifdef DEBUG
+	OPTIMIZE_FLAGS = -Og -g
+endif
 
 LDFLAGS =                             \
 	-static                           \
@@ -54,23 +62,22 @@ LDFLAGS =                             \
 	-L $(XLIBDIR2)
 LIBRARIES = -lstdc++ -lc -lgcc
 
-.PHONY: dirs all
-all: $(BIN_DIR)/$(BIN_NAME)
-
-release: OPTIMIZE_FLAGS = $(RELEASE_FLAGS)
-release: all
+.PHONY: current_assignment
+current_assignment: $(CURRENT_ASSIGNMENT).elf
+	cp $(BIN_DIR)/$(CURRENT_ASSIGNMENT).elf $(CURRENT_ASSIGNMENT).elf
 
 .PHONY: clean
 clean:
 	$(RM) -r $(BUILD_DIR)
 	$(RM) -r $(BIN_DIR)
+	$(RM) *.elf
 
 .PHONY: dirs
 dirs: $(BIN_DIR)
 
-$(BIN_DIR)/$(BIN_NAME): $(OBJS)
-	@mkdir -p $(dir $@)
-	$(LD) $(LDFLAGS) $(OBJS) -o $@ $(LIBRARIES)
+k1.elf: $(OBJS)
+	@mkdir -p $(BIN_DIR)
+	$(LD) $(LDFLAGS) $(OBJS) -o $(BIN_DIR)/$@ $(LIBRARIES)
 
 -include $(DEPS)
 
