@@ -1,4 +1,3 @@
-
 #include <string.h>
 
 #include "bwio.h"
@@ -24,10 +23,13 @@ int _start() {
     // Saves the LR into redboot_return_addr, allowing kexit() to jump straight
     // back to RedBoot. This line must be executed before any functions are
     // called to ensure that the LR isn't modified.
-    __asm__ volatile("mov %0, lr" : "=r"(redboot_return_addr));
+    void* ra;
+    __asm__ volatile("mov %0, lr" : "=r"(ra));
 
     // Zero out .bss
     memset(&__BSS_START__, 0, (size_t)(&__BSS_END__ - &__BSS_START__));
+
+    redboot_return_addr = ra;
 
     // Run C++ global constructors
     for (ctr_fn* ctr = &__INIT_ARRAY_START__; ctr < &__INIT_ARRAY_END__; ctr++)

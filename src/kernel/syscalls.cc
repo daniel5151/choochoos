@@ -12,17 +12,12 @@ namespace User {
 // defined in the linker script
 extern "C" {
 // Designate region of memory to use for user stacks
-extern char __USER_STACKS_START__, __USER_STACKS_SIZE__;
-extern size_t __MAX_USER_STACKS__;
-// Individual task stack size
-extern size_t __USER_STACK_SIZE__;
+extern char __USER_STACKS_START__, __USER_STACKS_END__;
 }
 
 #define USER_STACK_SIZE 0x40000
 
-// TODO optimize this, taking into account our available RAM and the amount of
-// stack we need for the kernel.
-#define MAX_SCHEDULED_TASKS 16
+#define MAX_SCHEDULED_TASKS 48
 
 #define INVALID_PRIORITY -1
 #define OUT_OF_TASK_DESCRIPTORS -2
@@ -123,6 +118,12 @@ class Kernel {
         // set up memory for the initial user stack
         char* start_of_stack =
             &__USER_STACKS_START__ + (USER_STACK_SIZE * (tid + 1));
+        if (start_of_stack > &__USER_STACKS_END__) {
+            kpanic(
+                "Create(): stack overflow! start_of_stack (%p) > "
+                "&__USER_STACKS_END__ (%p)",
+                start_of_stack, &__USER_STACKS_END__);
+        }
 
         FreshStack* stack = (FreshStack*)(start_of_stack - sizeof(FreshStack));
 
@@ -326,6 +327,20 @@ class Kernel {
 
     void initialize(void (*user_main)()) {
         *((uint32_t*)0x028) = (uint32_t)((void*)_swi_handler);
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Warray-bounds"
+        char* actual_user_stacks_end =
+            &__USER_STACKS_START__ + (MAX_SCHEDULED_TASKS * USER_STACK_SIZE);
+        if (actual_user_stacks_end > &__USER_STACKS_END__) {
+            kpanic(
+                "actual_user_stacks_end (%p) > &__USER_STACKS_END__ (%p). We "
+                "should change MAX_SCHEDULED_TASKS (currently %d) and/or "
+                "USER_STACK_SIZE (currently 0x%x).",
+                actual_user_stacks_end, &__USER_STACKS_END__,
+                MAX_SCHEDULED_TASKS, USER_STACK_SIZE);
+        }
+#pragma GCC diagnostic pop
 
         int tid = Create(4, (void*)user_main);
         if (tid < 0) kpanic("could not create tasks (error code %d)", tid);
