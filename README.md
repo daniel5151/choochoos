@@ -6,6 +6,8 @@ Written by [Daniel Prilik](https://prilik.com) and [James Hageman](https://james
 
 ## Building
 
+From the repository root, run:
+
 ```bash
 make release USER_FOLDER=<assignment> # e.g: make release USER_FOLDER=k1
 ```
@@ -16,6 +18,6 @@ _Note_: omiting `release` from the `make` command will enable debug logging and 
 
 ## Documentation
 
-Documentation for each assignment can be found under the `docs` folder. Each assignment has it's own directory with associated documentation.
+Documentation for each assignment can be found under the [docs](./docs/) folder. Each assignment has it's own directory with associated documentation.
 
-e.g: for assignment K1, the documentation is under `docs/k1/`.
+e.g: for assignment K1, the documentation is under [docs/k1](./docs/k1/).

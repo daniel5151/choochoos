@@ -1,6 +1,6 @@
 # The `choochoos` Kernel
 
-Written by Daniel Prilik (dprilik - 20604934) and James Hageman (jdhagema - <TODO>).
+Written by Daniel Prilik (dprilik - 20604934) and James Hageman (jdhagema - 20604974).
 
 ## Project Structure
 
