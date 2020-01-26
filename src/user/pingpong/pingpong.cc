@@ -1,8 +1,7 @@
-#include "bwio.h"
-#include "user/syscalls.h"
-
 #include <cstdio>
 #include <cstring>
+#include "bwio.h"
+#include "user/syscalls.h"
 
 void PongTask() {
     int tid;
@@ -19,6 +18,9 @@ void PongTask() {
 void FirstUserTask() {
     int pong_tid_1 = Create(3, PongTask);  // lower priority
     int pong_tid_2 = Create(5, PongTask);  // higher priority
+
+    // TODO make this compile
+    assert(Send(100, nullptr, 0, nullptr, 0) == -1);
 
     // send to the lower priority task first
     {
