@@ -12,10 +12,10 @@ The default target is updated according the the most-recent assignment, so build
 make
 ```
 
-Additional debug statements can be enabled by invoking `make DEBUG=1`.
+The executable will be written to `k1.elf` in the root of the repository.
+
+Additional debug statements can be enabled by invoking `make DEBUG=1` (you might need to `make clean` first).
 
 ## Documentation
 
-Documentation for each assignment can be found under the [docs](./docs/) folder. Each assignment has it's own directory with associated documentation.
-
-e.g: for assignment K1, the documentation is under [docs/k1](./docs/k1/).
+Documentation is in [k1.pdf](./k1.pdf), and can be built (from markdown sources) via `make k1.pdf`. To build the docs, you must have [pandoc](https://pandoc.org/installing.html) installed.
