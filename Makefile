@@ -100,3 +100,6 @@ unit_tests: test/test.cc $(HEADERS)
 	@mkdir -p $(BIN_DIR)
 	g++ -std=c++17 -fno-rtti -fno-exceptions -I $(INCLUDES) \
 		$(WARNING_FLAGS) -Werror $< -o $(BIN_DIR)/test && $(BIN_DIR)/test
+
+k1.pdf: docs/k1/kernel.md docs/k1/output.md
+	pandoc --from markdown --to pdf $^ > k1.pdf
