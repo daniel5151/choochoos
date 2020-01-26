@@ -12,7 +12,7 @@ At the moment, both the `choochoos` kernel and userspace live under the same `in
 
 ### Building `choochoos`
 
-For details on building the project, see the [../../README.md](`README.md`) at the root of this repository.
+For details on building the project, see the [README.md](`../../README.md`) at the root of this repository.
 
 ## Architectural Overview
 
@@ -69,7 +69,7 @@ Instead, we extend each element in the priority queue to have a `ticket` counter
 
 Using this ticketed binary heap has both drawbacks and benefits over a fixed-priority implementation (be that a vector of queues, or an intrusive linked list per priority). The benefit is that we can permit `p` priorities in `O(1)` space instead of `O(p)` space. This allows us to define priorities as the entire range of `int`, and will allow us to potentially reliable arithmetic on priorities in the future (however, whether or not we'll need such a thing is yet to be discovered).
 
-The drawback is that we lose FIFO if the ticket counter overflows. Right now, the ticket counter is a `uint32_t`, so we would have to push `2^32` `Tid`s onto `ready_queue` in order to see an overflow. This definitely won't happen in our `k1` demo, but it doesn't seem impossible in a longer running program that is rapidly switching tasks. We're experimenting with using the non-native `uint64_t`, and we will profile such a change as we wrap up `k2`.
+The drawback is that we lose FIFO if the ticket counter overflows. Right now, the ticket counter is a `size_t` (a 32-bit unsigned integer), so we would have to push `2^32` `Tid`s onto `ready_queue` in order to see an overflow. This definitely won't happen in our `k1` demo, but it doesn't seem impossible in a longer running program that is rapidly switching tasks. We're experimenting with using the non-native `uint64_t`, and we will profile such a change as we wrap up `k2`.
 
 
 ### Context Switching
