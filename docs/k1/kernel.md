@@ -45,7 +45,7 @@ int kmain() {
 }
 ```
 
-The scheduling loop differs from the one described in lecture only in that `Kernel::activate` does not return a syscall decription to handle. Instead, activate returns only after the syscall made by the executing task is handled. Nonetheless, the kernel can be broken down into three main parts: scheduling, context switching, and syscall handling.
+The scheduling loop differs from the one described in lecture only in that `Kernel::activate` does not return a syscall request to handle. Instead, activate only returns after the syscall has been handled. Nonetheless, the kernel can be broken down into three main parts: scheduling, context switching, and syscall handling.
 
 ### Scheduling
 
@@ -59,9 +59,7 @@ int schedule() {
 }
 ```
 
-We have a `ready_queue`, which is a FIFO priority queue of `Tid`s. Tasks that
-are ready to be executed are on the queue, and `schedule()` simply grabs the
-next one.
+We have a `ready_queue`, which is a FIFO priority queue of Tids. Tasks that are ready to be executed are on the queue, and `schedule()` simply grabs the next one.
 
 Our priority queue is implemented as a template class in [include/priority_queue.h](../../include/priority_queue.h). A `PriorityQueue<T, N>` is a fixed size object containing up to `N` elements of type `T`, implemented as a modified binary max-heap. Usually, when implementing a priority queue as a binary heap, the elements within the heap are compared only by their priority, to ensure that elements of higher priority are popped first. However, only using an element's priority does not guarantee FIFO ordering _within_ a priority.
 
