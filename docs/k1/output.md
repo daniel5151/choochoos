@@ -31,6 +31,6 @@
 - Lines 6-8
     - These lines are identical to lines 3-5, as once the first high-priority `OtherTask` calls exit, its Tid is returned to the free Tid pool, which is then re-used for the newly spawned `OtherTask`.
 - Lines 9-13
-    - Once the second high-priority `OtherTask` has completed, and execution has returned to the `FirstUserTask`, the `FirstUserTask` is done, and calls exits itself. At this point, there are only two remaining tasks left on the system: The two low-priority `OtherTasks`s
+    - Once the second high-priority `OtherTask` has completed, and execution has returned to the `FirstUserTask`, the `FirstUserTask` is done, and calls exits itself. At this point, there are only two remaining tasks left on the system: The two low-priority `OtherTask`s
     - Since both tasks have the same priority, they are scheduled in a round-robin fashion, which results in the interleaved output between the two tasks. When the first `OtherTask` prints its line, it immediately yields, allowing the second `OtherTask` to print its line. The second `OtherTask` then yields, allowing the first `OtherTask` to print its line (and so on and so forth).
     - NOTE: the two tasks yield execution during the `MyTid` and `MyParentTid` calls as well, interweaving execution even further. That being said, since there is no output between these syscall invocations, it is more difficult to see the interwoven execution flow.
