@@ -16,13 +16,17 @@ void PongTask() {
 }
 
 void Echo() {
+    int my_tid = MyTid();
     int tid;
     char buf[12];
     while (true) {
         // receive 12 bytes
-        Receive(&tid, buf, sizeof(buf));
+        int n = Receive(&tid, buf, sizeof(buf));
+        printf("[tid %d] Echo received %d bytes\r\n", my_tid, n);
+
         // reply with the first 8
-        Reply(tid, buf, 8);
+        n = Reply(tid, buf, 8);
+        printf("[tid %d] Echo sent %d bytes\r\n", my_tid, n);
     }
 }
 
@@ -52,6 +56,9 @@ void FirstUserTask() {
     assert(Send(echo_hi, buf, sizeof(buf), res, sizeof(res)) == 8);
     assert(Send(echo_lo, buf, sizeof(buf), res, sizeof(res)) == 8);
     assert(strcmp(res, "abcdefgh") == 0);
+
+    assert(Send(echo_hi, buf, sizeof(buf), res, 7) == 7);
+    assert(Send(echo_lo, buf, sizeof(buf), res, 7) == 7);
 
     // send to the lower priority task first
     {

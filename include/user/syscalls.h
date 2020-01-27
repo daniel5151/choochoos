@@ -76,16 +76,16 @@ int Reply(int tid, const char* reply, int rplen);
 // the (null-terminated) output has been completely written if and only if the
 // returned value is nonnegative and less than buf_size
 #define PRINTF_BUF_SIZE 1024
-#define printf(fmt, args...)                                            \
-    do {                                                                \
-        char buf[PRINTF_BUF_SIZE];                                      \
-        int n = snprintf(buf, PRINTF_BUF_SIZE, fmt, ##args);            \
-        if (n < 0 || n >= PRINTF_BUF_SIZE) {                            \
-            panic("printf: short write (n=%d, buf_size=%d)  [" __FILE__ \
-                  ":%d]",                                               \
-                  n, PRINTF_BUF_SIZE, __LINE__);                        \
-        }                                                               \
-        bwputstr(COM2, buf);                                            \
+#define printf(fmt, args...)                                                   \
+    do {                                                                       \
+        char __printf_buf[PRINTF_BUF_SIZE];                                    \
+        int __printf_n = snprintf(__printf_buf, PRINTF_BUF_SIZE, fmt, ##args); \
+        if (__printf_n < 0 || __printf_n >= PRINTF_BUF_SIZE) {                 \
+            panic("printf: short write (n=%d, buf_size=%d)  [" __FILE__        \
+                  ":%d]",                                                      \
+                  __printf_n, PRINTF_BUF_SIZE, __LINE__);                      \
+        }                                                                      \
+        bwputstr(COM2, __printf_buf);                                          \
     } while (false)
 
 #ifdef __cplusplus

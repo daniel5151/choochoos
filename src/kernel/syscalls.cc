@@ -196,6 +196,10 @@ class Kernel {
                 receiver.state = {TaskState::READY, .ready = {Mailbox()}};
                 ready_queue.push(receiver_tid, receiver.priority);
 
+                // set the return value that the receiver gets from Receive() to
+                // n.
+                *((int32_t*)receiver.sp) = n;
+
                 break;
             }
             default:
@@ -220,13 +224,15 @@ class Kernel {
                 if (task.state.ready.mailbox.is_empty()) {
                     task.state = {TaskState::RECV_WAIT,
                                   .recv_wait = {tid, msg, (size_t)msglen}};
-                    return 0;
+                    // this will be overwritten when a sender shows up
+                    return -3;
                 }
                 Message m{};
                 task.state.ready.mailbox.pop_front(m);
                 *tid = m.tid;
-                memcpy(msg, m.msg, min(msglen, m.msglen));
-                return 0;
+                int n = min(msglen, m.msglen);
+                memcpy(msg, m.msg, n);
+                return n;
             }
             default:
                 kdebug("Receive() called from task in non-ready state %d",
@@ -252,8 +258,7 @@ class Kernel {
                 // the top of the stack represents the syscall return word, we
                 // can write directly to the stack pointer.
                 // points at the top of its stack.
-                int32_t* syscall_return = ((int32_t*)receiver.sp);
-                *syscall_return = n;
+                *((int32_t*)receiver.sp) = n;
 
                 // return the length of the reply to the original receiver
                 return n;
