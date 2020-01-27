@@ -419,7 +419,7 @@ void bwgetline(char* line, size_t len) {
 void FirstUserTask() {
     assert(Create(0, NameServer::NameServer) == NAME_SERVER_TID);
 
-    int seed;
+    int seed = 0;
     char c;
     bool pause_after_each = false;
 
@@ -434,7 +434,7 @@ void FirstUserTask() {
     sscanf(line, "%c", &c);
     pause_after_each = (c == 'y');
 
-    size_t num_players;
+    size_t num_players = 0;
     printf("num players (0-32): ");
     bwgetline(line, 100);
     sscanf(line, "%u", &num_players);
