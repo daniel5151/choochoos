@@ -70,7 +70,6 @@ class StringArena {
 };
 
 void NameServer() {
-    assert(MyTid() == 1);
     Request msg;
     int tid;
 
