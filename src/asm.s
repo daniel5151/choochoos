@@ -73,20 +73,17 @@ _activate_task:
     msr     spsr,r2
     movs    pc,r1
 
-// http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.ddi0363g/Chdhgibd.html
 .global _enable_caches
 _enable_caches:
     mrc     p15, 0, r1, c1, c0, 0  // read config register
     orr     r1, r1, #0x1 << 12     // enable instruction cache
     orr     r1, r1, #0x1 << 2      // enable data cache
 
-    mcr     p15, 0, r0, c15, c5, 0 // Invalidate entire data cache
-    mcr     p15, 0, r0, c7, c5, 0  // Invalidate entire instruction cache
+    mcr     p15, 0, r0, c7, c7, 0  // Invalidate entire instruction + data caches
     mcr     p15, 0, r1, c1, c0, 0  // enable caches
 
     bx      lr
 
-// http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.ddi0363g/Chdhgibd.html
 .global _disable_caches
 _disable_caches:
     mrc     p15, 0, r1, c1, c0, 0 // Read config register
