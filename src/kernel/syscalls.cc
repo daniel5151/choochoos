@@ -252,15 +252,15 @@ class Kernel {
                 receiver.state = {TaskState::READY, .ready = {Mailbox()}};
                 ready_queue.push(tid, receiver.priority);
 
-                // return the length of the reply to the original sender
-                // the receiver of the reply is blocked, so the stack pointer
+                // Return the length of the reply to the original sender.
+                //
+                // The receiver of the reply is blocked, so the stack pointer
                 // in the TaskDescriptor points at the top of the stack. Since
                 // the top of the stack represents the syscall return word, we
                 // can write directly to the stack pointer.
-                // points at the top of its stack.
                 *((int32_t*)receiver.sp) = n;
 
-                // return the length of the reply to the original receiver
+                // Return the length of the reply to the original receiver.
                 return n;
             }
             default:
