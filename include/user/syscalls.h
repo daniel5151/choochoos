@@ -67,6 +67,7 @@ int Reply(int tid, const char* reply, int rplen);
     } while (false)
 #endif
 
+#undef panic
 #define panic(fmt, args...)                                                    \
     do {                                                                       \
         bwprintf(COM2,                                                         \

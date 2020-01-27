@@ -1,4 +1,6 @@
+#include <cctype>
 #include <cstdlib>
+
 #include "queue.h"
 #include "user/syscalls.h"
 
@@ -141,7 +143,7 @@ class Game {
 #define NUM_GAMES 16
 
 void Server() {
-    Queue<int, 2> queue;
+    Queue<int, 1> queue;
     Game games[NUM_GAMES];
 
     int tid;
@@ -304,7 +306,10 @@ void Client() {
            num_games);
     req = (Message){.tag = Message::SIGNUP, .empty = {}};
     code = Send(server, (char*)&req, sizeof(req), (char*)&res, sizeof(res));
-    assert(code >= 0);
+    // TODO this happens if we exceed the mailbox size.
+    if (code < 0) {
+        panic("could not sign up: code=%d", code);
+    }
     switch (res.tag) {
         case Message::ACK:
             printf("%sreceived signup ack" ENDL, prefix);
@@ -321,7 +326,10 @@ void Client() {
                str_of_rps(req.play.choice));
         int code =
             Send(server, (char*)&req, sizeof(req), (char*)&res, sizeof(res));
-        assert(code >= 0);
+        // TODO this seems to fail if we exceed the Mailbox size
+        if (code < 0) {
+            panic("could not send play message: code=%d", code);
+        }
 
         switch (res.tag) {
             case Message::PLAY_RESP: {
@@ -353,14 +361,22 @@ void Client() {
 
 void bwgetline(char* line, size_t len) {
     size_t i = 0;
-    while (i < len - 1) {
+    while (true) {
         char c = (char)bwgetc(COM2);
         if (c == '\r') break;
-        if (c == '\b' && i > 0) {
+        if (c == '\b') {
+            if (i == 0) continue;
             i--;
             bwputstr(COM2, "\b \b");
             continue;
         }
+        if (i == len - 1) {
+            // out of space - output a "ding" sound and ask for another
+            // character
+            bwputc(COM2, '\a');
+            continue;
+        }
+        if (!isprint(c)) continue;
         line[i++] = c;
         bwputc(COM2, c);
     }
@@ -373,9 +389,9 @@ void FirstUserTask() {
     char c;
     bool pause_after_each = false;
 
-    char line[100];
+    char line[24];
     printf("random seed (>= 0): ");
-    bwgetline(line, 100);
+    bwgetline(line, sizeof(line));
     sscanf(line, "%d", &seed);
     assert(seed >= 0);
 
@@ -419,6 +435,7 @@ void FirstUserTask() {
     (void)server;  // TODO register this with the name server
     for (auto& config : players) {
         int tid = Create(config.priority, rps::Client);
+        if (tid < 0) panic("unable to create player - out of task descriptors");
         m = {Message::PLAYER_CONFIG,
              .player_config = {.num_games = config.num_games}};
         Send(tid, (char*)&m, sizeof(m), /* ignore response */ nullptr, 0);

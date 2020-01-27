@@ -22,7 +22,7 @@ extern size_t __USER_STACK_SIZE__;
 
 // TODO optimize this, taking into account our available RAM and the amount of
 // stack we need for the kernel.
-#define MAX_SCHEDULED_TASKS 16
+#define MAX_SCHEDULED_TASKS 48
 
 #define INVALID_PRIORITY -1
 #define OUT_OF_TASK_DESCRIPTORS -2
