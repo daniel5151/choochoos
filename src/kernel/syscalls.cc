@@ -190,12 +190,16 @@ class Kernel {
                 break;
             }
             case TaskState::RECV_WAIT: {
-                memcpy(receiver.state.recv_wait.recv_buf, msg,
-                       min(msglen, receiver.state.recv_wait.len));
+                int n = min(msglen, receiver.state.recv_wait.len);
+                memcpy(receiver.state.recv_wait.recv_buf, msg, n);
                 *receiver.state.recv_wait.tid = sender_tid;
 
                 receiver.state = {TaskState::READY, .ready = {Mailbox()}};
                 ready_queue.push(receiver_tid, receiver.priority);
+
+                // set the return value that the receiver gets from Receive() to
+                // n.
+                *((int32_t*)receiver.sp) = n;
 
                 break;
             }
@@ -206,8 +210,9 @@ class Kernel {
 
         sender.state = {TaskState::REPLY_WAIT,
                         .reply_wait = {reply, (size_t)rplen}};
-
-        return 0;
+        // the sender should never see this - it should be overwritten by
+        // Reply()
+        return -3;
     }
 
     int Receive(int* tid, char* msg, int msglen) {
@@ -220,13 +225,15 @@ class Kernel {
                 if (task.state.ready.mailbox.is_empty()) {
                     task.state = {TaskState::RECV_WAIT,
                                   .recv_wait = {tid, msg, (size_t)msglen}};
-                    return 0;
+                    // this will be overwritten when a sender shows up
+                    return -3;
                 }
                 Message m{};
                 task.state.ready.mailbox.pop_front(m);
                 *tid = m.tid;
-                memcpy(msg, m.msg, min(msglen, m.msglen));
-                return 0;
+                int n = min(msglen, m.msglen);
+                memcpy(msg, m.msg, n);
+                return n;
             }
             default:
                 kdebug("Receive() called from task in non-ready state %d",
@@ -240,17 +247,27 @@ class Kernel {
         if (tid < 0 || tid >= MAX_SCHEDULED_TASKS) return -1;
         TaskDescriptor& receiver = tasks[tid];
         switch (receiver.state.tag) {
-            case TaskState::REPLY_WAIT:
-                memcpy(receiver.state.reply_wait.reply_buf, reply,
-                       min(receiver.state.reply_wait.len, rplen));
+            case TaskState::REPLY_WAIT: {
+                int n = min(receiver.state.reply_wait.len, rplen);
+                memcpy(receiver.state.reply_wait.reply_buf, reply, n);
                 receiver.state = {TaskState::READY, .ready = {Mailbox()}};
                 ready_queue.push(tid, receiver.priority);
-                return 0;
-            default:
-                kpanic(
-                    "Reply() sent to a task not in REPLY_WAIT: (tag=%d tid=%d)",
-                    receiver.state.tag, tid);
+
+                // Return the length of the reply to the original sender.
+                //
+                // The receiver of the reply is blocked, so the stack pointer
+                // in the TaskDescriptor points at the top of the stack. Since
+                // the top of the stack represents the syscall return word, we
+                // can write directly to the stack pointer.
+                *((int32_t*)receiver.sp) = n;
+
+                // Return the length of the reply to the original receiver.
+                return n;
+            }
+            case TaskState::UNUSED:
                 return -1;
+            default:
+                return -2;
         }
     }
 
