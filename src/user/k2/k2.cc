@@ -2,6 +2,7 @@
 #include <cstdlib>
 
 #include "queue.h"
+#include "user/name_server.h"
 #include "user/syscalls.h"
 
 enum class RPS { NONE = 0, ROCK = 1, PAPER = 2, SCISSORS = 3 };
@@ -55,6 +56,7 @@ struct Message {
 };
 
 namespace rps {
+const char* RPS_SERVER = "RPSServer";
 class Game {
     int tid1, tid2;
     RPS choice1, choice2;
@@ -142,7 +144,36 @@ class Game {
 
 #define NUM_GAMES 16
 
+#define NAME_SERVER_TID 1
+
+int RegisterAs(const char* name) {
+    NameServer::Request req{NameServer::RegisterAs,
+                            .register_as = {.buf = name, .tid = MyTid()}};
+    NameServer::Response res;
+
+    if (Send(NAME_SERVER_TID, (char*)&req, sizeof(req), (char*)&res,
+             sizeof(res)) != sizeof(res)) {
+        return -1;
+    }
+    assert(res.kind == NameServer::RegisterAs);
+    return res.register_as.success ? 0 : -1;
+}
+
+int WhoIs(const char* name) {
+    NameServer::Request req{NameServer::WhoIs, .who_is = {.buf = name}};
+    NameServer::Response res;
+
+    if (Send(NAME_SERVER_TID, (char*)&req, sizeof(req), (char*)&res,
+             sizeof(res)) != sizeof(res)) {
+        return -1;
+    }
+    assert(res.kind == NameServer::WhoIs);
+    return res.who_is.success ? res.who_is.tid : -1;
+}
+
 void Server() {
+    RegisterAs(RPS_SERVER);
+    assert(WhoIs(RPS_SERVER) == MyTid());
     Queue<int, 1> queue;
     Game games[NUM_GAMES];
 
@@ -287,7 +318,8 @@ void Server() {
 }
 
 void Client() {
-    int server = 1;  // TODO get this from the name server
+    int server = WhoIs(RPS_SERVER);
+    assert(server >= 0);
     char prefix[32];
     snprintf(prefix, 32, "[Client %d] ", MyTid());
 
@@ -385,6 +417,8 @@ void bwgetline(char* line, size_t len) {
 }
 
 void FirstUserTask() {
+    assert(Create(0, NameServer::NameServer) == NAME_SERVER_TID);
+
     int seed;
     char c;
     bool pause_after_each = false;
@@ -430,9 +464,9 @@ void FirstUserTask() {
     int server = Create(0, rps::Server);
     Message m = {Message::SERVER_CONFIG,
                  .server_config = {.pause_after_each = pause_after_each}};
-    Send(server, (char*)&m, sizeof(m), nullptr, 0);
+    int code = Send(server, (char*)&m, sizeof(m), nullptr, 0);
+    assert(code == 0);
 
-    (void)server;  // TODO register this with the name server
     for (auto& config : players) {
         int tid = Create(config.priority, rps::Client);
         if (tid < 0) panic("unable to create player - out of task descriptors");
