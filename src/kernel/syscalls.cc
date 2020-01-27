@@ -362,7 +362,7 @@ class Kernel {
         int tid = Create(4, (void*)user_main);
         if (tid < 0) kpanic("could not create tasks (error code %d)", tid);
     }
-};  // namespace kernel
+};  // class Kernel
 }  // namespace kernel
 
 extern void FirstUserTask();
