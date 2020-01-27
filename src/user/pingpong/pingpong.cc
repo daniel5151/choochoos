@@ -22,11 +22,11 @@ void Echo() {
     while (true) {
         // receive 12 bytes
         int n = Receive(&tid, buf, sizeof(buf));
-        printf("[tid %d] Echo received %d bytes\r\n", my_tid, n);
+        printf("[tid %d] Echo received %d bytes" ENDL, my_tid, n);
 
         // reply with the first 8
         n = Reply(tid, buf, 8);
-        printf("[tid %d] Echo sent %d bytes\r\n", my_tid, n);
+        printf("[tid %d] Echo sent %d bytes" ENDL, my_tid, n);
     }
 }
 
@@ -40,7 +40,6 @@ void FirstUserTask() {
     assert(echo_lo >= 0);
     assert(echo_hi >= 0);
 
-    // TODO make this compile
     // sending to an invalid task returns -1
     assert(Send(100, nullptr, 0, nullptr, 0) == -1);
 
@@ -64,12 +63,12 @@ void FirstUserTask() {
     {
         char resp[100] = {'\0'};
         assert(Send(pong_tid_1, "ping1", 6, resp, sizeof(resp) - 1) >= 0);
-        bwprintf(COM2, "FirstUserTask recieved reply '%s'\r\n", resp);
+        bwprintf(COM2, "FirstUserTask recieved reply '%s'" ENDL, resp);
     }
     {
         char resp[100] = {'\0'};
         assert(Send(pong_tid_2, "ping2", 6, resp, sizeof(resp) - 1) >= 0);
-        bwprintf(COM2, "FirstUserTask recieved reply '%s'\r\n", resp);
+        bwprintf(COM2, "FirstUserTask recieved reply '%s'" ENDL, resp);
     }
 
     pong_tid_1 = Create(3, PongTask);  // lower priority
@@ -82,11 +81,11 @@ void FirstUserTask() {
     {
         char resp[100] = {'\0'};
         assert(Send(pong_tid_2, "ping2", 6, resp, sizeof(resp) - 1) >= 0);
-        bwprintf(COM2, "FirstUserTask recieved reply '%s'\r\n", resp);
+        bwprintf(COM2, "FirstUserTask recieved reply '%s'" ENDL, resp);
     }
     {
         char resp[100] = {'\0'};
         assert(Send(pong_tid_1, "ping1", 6, resp, sizeof(resp) - 1) >= 0);
-        bwprintf(COM2, "FirstUserTask recieved reply '%s'\r\n", resp);
+        bwprintf(COM2, "FirstUserTask recieved reply '%s'" ENDL, resp);
     }
 }
