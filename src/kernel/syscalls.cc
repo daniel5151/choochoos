@@ -263,11 +263,10 @@ class Kernel {
                 // Return the length of the reply to the original receiver.
                 return n;
             }
-            default:
-                kpanic(
-                    "Reply() sent to a task not in REPLY_WAIT: (tag=%d tid=%d)",
-                    receiver.state.tag, tid);
+            case TaskState::UNUSED:
                 return -1;
+            default:
+                return -2;
         }
     }
 
