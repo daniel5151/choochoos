@@ -189,8 +189,8 @@ class Kernel {
                 break;
             }
             case TaskState::RECV_WAIT: {
-                memcpy(receiver.state.recv_wait.recv_buf, msg,
-                       min(msglen, receiver.state.recv_wait.len));
+                int n = min(msglen, receiver.state.recv_wait.len);
+                memcpy(receiver.state.recv_wait.recv_buf, msg, n);
                 *receiver.state.recv_wait.tid = sender_tid;
 
                 receiver.state = {TaskState::READY, .ready = {Mailbox()}};
@@ -205,8 +205,9 @@ class Kernel {
 
         sender.state = {TaskState::REPLY_WAIT,
                         .reply_wait = {reply, (size_t)rplen}};
-
-        return 0;
+        // the sender should never see this - it should be overwritten by
+        // Reply()
+        return -3;
     }
 
     int Receive(int* tid, char* msg, int msglen) {
@@ -239,12 +240,24 @@ class Kernel {
         if (tid < 0 || tid >= MAX_SCHEDULED_TASKS) return -1;
         TaskDescriptor& receiver = tasks[tid];
         switch (receiver.state.tag) {
-            case TaskState::REPLY_WAIT:
-                memcpy(receiver.state.reply_wait.reply_buf, reply,
-                       min(receiver.state.reply_wait.len, rplen));
+            case TaskState::REPLY_WAIT: {
+                int n = min(receiver.state.reply_wait.len, rplen);
+                memcpy(receiver.state.reply_wait.reply_buf, reply, n);
                 receiver.state = {TaskState::READY, .ready = {Mailbox()}};
                 ready_queue.push(tid, receiver.priority);
-                return 0;
+
+                // return the length of the reply to the original sender
+                // the receiver of the reply is blocked, so the stack pointer
+                // in the TaskDescriptor points at the top of the stack. Since
+                // the top of the stack represents the syscall return word, we
+                // can write directly to the stack pointer.
+                // points at the top of its stack.
+                int32_t* syscall_return = ((int32_t*)receiver.sp);
+                *syscall_return = n;
+
+                // return the length of the reply to the original receiver
+                return n;
+            }
             default:
                 kpanic(
                     "Reply() sent to a task not in REPLY_WAIT: (tag=%d tid=%d)",
