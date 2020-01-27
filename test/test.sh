@@ -2,23 +2,25 @@
 
 set -e
 
-
+echo "running unit tests..."
+make unit_tests
 
 folders=(k1 pingpong k2)
 
 for folder in "${folders[@]}"; do
   echo "building ${folder}..."
 
-  make clean >/dev/null
-  make $@ USER_FOLDER="${folder}" release >/dev/null
+  make $@ CURRENT_ASSIGNMENT="${folder}" >/dev/null
+
+  exe="${folder}.elf"
 
   echo "running ${folder}..."
 
   input="test/${folder}.input"
   if [[ -f $input ]]; then
-       tr '\n' '\r' < "$input" | ts7200 bin/choochoos.elf > "test/${folder}.actual";
+       tr '\n' '\r' < "$input" | ts7200 "$exe" > "test/${folder}.actual";
     else
-      ts7200 bin/choochoos.elf > "test/${folder}.actual";
+      ts7200 "$exe" > "test/${folder}.actual";
     fi
 done
 

@@ -12,6 +12,7 @@ LD = $(XBINDIR)/arm-none-eabi-ld
 SRC_DIR = src
 BUILD_DIR = build
 BIN_DIR = bin
+INCLUDE_DIR = include
 
 # XXX: this ain't great, and aught to be rewritten
 ifeq ($(MAKECMDGOALS),)
@@ -31,12 +32,11 @@ OBJS = $(patsubst $(SRC_DIR)/%,$(BUILD_DIR)/%,\
 		$(patsubst %.cc,%.o,\
 		$(patsubst %.s,%.o,\
 			$(SRCS)))))
-HEADERS = $(shell find ./include -name '*.h')
-DEPS = $(OBJS:.o=.d)
+DEPS = $(shell find $(BUILD_DIR) -name '*.d')
 
 WARNING_FLAGS = -Wall -Wextra -Wconversion
 
-COMMON_FLAGS = -fPIC -mcpu=arm920t -msoft-float -MP -MMD $(WARNING_FLAGS)
+COMMON_FLAGS = -fPIC -mcpu=arm920t -msoft-float -MP -MMD -MT $@ $(WARNING_FLAGS)
 
 ifdef ENABLE_CACHES
 	COMMON_FLAGS += -DENABLE_CACHES
@@ -66,6 +66,8 @@ LIBRARIES = -lstdc++ -lc -lgcc
 current_assignment: $(CURRENT_ASSIGNMENT).elf
 	cp $(BIN_DIR)/$(CURRENT_ASSIGNMENT).elf $(CURRENT_ASSIGNMENT).elf
 
+-include $(DEPS)
+
 .PHONY: clean
 clean:
 	$(RM) -r $(BUILD_DIR)
@@ -75,11 +77,9 @@ clean:
 .PHONY: dirs
 dirs: $(BIN_DIR)
 
-k1.elf: $(OBJS)
+$(CURRENT_ASSIGNMENT).elf: $(OBJS)
 	@mkdir -p $(BIN_DIR)
 	$(LD) $(LDFLAGS) $(OBJS) -o $(BIN_DIR)/$@ $(LIBRARIES)
-
--include $(DEPS)
 
 $(BUILD_DIR)/%.o: $(SRC_DIR)/%.c
 	@mkdir -p $(dir $@)
@@ -96,10 +96,12 @@ $(BUILD_DIR)/%.o: $(SRC_DIR)/%.s
 	$(AS) $(ASFLAGS) -g -o $@ $<
 
 .PHONY: unit_tests
-unit_tests: test/test.cc $(HEADERS)
-	@mkdir -p $(BIN_DIR)
+unit_tests: $(BIN_DIR)/test
+
+$(BIN_DIR)/test: test/test.cc
+	@mkdir -p $(BIN_DIR) $(BUILD_DIR)/test
 	g++ -std=c++17 -fno-rtti -fno-exceptions -I $(INCLUDES) \
-		$(WARNING_FLAGS) -Werror $< -o $(BIN_DIR)/test && $(BIN_DIR)/test
+		$(WARNING_FLAGS) -MMD -MF $(BUILD_DIR)/test/test.d -Werror $< -o $(BIN_DIR)/test && $(BIN_DIR)/test
 
 k1.pdf: docs/k1/kernel.md docs/k1/output.md
 	pandoc --from markdown --to pdf $^ > k1.pdf
