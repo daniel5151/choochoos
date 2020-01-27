@@ -11,10 +11,10 @@ struct Request {
     MessageKind kind;
     union {
         struct {
-            const char* buf;
+            const char* name;
         } who_is;
         struct {
-            const char* buf;
+            const char* name;
             int tid;
         } register_as;
     };
@@ -91,7 +91,7 @@ void NameServer() {
                 for (size_t i = 0; i < names_head; i++) {
                     auto& name = names[i];
                     assert(strings.get(name.idx) != nullptr);
-                    if (strcmp(strings.get(name.idx), msg.who_is.buf) == 0) {
+                    if (strcmp(strings.get(name.idx), msg.who_is.name) == 0) {
                         found_tid = name.tid;
                         break;
                     }
@@ -105,7 +105,7 @@ void NameServer() {
                 }
 
                 debug("NameServer returning %d for %s (to tid %d)", found_tid,
-                      msg.who_is.buf, tid);
+                      msg.who_is.name, tid);
                 Reply(tid, (char*)&res, sizeof(Response));
 
             } break;
@@ -118,7 +118,7 @@ void NameServer() {
                 for (size_t i = 0; i < names_head; i++) {
                     auto& name = names[i];
                     assert(strings.get(name.idx) != nullptr);
-                    if (strcmp(strings.get(name.idx), msg.register_as.buf) ==
+                    if (strcmp(strings.get(name.idx), msg.register_as.name) ==
                         0) {
                         found_existing = true;
                         name.tid = msg.register_as.tid;
@@ -128,8 +128,8 @@ void NameServer() {
 
                 if (!found_existing) {
                     // create a new entry
-                    auto idx = strings.add(msg.register_as.buf,
-                                           strlen(msg.register_as.buf) + 1);
+                    auto idx = strings.add(msg.register_as.name,
+                                           strlen(msg.register_as.name) + 1);
 
                     names[names_head].idx = idx;
                     names[names_head].tid = tid;
@@ -138,7 +138,7 @@ void NameServer() {
 
                 Response res = {msg.kind, .register_as = {true}};
                 debug("NameServer registered %d for %s", msg.register_as.tid,
-                      msg.register_as.buf);
+                      msg.register_as.name);
                 Reply(tid, (char*)&res, sizeof(Response));
 
             } break;

@@ -148,7 +148,7 @@ class Game {
 
 int RegisterAs(const char* name) {
     NameServer::Request req{NameServer::RegisterAs,
-                            .register_as = {.buf = name, .tid = MyTid()}};
+                            .register_as = {.name = name, .tid = MyTid()}};
     NameServer::Response res;
 
     if (Send(NAME_SERVER_TID, (char*)&req, sizeof(req), (char*)&res,
@@ -160,7 +160,7 @@ int RegisterAs(const char* name) {
 }
 
 int WhoIs(const char* name) {
-    NameServer::Request req{NameServer::WhoIs, .who_is = {.buf = name}};
+    NameServer::Request req{NameServer::WhoIs, .who_is = {.name = name}};
     NameServer::Response res;
 
     if (Send(NAME_SERVER_TID, (char*)&req, sizeof(req), (char*)&res,
