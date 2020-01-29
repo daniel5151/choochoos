@@ -34,7 +34,6 @@ struct TaskState {
             size_t msglen;
             char* reply;
             size_t rplen;
-            int receiver;
             int next;
         } send_wait;
         struct {
@@ -119,7 +118,6 @@ class TaskDescriptor {
                                                           .msglen = msglen,
                                                           .reply = reply,
                                                           .rplen = rplen,
-                                                          .receiver = tid(),
                                                           .next = -1}};
         if (send_queue_is_empty()) {
             kassert(send_queue_head == -1);
