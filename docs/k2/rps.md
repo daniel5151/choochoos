@@ -78,13 +78,14 @@
 - [26-31]: Client 2 receives the signup ack, and sends scissors. Client 1 (the one with the lowest priority), only just receives the response from the NameServer. It sends a signup request, but won't hear back for a while. Client 3, which was matched with client 2, also receives the signup ack and sends paper.
 - [32-36]: Our first game! Client 2 send scissors and client 3 sent paper, so client
 2 wins. Both clients are informed of the result and send their next move. Since clients send their next move as soon as they see the results, client 2 sends their next move before client 3 has heard that it lost. The program pauses waiting for the user to press a key.
-- [37-41]: client 2 sent paper and client 3 sent rock, so client 2 wins again.
+- [37-41]: client 2 sent paper and client 3 sent rock, so client 2 wins again. For the third game, both clients send rock. For client 3, it is their last game.
+- [42-46]:
 
 ```
 
-    37	[Client tid=4 id=2] I won!
-    38	[Client tid=4 id=2] I want to play 3 more games. Sending rock...
-    39	[Client tid=5 id=3] I lost :(
-    40	[Client tid=5 id=3] I want to play 1 more game. Sending rock...
-    41	~~~~~~~~~ press any key to continue ~~~~~~~~~
+    42	[Client tid=4 id=2] it's a draw
+    43	[Client tid=4 id=2] I want to play 2 more games. Sending rock...
+    44	[Client tid=5 id=3] it's a draw
+    45	[Client tid=5 id=3] sending quit
+    46	~~~~~~~~~ press any key to continue ~~~~~~~~~
 ```

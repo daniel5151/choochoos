@@ -1,6 +1,6 @@
 # New in K2
 
-In K2 we implemented the Send-Receive-Reply mechanism, as well as the NameServer.
+In K2 we implemented the Send-Receive-Reply mechanism, the Name Server, and the Rock Paper Scissor Server & Client.
 
 ## Send-Receive-Reply
 
@@ -115,3 +115,7 @@ would never wake up. Instead, we iterate through the send queue, waking ever
 ## NameServer
 
 <!-- TODO Prilik -->
+
+## RPS Server & Client
+
+<!-- TODO James -->
