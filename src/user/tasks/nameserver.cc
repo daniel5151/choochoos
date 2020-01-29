@@ -47,7 +47,7 @@ class StringArena {
 
 namespace NameServer {
 
-void NameServer() {
+void Task() {
     Request msg{};
     int tid;
 
@@ -124,4 +124,39 @@ void NameServer() {
     }
 }
 
-}  // namespace NameServer
+int RegisterAs(const char* name) {
+    size_t len = strlen(name);
+    assert(len < NAMESERVER_MAX_NAME_LEN);
+    NameServer::Request req{
+        MessageKind::RegisterAs,
+        .register_as = {.name = {'\0'}, .len = len, .tid = MyTid()}};
+    strcpy(req.register_as.name, name);
+
+    NameServer::Response res;
+
+    if (Send(NameServer::TID, (char*)&req, sizeof(req), (char*)&res,
+             sizeof(res)) != sizeof(res)) {
+        return -1;
+    }
+    assert(res.kind == MessageKind::RegisterAs);
+    return res.register_as.success ? 0 : -1;
+}
+
+int WhoIs(const char* name) {
+    size_t len = strlen(name);
+    assert(len < NAMESERVER_MAX_NAME_LEN);
+    NameServer::Request req{MessageKind::WhoIs,
+                            .who_is = {.name = {'\0'}, .len = len}};
+    strcpy(req.who_is.name, name);
+
+    NameServer::Response res;
+
+    if (Send(NameServer::TID, (char*)&req, sizeof(req), (char*)&res,
+             sizeof(res)) != sizeof(res)) {
+        return -1;
+    }
+    assert(res.kind == MessageKind::WhoIs);
+    return res.who_is.success ? res.who_is.tid : -1;
+}
+
+}

@@ -3,6 +3,7 @@
 #include <cstring>
 
 #include "common/queue.h"
+#include "common/bwio.h"
 
 #include "user/dbg.h"
 #include "user/syscalls.h"
@@ -147,46 +148,9 @@ class Game {
 
 #define NUM_GAMES 32
 
-#define NAME_SERVER_TID 1
-
-int RegisterAs(const char* name) {
-    size_t len = strlen(name);
-    assert(len < NAMESERVER_MAX_NAME_LEN);
-    NameServer::Request req{
-        NameServer::RegisterAs,
-        .register_as = {.name = {'\0'}, .len = len, .tid = MyTid()}};
-    strcpy(req.register_as.name, name);
-
-    NameServer::Response res;
-
-    if (Send(NAME_SERVER_TID, (char*)&req, sizeof(req), (char*)&res,
-             sizeof(res)) != sizeof(res)) {
-        return -1;
-    }
-    assert(res.kind == NameServer::RegisterAs);
-    return res.register_as.success ? 0 : -1;
-}
-
-int WhoIs(const char* name) {
-    size_t len = strlen(name);
-    assert(len < NAMESERVER_MAX_NAME_LEN);
-    NameServer::Request req{NameServer::WhoIs,
-                            .who_is = {.name = {'\0'}, .len = len}};
-    strcpy(req.who_is.name, name);
-
-    NameServer::Response res;
-
-    if (Send(NAME_SERVER_TID, (char*)&req, sizeof(req), (char*)&res,
-             sizeof(res)) != sizeof(res)) {
-        return -1;
-    }
-    assert(res.kind == NameServer::WhoIs);
-    return res.who_is.success ? res.who_is.tid : -1;
-}
-
 void Server() {
-    RegisterAs(RPS_SERVER);
-    assert(WhoIs(RPS_SERVER) == MyTid());
+    NameServer::RegisterAs(RPS_SERVER);
+    assert(NameServer::WhoIs(RPS_SERVER) == MyTid());
     Queue<int, 1> queue;
     Game games[NUM_GAMES];
 
@@ -331,7 +295,7 @@ void Server() {
 }
 
 void Client() {
-    int server = WhoIs(RPS_SERVER);
+    int server = NameServer::WhoIs(RPS_SERVER);
     assert(server >= 0);
     char prefix[32];
     snprintf(prefix, 32, "[Client %d] ", MyTid());
@@ -402,36 +366,7 @@ void Client() {
     printf("%sexiting" ENDL, prefix);
 }
 
-}  // namespace rps
-
-void bwgetline(char* line, size_t len) {
-    size_t i = 0;
-    while (true) {
-        char c = (char)bwgetc(COM2);
-        if (c == '\r') break;
-        if (c == '\b') {
-            if (i == 0) continue;
-            i--;
-            bwputstr(COM2, "\b \b");
-            continue;
-        }
-        if (i == len - 1) {
-            // out of space - output a "ding" sound and ask for another
-            // character
-            bwputc(COM2, '\a');
-            continue;
-        }
-        if (!isprint(c)) continue;
-        line[i++] = c;
-        bwputc(COM2, c);
-    }
-    bwputstr(COM2, ENDL);
-    line[i] = '\0';
-}
-
-void FirstUserTask() {
-    assert(Create(0, NameServer::NameServer) == NAME_SERVER_TID);
-
+void setup_and_run() {
     int seed = 0;
     char c;
     bool pause_after_each = false;
@@ -487,4 +422,11 @@ void FirstUserTask() {
              .player_config = {.num_games = config.num_games}};
         Send(tid, (char*)&m, sizeof(m), /* ignore response */ nullptr, 0);
     }
+}
+
+}  // namespace rps
+
+void FirstUserTask() {
+    assert(Create(0, NameServer::Task) == NameServer::TID);
+    rps::setup_and_run();
 }
