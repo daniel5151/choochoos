@@ -70,6 +70,7 @@ void FirstUserTask() {
     // its send queue. When server_that_dies exits, it iterates over its send
     // queue, waking each blocked task up with -2.
     assert(Send(server_that_dies, buf, sizeof(buf), res, sizeof(res)) == -2);
+    // As this point the server is dead, so we get -1.
     assert(Send(server_that_dies, buf, sizeof(buf), res, sizeof(res)) == -1);
 
     // send to the lower priority task first
