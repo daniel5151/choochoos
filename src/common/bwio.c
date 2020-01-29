@@ -263,3 +263,33 @@ void bwprintf(int channel, const char* fmt, ...) {
     bwformat(channel, fmt, va);
     va_end(va);
 }
+
+//----------------------------- Custom Additions -----------------------------//
+
+#include <stdbool.h>
+#include <ctype.h>
+
+void bwgetline(char* line, size_t len) {
+    size_t i = 0;
+    while (true) {
+        char c = (char)bwgetc(COM2);
+        if (c == '\r') break;
+        if (c == '\b') {
+            if (i == 0) continue;
+            i--;
+            bwputstr(COM2, "\b \b");
+            continue;
+        }
+        if (i == len - 1) {
+            // out of space - output a "ding" sound and ask for another
+            // character
+            bwputc(COM2, '\a');
+            continue;
+        }
+        if (!isprint(c)) continue;
+        line[i++] = c;
+        bwputc(COM2, c);
+    }
+    bwputstr(COM2, "\r\n");
+    line[i] = '\0';
+}

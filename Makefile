@@ -27,7 +27,12 @@ endif
 ifdef DEBUG
     COMMON_FLAGS += -Og -g
 else
-    COMMON_FLAGS += -O3 -g -Werror -DRELEASE_MODE
+    COMMON_FLAGS += -g -Werror -DRELEASE_MODE
+	ifdef NO_OPTIMIZATION
+		COMMON_FLAGS += -O0 -DNO_OPTIMIZATION
+	else
+		COMMON_FLAGS += -O3
+	endif
 endif
 
 CCFLAGS = $(COMMON_FLAGS) -std=c11
@@ -53,7 +58,7 @@ USER_SRC_DIR = $(SRC_DIR)/assignments/$(TARGET)
 SRCS = $(shell find $(SRC_DIR) \
                             \( -name '*.c' -or -name '*.cc' -or -name '*.s' \) \
                             ! -path "$(ALL_USER_SRCS_GLOB)" \
-                            -or -path "$(USER_SRC_DIR)/**" )
+                            -or -path "$(USER_SRC_DIR)/**" -and -not -name '*.h' )
 OBJS = $(patsubst $(SRC_DIR)/%,$(BUILD_DIR)/%,\
         $(patsubst %.c,%.o,\
         $(patsubst %.cc,%.o,\
