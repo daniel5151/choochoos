@@ -41,7 +41,8 @@ Let's explain each of the states:
 
 - `UNUSED`: the `TaskDescriptor` does not represent a running task.
 - `READY`: the task is on the `ready_queue`, waiting to be scheduled.
-- `SEND_WAIT`: the task is waiting to `Send()` to another task that hasn't called `Receive()` yet.
+- `SEND_WAIT`: the task is waiting to `Send()` to another task that hasn't
+  called `Receive()` yet.
 - `RECV_WAIT`: the task has called `Receive()`, but no task has sent a message to it yet.
 - `REPLY_WAIT`: the task called `Send()` and the receiver got the message via `Receive()`, but no other task has called `Reply()` back at the task.
 
@@ -98,10 +99,10 @@ in `REPLY_WAIT`.
 
 ### Error cases
 
-The SRR syscalls return two possible error codes: `-1` and `-2`. `-1` is returned
-whenever a `tid` does not represent a task - either it is out of range, or it
-points to a TaskDescriptor in the `UNUSED` state. `-2` is returned in two cases
-where a SRR transaction cannot be completed:
+The SRR syscalls return two possible error codes: `-1` and `-2`. `-1` is
+returned whenever a `tid` does not represent a task - either it is out of
+range, or it points to a TaskDescriptor in the `UNUSED` state. `-2` is returned
+in two cases where a SRR transaction cannot be completed:
 
 - If a task tries to `Reply()`to a task that is not in `REPLY_WAIT` - this would
  mean that the task never called `Send()` and thus is not expecting a reply.
