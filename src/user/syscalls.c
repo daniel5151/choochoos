@@ -3,6 +3,7 @@
 #include <stdbool.h>
 
 #include "user/dbg.h"
+#include "user/syscalls.h"
 
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #pragma GCC diagnostic ignored "-Wreturn-type"

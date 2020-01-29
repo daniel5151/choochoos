@@ -296,7 +296,8 @@ class Kernel {
             }
 
             default:
-                kassert(false);
+                kpanic("invalid state %d for task %d",
+                       (int)tasks[receiver_tid].state.tag, receiver_tid);
         }
     }
 
