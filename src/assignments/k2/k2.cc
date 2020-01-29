@@ -1,5 +1,6 @@
 #include <cctype>
 #include <cstdlib>
+#include <cstring>
 
 #include "common/queue.h"
 
@@ -149,8 +150,13 @@ class Game {
 #define NAME_SERVER_TID 1
 
 int RegisterAs(const char* name) {
-    NameServer::Request req{NameServer::RegisterAs,
-                            .register_as = {.name = name, .tid = MyTid()}};
+    size_t len = strlen(name);
+    assert(len < NAMESERVER_MAX_NAME_LEN);
+    NameServer::Request req{
+        NameServer::RegisterAs,
+        .register_as = {.name = {'\0'}, .len = len, .tid = MyTid()}};
+    strcpy(req.register_as.name, name);
+
     NameServer::Response res;
 
     if (Send(NAME_SERVER_TID, (char*)&req, sizeof(req), (char*)&res,
@@ -162,7 +168,12 @@ int RegisterAs(const char* name) {
 }
 
 int WhoIs(const char* name) {
-    NameServer::Request req{NameServer::WhoIs, .who_is = {.name = name}};
+    size_t len = strlen(name);
+    assert(len < NAMESERVER_MAX_NAME_LEN);
+    NameServer::Request req{NameServer::WhoIs,
+                            .who_is = {.name = {'\0'}, .len = len}};
+    strcpy(req.who_is.name, name);
+
     NameServer::Response res;
 
     if (Send(NAME_SERVER_TID, (char*)&req, sizeof(req), (char*)&res,
