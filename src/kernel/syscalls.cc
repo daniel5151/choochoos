@@ -60,7 +60,6 @@ class TaskDescriptor {
     TaskState state;
     int parent_tid;
 
-    size_t send_queue_len;
     int send_queue_head;
     int send_queue_tail;
 
@@ -73,17 +72,17 @@ class TaskDescriptor {
           priority(priority),
           state{TaskState::READY, .ready = {}},
           parent_tid(parent_tid),
-          send_queue_len(0),
           send_queue_head(-1),
           send_queue_tail(-1),
           sp(stack_ptr) {}
+
+    bool send_queue_is_empty() const { return send_queue_head == -1; }
 
     void reset(TaskDescriptor (&tasks)[MAX_SCHEDULED_TASKS],
                PriorityQueue<int, MAX_SCHEDULED_TASKS>& ready_queue) {
         state = {TaskState::UNUSED, .unused = {}};
         sp = nullptr;
         parent_tid = -2;
-        send_queue_len = 0;
 
         int tid = send_queue_head;
 
@@ -123,18 +122,15 @@ class TaskDescriptor {
                                                           .rplen = rplen,
                                                           .receiver = tid(),
                                                           .next = -1}};
-        if (send_queue_len == 0) {
+        if (send_queue_is_empty()) {
             kassert(send_queue_head == -1);
             kassert(send_queue_tail == -1);
 
-            send_queue_len = 1;
             send_queue_head = task.tid();
             send_queue_tail = task.tid();
         } else {
             kassert(send_queue_head >= 0);
             kassert(send_queue_tail >= 0);
-
-            send_queue_len++;
 
             TaskDescriptor& old_tail = tasks[send_queue_tail];
             kassert(old_tail.state.tag == TaskState::SEND_WAIT);
@@ -143,8 +139,6 @@ class TaskDescriptor {
             send_queue_tail = task.tid();
         }
     }
-
-    bool send_queue_is_empty() const { return send_queue_len == 0; }
 
     int pop_from_send_queue(int* sender_tid, char* recv_buf, size_t len,
                             TaskDescriptor (&tasks)[MAX_SCHEDULED_TASKS]) {
@@ -166,13 +160,11 @@ class TaskDescriptor {
 
         this->state = {TaskState::READY, .ready = {}};
 
-        send_queue_len--;
         send_queue_head = next;
         if (send_queue_head == -1) {
-            kassert(send_queue_len == 0);
             send_queue_tail = -1;
         } else {
-            kassert(send_queue_len > 0);
+            kassert(send_queue_tail >= 0);
         }
 
         return n;
