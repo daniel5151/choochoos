@@ -20,60 +20,160 @@ extern char __USER_STACKS_START__, __USER_STACKS_END__;
 #define INVALID_PRIORITY -1
 #define OUT_OF_TASK_DESCRIPTORS -2
 
-static inline int min(int a, int b) { return a < b ? a : b; }
-
 namespace kernel {
 
-struct Message {
-    int tid;
-    const char* msg;
-    size_t msglen;
-};
-
-typedef Queue<Message, 16> Mailbox;
-
 struct TaskState {
-    enum uint8_t { UNUSED, READY, RECV_WAIT, REPLY_WAIT } tag;
+    enum uint8_t { UNUSED, READY, SEND_WAIT, RECV_WAIT, REPLY_WAIT } tag;
     union {
         struct {
         } unused;
         struct {
         } ready;
         struct {
+            const char* msg;
+            size_t msglen;
+            char* reply;
+            size_t rplen;
+            int receiver;
+            int next;
+        } send_wait;
+        struct {
             int* tid;
             char* recv_buf;
             size_t len;
         } recv_wait;
         struct {
-            char* reply_buf;
-            size_t len;
+            char* reply;
+            size_t rplen;
         } reply_wait;
     };
 };
 
 class TaskDescriptor {
+    int my_tid;
+
+    // hack since Kdebug relies on a local MyTid() (TODO plsfix)
+    int MyTid() const { return my_tid; }
+
    public:
     size_t priority;
     TaskState state;
     int parent_tid;
-    Mailbox mailbox;
+
+    size_t send_queue_len;
+    int send_queue_head;
+    int send_queue_tail;
 
     void* sp;
 
     TaskDescriptor() : state{TaskState::UNUSED, .unused = {}}, parent_tid(-2) {}
 
-    TaskDescriptor(size_t priority, int parent_tid, void* stack_ptr)
-        : priority(priority),
+    TaskDescriptor(int tid, size_t priority, int parent_tid, void* stack_ptr)
+        : my_tid(tid),
+          priority(priority),
           state{TaskState::READY, .ready = {}},
           parent_tid(parent_tid),
-          mailbox(),
+          send_queue_len(0),
+          send_queue_head(-1),
+          send_queue_tail(-1),
           sp(stack_ptr) {}
 
-    void reset() {
+    void reset(TaskDescriptor (&tasks)[MAX_SCHEDULED_TASKS],
+               PriorityQueue<int, MAX_SCHEDULED_TASKS>& ready_queue) {
         state = {TaskState::UNUSED, .unused = {}};
         sp = nullptr;
         parent_tid = -2;
-        mailbox.clear();
+        send_queue_len = 0;
+
+        int tid = send_queue_head;
+
+        send_queue_head = -1;
+        send_queue_tail = -1;
+
+        while (tid >= 0) {
+            auto& task = tasks[tid];
+            kassert(task.state.tag == TaskState::SEND_WAIT);
+
+            kdebug("tid=%d cannot complete SRR, receiver shut down", tid);
+
+            // SRR could not be completed, return -2 to the sender
+            *(int32_t*)task.sp = -2;
+            task.state = {TaskState::READY, .ready = {}};
+            if (ready_queue.push(tid, task.priority) != PriorityQueueErr::OK) {
+                kpanic("ready queue full");
+            }
+
+            tid = task.state.send_wait.next;
+        }
+    }
+
+    int tid() const { return my_tid; }
+
+    void add_to_send_queue(TaskDescriptor& task, const char* msg, size_t msglen,
+                           char* reply, size_t rplen,
+                           TaskDescriptor (&tasks)[MAX_SCHEDULED_TASKS]) {
+        kassert(this->state.tag != TaskState::RECV_WAIT);
+        kassert(task.state.tag == TaskState::READY);
+
+        task.state = {TaskState::SEND_WAIT, .send_wait = {.msg = msg,
+                                                          .msglen = msglen,
+                                                          .reply = reply,
+                                                          .rplen = rplen,
+                                                          .receiver = tid(),
+                                                          .next = -1}};
+        if (send_queue_len == 0) {
+            kassert(send_queue_head == -1);
+            kassert(send_queue_tail == -1);
+
+            send_queue_len = 1;
+            send_queue_head = task.tid();
+            send_queue_tail = task.tid();
+        } else {
+            kassert(send_queue_head >= 0);
+            kassert(send_queue_tail >= 0);
+
+            send_queue_len++;
+
+            TaskDescriptor& old_tail = tasks[send_queue_tail];
+            kassert(old_tail.state.tag == TaskState::SEND_WAIT);
+            kassert(old_tail.state.send_wait.next == -1);
+            old_tail.state.send_wait.next = task.tid();
+            send_queue_tail = task.tid();
+        }
+    }
+
+    bool send_queue_is_empty() const { return send_queue_len == 0; }
+
+    int pop_from_send_queue(int* sender_tid, char* recv_buf, size_t len,
+                            TaskDescriptor (&tasks)[MAX_SCHEDULED_TASKS]) {
+        kassert(!send_queue_is_empty());
+        kassert(state.tag == TaskState::READY);
+        kassert(send_queue_head >= 0);
+
+        TaskDescriptor& task = tasks[send_queue_head];
+        kassert(task.state.tag == TaskState::SEND_WAIT);
+
+        int n = std::min(task.state.send_wait.msglen, len);
+        memcpy(recv_buf, task.state.send_wait.msg, n);
+        *sender_tid = send_queue_head;
+
+        char* reply = task.state.send_wait.reply;
+        size_t rplen = task.state.send_wait.rplen;
+        int next = task.state.send_wait.next;
+        task.state = {TaskState::REPLY_WAIT, .reply_wait = {reply, rplen}};
+
+        this->state = {TaskState::READY, .ready = {}};
+
+        send_queue_len--;
+        send_queue_head = next;
+        if (send_queue_head == -1) {
+            kassert(send_queue_len == 0);
+            send_queue_tail = -1;
+        } else {
+            kassert(send_queue_len > 0);
+        }
+
+        return n;
     }
 };
 
@@ -148,14 +248,15 @@ class Kernel {
         kdebug("Created: tid=%d priority=%d function=%p", tid, priority,
                function);
 
-        tasks[tid] = TaskDescriptor((size_t)priority, MyTid(), (void*)stack);
+        tasks[tid] =
+            TaskDescriptor(tid, (size_t)priority, MyTid(), (void*)stack);
         return tid;
     }
 
     void Exit() {
         kdebug("Called Exit");
         int tid = MyTid();
-        tasks[tid].reset();
+        tasks[tid].reset(tasks, ready_queue);
     }
 
     void Yield() { kdebug("Called Yield"); }
@@ -172,23 +273,20 @@ class Kernel {
         switch (receiver.state.tag) {
             case TaskState::UNUSED:
                 return -1;  // no running task with tid
+            case TaskState::SEND_WAIT:
             case TaskState::REPLY_WAIT:
             case TaskState::READY: {
-                Message message = {
-                    .tid = sender_tid,
-                    .msg = msg,
-                    .msglen = (size_t)msglen,
-                };
+                receiver.add_to_send_queue(sender, msg,
+                                           (size_t)std::max(msglen, 0), reply,
+                                           (size_t)std::max(rplen, 0), tasks);
 
-                if (receiver.mailbox.push_back(message) == QueueErr::FULL) {
-                    kdebug("mailbox full for task %d", receiver_tid);
-                    return -2;
-                }
-
-                break;
+                // the sender should never see this - it should be overwritten
+                // by Reply()
+                return -4;
             }
             case TaskState::RECV_WAIT: {
-                int n = min(msglen, receiver.state.recv_wait.len);
+                size_t n = std::min((size_t)std::max(msglen, 0),
+                                    receiver.state.recv_wait.len);
                 memcpy(receiver.state.recv_wait.recv_buf, msg, n);
                 *receiver.state.recv_wait.tid = sender_tid;
 
@@ -197,20 +295,18 @@ class Kernel {
 
                 // set the return value that the receiver gets from Receive() to
                 // n.
-                *((int32_t*)receiver.sp) = n;
+                *((int32_t*)receiver.sp) = (int32_t)n;
 
-                break;
+                sender.state = {TaskState::REPLY_WAIT,
+                                .reply_wait = {reply, (size_t)rplen}};
+                // the sender should never see this - it should be overwritten
+                // by Reply()
+                return -3;
             }
-            default:
-                kpanic("invalid state %d for task %d",
-                       (int)tasks[receiver_tid].state.tag, receiver_tid);
-        }
 
-        sender.state = {TaskState::REPLY_WAIT,
-                        .reply_wait = {reply, (size_t)rplen}};
-        // the sender should never see this - it should be overwritten by
-        // Reply()
-        return -3;
+            default:
+                kassert(false);
+        }
     }
 
     int Receive(int* tid, char* msg, int msglen) {
@@ -220,18 +316,15 @@ class Kernel {
 
         switch (task.state.tag) {
             case TaskState::READY: {
-                if (task.mailbox.is_empty()) {
+                if (task.send_queue_is_empty()) {
                     task.state = {TaskState::RECV_WAIT,
                                   .recv_wait = {tid, msg, (size_t)msglen}};
                     // this will be overwritten when a sender shows up
                     return -3;
                 }
-                Message m{};
-                task.mailbox.pop_front(m);
-                *tid = m.tid;
-                int n = min(msglen, m.msglen);
-                memcpy(msg, m.msg, n);
-                return n;
+
+                return task.pop_from_send_queue(
+                    tid, msg, (size_t)std::max(msglen, 0), tasks);
             }
             default:
                 kdebug("Receive() called from task in non-ready state %d",
@@ -246,8 +339,9 @@ class Kernel {
         TaskDescriptor& receiver = tasks[tid];
         switch (receiver.state.tag) {
             case TaskState::REPLY_WAIT: {
-                int n = min(receiver.state.reply_wait.len, rplen);
-                memcpy(receiver.state.reply_wait.reply_buf, reply, n);
+                size_t n = std::min(receiver.state.reply_wait.rplen,
+                                    (size_t)std::max(rplen, 0));
+                memcpy(receiver.state.reply_wait.reply, reply, n);
                 receiver.state = {TaskState::READY, .ready = {}};
                 ready_queue.push(tid, receiver.priority);
 
@@ -257,10 +351,10 @@ class Kernel {
                 // in the TaskDescriptor points at the top of the stack. Since
                 // the top of the stack represents the syscall return word, we
                 // can write directly to the stack pointer.
-                *((int32_t*)receiver.sp) = n;
+                *((int32_t*)receiver.sp) = (int32_t)n;
 
                 // Return the length of the reply to the original receiver.
-                return n;
+                return (int)n;
             }
             case TaskState::UNUSED:
                 return -1;
@@ -333,6 +427,7 @@ class Kernel {
                     kpanic("out of space in ready queue (tid=%d)", tid);
                 }
                 break;
+            case TaskState::SEND_WAIT:
             case TaskState::RECV_WAIT:
             case TaskState::REPLY_WAIT:
             case TaskState::UNUSED:

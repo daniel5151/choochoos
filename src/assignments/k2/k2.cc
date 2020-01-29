@@ -145,7 +145,7 @@ class Game {
     }
 };
 
-#define NUM_GAMES 16
+#define NUM_GAMES 32
 
 #define NAME_SERVER_TID 1
 
