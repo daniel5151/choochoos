@@ -93,8 +93,10 @@ class TaskDescriptor {
         while (tid >= 0) {
             auto& task = tasks[tid];
             kassert(task.state.tag == TaskState::SEND_WAIT);
+            int next_tid = task.state.send_wait.next;
 
-            kdebug("tid=%d cannot complete SRR, receiver shut down", tid);
+            kdebug("tid=%d cannot complete SRR, receiver (%d) shut down", tid,
+                   my_tid);
 
             // SRR could not be completed, return -2 to the sender
             *(int32_t*)task.sp = -2;
@@ -103,7 +105,7 @@ class TaskDescriptor {
                 kpanic("ready queue full");
             }
 
-            tid = task.state.send_wait.next;
+            tid = next_tid;
         }
     }
 
