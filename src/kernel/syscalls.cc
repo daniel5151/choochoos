@@ -51,6 +51,8 @@ struct TaskState {
 
 class TaskDescriptor {
     int my_tid;
+    int send_queue_head;
+    int send_queue_tail;
 
     // hack since Kdebug relies on a local MyTid() (TODO plsfix)
     int MyTid() const { return my_tid; }
@@ -60,20 +62,17 @@ class TaskDescriptor {
     TaskState state;
     int parent_tid;
 
-    int send_queue_head;
-    int send_queue_tail;
-
     void* sp;
 
     TaskDescriptor() : state{TaskState::UNUSED, .unused = {}}, parent_tid(-2) {}
 
     TaskDescriptor(int tid, size_t priority, int parent_tid, void* stack_ptr)
         : my_tid(tid),
+          send_queue_head(-1),
+          send_queue_tail(-1),
           priority(priority),
           state{TaskState::READY, .ready = {}},
           parent_tid(parent_tid),
-          send_queue_head(-1),
-          send_queue_tail(-1),
           sp(stack_ptr) {}
 
     bool send_queue_is_empty() const { return send_queue_head == -1; }
