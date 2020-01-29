@@ -18,6 +18,8 @@ void PongTask() {
     Reply(tid, resp, strlen(resp));
 }
 
+void ServerThatDies() {}
+
 void Echo() {
     int my_tid = MyTid();
     int tid;
@@ -61,6 +63,15 @@ void FirstUserTask() {
 
     assert(Send(echo_hi, buf, sizeof(buf), res, 7) == 7);
     assert(Send(echo_lo, buf, sizeof(buf), res, 7) == 7);
+
+    int server_that_dies = Create(3, ServerThatDies);
+    assert(server_that_dies >= 0);
+    // Before server_that_dies is scheduled, we send to it, adding outselves to
+    // its send queue. When server_that_dies exits, it iterates over its send
+    // queue, waking each blocked task up with -2.
+    assert(Send(server_that_dies, buf, sizeof(buf), res, sizeof(res)) == -2);
+    // As this point the server is dead, so we get -1.
+    assert(Send(server_that_dies, buf, sizeof(buf), res, sizeof(res)) == -1);
 
     // send to the lower priority task first
     {
