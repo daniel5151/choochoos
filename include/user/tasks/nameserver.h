@@ -6,7 +6,9 @@
 
 namespace NameServer {
 
-enum MessageKind { WhoIs, RegisterAs, Shutdown };
+const int TID = 1;
+
+enum class MessageKind : size_t { WhoIs, RegisterAs, Shutdown };
 
 struct Request {
     MessageKind kind;
@@ -36,5 +38,9 @@ struct Response {
     };
 };
 
-void NameServer();
+void Task();
+
+int RegisterAs(const char* name);
+int WhoIs(const char* name);
+
 }  // namespace NameServer
