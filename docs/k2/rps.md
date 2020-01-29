@@ -5,7 +5,7 @@
 ```
      1	Hello from the choochoos kernel!
      2	random seed (>= 0): 2
-     3	pause after each game (y/n)? n
+     3	pause after each game (y/n)? y
      4	num players (0-32): 3
      5	player 1 priority  (default 1): 1
      6	player 1 num games (default 3): 3
@@ -13,48 +13,69 @@
      8	player 2 num games (default 3): 5
      9	player 3 priority  (default 1): 3
     10	player 3 num games (default 3): 3
-    11	[Client 3] I want to play 3 games. Sending signup...
-    12	[Client 4] I want to play 5 games. Sending signup...
-    13	[RPSServer] matching tids 4 and 3
-    14	[Client 4] received signup ack
-    15	[Client 4] I want to play 5 more games. Sending scissors...
-    16	[Client 5] I want to play 3 games. Sending signup...
-    17	[Client 3] received signup ack
-    18	[Client 3] I want to play 3 more games. Sending paper...
-    19	[Client 4] I won!
-    20	[Client 4] I want to play 4 more games. Sending paper...
-    21	[Client 3] I lost :(
-    22	[Client 3] I want to play 2 more games. Sending rock...
-    23	~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    24	[Client 4] I won!
-    25	[Client 4] I want to play 3 more games. Sending rock...
-    26	[Client 3] I lost :(
-    27	[Client 3] I want to play 1 more game. Sending rock...
-    28	~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    29	[Client 4] it's a draw
-    30	[Client 4] I want to play 2 more games. Sending rock...
-    31	[Client 3] it's a draw
-    32	[Client 3] sending quit
-    33	~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    34	[RPSServer] tid 3 quit, but tid 5 is waiting. Matching tids 4 and 5
-    35	[Client 5] received signup ack
-    36	[Client 5] I want to play 3 more games. Sending scissors...
-    37	[Client 3] exiting
-    38	[Client 4] I won!
-    39	[Client 4] I want to play 1 more game. Sending scissors...
-    40	[Client 5] I lost :(
-    41	[Client 5] I want to play 2 more games. Sending rock...
-    42	~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    43	[Client 4] I lost :(
-    44	[Client 4] sending quit
-    45	[Client 5] I won!
-    46	[Client 5] I want to play 1 more game. Sending paper...
-    47	~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    48	[RPSServer] tid 4 quit, but no players are waiting.
-    49	[Client 4] exiting
-    50	[Client 5] other player quit! I guess I'll go home :(
-    51	[Client 5] exiting
-    52	Goodbye from choochoos kernel!
+    11	[Client tid=3 id=?] waiting for player config
+    12	[Client tid=4 id=?] waiting for player config
+    13	[Client tid=5 id=?] waiting for player config
+    14	[Client tid=5 id=?] received player config (num_games=3, id=3)
+    15	[Client tid=5 id=3] querying nameserver for 'RPSServer'
+    16	[Client tid=4 id=?] received player config (num_games=5, id=2)
+    17	[Client tid=4 id=2] querying nameserver for 'RPSServer'
+    18	[Client tid=3 id=?] received player config (num_games=3, id=1)
+    19	[Client tid=3 id=1] querying nameserver for 'RPSServer'
+    20	[RPSServer] accepting signups...
+    21	[Client tid=5 id=3] received reply from nameserver: RPSServer=2
+    22	[Client tid=5 id=3] I want to play 3 games. Sending signup...
+    23	[Client tid=4 id=2] received reply from nameserver: RPSServer=2
+    24	[Client tid=4 id=2] I want to play 5 games. Sending signup...
+    25	[RPSServer] matching tids 4 and 5
+    26	[Client tid=4 id=2] received signup ack
+    27	[Client tid=4 id=2] I want to play 5 more games. Sending scissors...
+    28	[Client tid=3 id=1] received reply from nameserver: RPSServer=2
+    29	[Client tid=3 id=1] I want to play 3 games. Sending signup...
+    30	[Client tid=5 id=3] received signup ack
+    31	[Client tid=5 id=3] I want to play 3 more games. Sending paper...
+    32	[Client tid=4 id=2] I won!
+    33	[Client tid=4 id=2] I want to play 4 more games. Sending paper...
+    34	[Client tid=5 id=3] I lost :(
+    35	[Client tid=5 id=3] I want to play 2 more games. Sending rock...
+    36	~~~~~~~~~ press any key to continue ~~~~~~~~~
+    37	[Client tid=4 id=2] I won!
+    38	[Client tid=4 id=2] I want to play 3 more games. Sending rock...
+    39	[Client tid=5 id=3] I lost :(
+    40	[Client tid=5 id=3] I want to play 1 more game. Sending rock...
+    41	~~~~~~~~~ press any key to continue ~~~~~~~~~
+    42	[Client tid=4 id=2] it's a draw
+    43	[Client tid=4 id=2] I want to play 2 more games. Sending rock...
+    44	[Client tid=5 id=3] it's a draw
+    45	[Client tid=5 id=3] sending quit
+    46	~~~~~~~~~ press any key to continue ~~~~~~~~~
+    47	[RPSServer] tid 5 quit, but tid 3 is waiting. Matching tids 4 and 3
+    48	[Client tid=3 id=1] received signup ack
+    49	[Client tid=3 id=1] I want to play 3 more games. Sending scissors...
+    50	[Client tid=5 id=3] exiting
+    51	[Client tid=4 id=2] I won!
+    52	[Client tid=4 id=2] I want to play 1 more game. Sending scissors...
+    53	[Client tid=3 id=1] I lost :(
+    54	[Client tid=3 id=1] I want to play 2 more games. Sending rock...
+    55	~~~~~~~~~ press any key to continue ~~~~~~~~~
+    56	[Client tid=4 id=2] I lost :(
+    57	[Client tid=4 id=2] sending quit
+    58	[Client tid=3 id=1] I won!
+    59	[Client tid=3 id=1] I want to play 1 more game. Sending paper...
+    60	~~~~~~~~~ press any key to continue ~~~~~~~~~
+    61	[RPSServer] tid 4 quit, but no players are waiting.
+    62	[Client tid=4 id=2] exiting
+    63	[Client tid=3 id=1] other player quit! I guess I'll go home :(
+    64	[Client tid=3 id=1] exiting
+    65	Goodbye from choochoos kernel!
 ```
 
 ## Explanation
+
+- [1-10] game setup - the user's input is included.  The random number generator
+ is configured with a seed of 2, and we will pause for input after each game is
+ finished.  We are running 3 client tasks, with priotities (1,2,3) respectively, that
+ want to play (35,3) games respectively.
+- [11-16] Clients 3 and 4 (the first two players, identified by their Tid)
+
+<!-- TODO James -->
