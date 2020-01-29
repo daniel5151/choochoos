@@ -72,10 +72,19 @@
 
 ## Explanation
 
-- [1-10] game setup - the user's input is included.  The random number generator
- is configured with a seed of 2, and we will pause for input after each game is
- finished.  We are running 3 client tasks, with priotities (1,2,3) respectively, that
- want to play (35,3) games respectively.
-- [11-16] Clients 3 and 4 (the first two players, identified by their Tid)
+- [1-10]: Game setup. The user's input is included. The random number generator is configured with a seed of 2, and we will pause for input after each game is finished.  We are running 3 client tasks, with priotities (1,2,3) respectively, that want to play (3,5,3) games respectively.
+- [11-19]: The client tasks wait for their configuration (sent from the main task), and then query the NameServer for "RPSServer". Note that while the clients ask for their configuration in order, the highest priority task is (Tid 5) is woken up first, and thus queries the NameServer first.
+- [20-25]: The RPSServer (priority 0) starts accepting signups. Clients 3 and 2 are the highest priority, so their signup requests are received first, and they are matched.
+- [26-31]: Client 2 receives the signup ack, and sends scissors. Client 1 (the one with the lowest priority), only just receives the response from the NameServer. It sends a signup request, but won't hear back for a while. Client 3, which was matched with client 2, also receives the signup ack and sends paper.
+- [32-36]: Our first game! Client 2 send scissors and client 3 sent paper, so client
+2 wins. Both clients are informed of the result and send their next move. Since clients send their next move as soon as they see the results, client 2 sends their next move before client 3 has heard that it lost. The program pauses waiting for the user to press a key.
+- [37-41]: client 2 sent paper and client 3 sent rock, so client 2 wins again.
 
-<!-- TODO James -->
+```
+
+    37	[Client tid=4 id=2] I won!
+    38	[Client tid=4 id=2] I want to play 3 more games. Sending rock...
+    39	[Client tid=5 id=3] I lost :(
+    40	[Client tid=5 id=3] I want to play 1 more game. Sending rock...
+    41	~~~~~~~~~ press any key to continue ~~~~~~~~~
+```
