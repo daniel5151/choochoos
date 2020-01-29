@@ -4,8 +4,8 @@
 #include <cstring>
 
 #include "common/bwio.h"
-#include "user/syscalls.h"
 #include "user/dbg.h"
+#include "user/syscalls.h"
 
 template <size_t N>
 class StringArena {
@@ -14,6 +14,8 @@ class StringArena {
     size_t index;
 
    public:
+    StringArena() : buf(), index(0) {}
+
     struct Result {
         enum { Ok, OutOfSpace } kind;
         union {
@@ -46,7 +48,7 @@ class StringArena {
 namespace NameServer {
 
 void NameServer() {
-    Request msg;
+    Request msg{};
     int tid;
 
     StringArena<2048> strings;
@@ -104,8 +106,8 @@ void NameServer() {
 
                 if (!found_existing) {
                     // create a new entry
-                    auto idx = strings.add(msg.register_as.name,
-                                           strlen(msg.register_as.name) + 1);
+                    auto idx =
+                        strings.add(msg.register_as.name, msg.register_as.len);
 
                     names[names_head].idx = idx;
                     names[names_head].tid = tid;
@@ -122,4 +124,4 @@ void NameServer() {
     }
 }
 
-}
+}  // namespace NameServer

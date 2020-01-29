@@ -1,16 +1,23 @@
 #pragma once
 
+#include <cstddef>
+
+#define NAMESERVER_MAX_NAME_LEN 128
+
 namespace NameServer {
+
 enum MessageKind { WhoIs, RegisterAs, Shutdown };
 
 struct Request {
     MessageKind kind;
     union {
         struct {
-            const char* name;
+            char name[NAMESERVER_MAX_NAME_LEN];
+            size_t len;
         } who_is;
         struct {
-            const char* name;
+            char name[NAMESERVER_MAX_NAME_LEN];
+            size_t len;
             int tid;
         } register_as;
     };
