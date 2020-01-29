@@ -1,13 +1,11 @@
 #include <cstring>
 
-#include "bwio.h"
+#include "common/bwio.h"
+#include "common/priority_queue.h"
 #include "kernel/asm.h"
 #include "kernel/kernel.h"
-#include "priority_queue.h"
 
-namespace User {
 #include "user/syscalls.h"
-}
 
 // defined in the linker script
 extern "C" {
@@ -144,7 +142,7 @@ class Kernel {
         for (uint32_t i = 0; i < 13;
              i++)  // set regs to their own vals, for debug
             stack->regs[i] = i;
-        stack->lr = (void*)User::Exit;  // implicit Exit() calls!
+        stack->lr = (void*)::Exit;  // implicit Exit() calls!
 #pragma GCC diagnostic pop
 
         kdebug("Created: tid=%d priority=%d function=%p", tid, priority,

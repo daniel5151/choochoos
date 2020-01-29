@@ -1,6 +1,9 @@
 #include <cstdio>
 #include <cstring>
-#include "bwio.h"
+
+#include "common/bwio.h"
+
+#include "user/dbg.h"
 #include "user/syscalls.h"
 
 void PongTask() {

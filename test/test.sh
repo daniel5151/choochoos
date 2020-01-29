@@ -10,7 +10,7 @@ folders=(k1 pingpong k2)
 for folder in "${folders[@]}"; do
   echo "building ${folder}..."
 
-  make $@ CURRENT_ASSIGNMENT="${folder}" >/dev/null
+  make $@ TARGET="${folder}" >/dev/null
 
   exe="${folder}.elf"
 

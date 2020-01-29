@@ -1,37 +1,11 @@
+#include "user/tasks/nameserver.h"
+
 #include <cstdio>
 #include <cstring>
 
-#include "bwio.h"
+#include "common/bwio.h"
 #include "user/syscalls.h"
-
-namespace NameServer {
-enum MessageKind : size_t { WhoIs, RegisterAs, Shutdown };
-
-struct Request {
-    MessageKind kind;
-    union {
-        struct {
-            const char* name;
-        } who_is;
-        struct {
-            const char* name;
-            int tid;
-        } register_as;
-    };
-};
-
-struct Response {
-    MessageKind kind;
-    union {
-        struct {
-            bool success;
-            int tid;
-        } who_is;
-        struct {
-            bool success;
-        } register_as;
-    };
-};
+#include "user/dbg.h"
 
 template <size_t N>
 class StringArena {
@@ -68,6 +42,8 @@ class StringArena {
         return &this->buf[idx];
     }
 };
+
+namespace NameServer {
 
 void NameServer() {
     Request msg;
@@ -145,4 +121,5 @@ void NameServer() {
         }
     }
 }
-}  // namespace NameServer
+
+}

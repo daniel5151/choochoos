@@ -1,8 +1,8 @@
 #include <cassert>
 #include <iostream>
 
-#include "priority_queue.h"
-#include "queue.h"
+#include "common/priority_queue.h"
+#include "common/queue.h"
 
 void test_queue() {
     Queue<int, 10> q;

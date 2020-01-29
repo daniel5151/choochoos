@@ -14,7 +14,7 @@ void kprintf(const char* fmt, ...) __attribute__((format(printf, 1, 2)));
 #if defined(DISABLE_KDEBUG_PRINTS) || defined(RELEASE_MODE)
 #define kdebug(...)
 #else
-#include "vt_escapes.h"
+#include "common/vt_escapes.h"
 
 // TODO this will blow up spectacularly if MyTid() isn't in scope. Ideally,
 // we'd have a singleton Kernel instance in scope, and we'd always call MyTid()

@@ -1,9 +1,11 @@
 #include <cctype>
 #include <cstdlib>
 
-#include "queue.h"
-#include "user/name_server.h"
+#include "common/queue.h"
+
+#include "user/dbg.h"
 #include "user/syscalls.h"
+#include "user/tasks/nameserver.h"
 
 enum class RPS { NONE = 0, ROCK = 1, PAPER = 2, SCISSORS = 3 };
 enum class Result { DRAW, I_WON, I_LOST };
