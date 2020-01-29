@@ -1,2 +1,2 @@
-file bin/choochoos.elf
+file latest.elf
 target remote localhost:9001

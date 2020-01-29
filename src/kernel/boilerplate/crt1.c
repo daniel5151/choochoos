@@ -1,6 +1,6 @@
 #include <string.h>
 
-#include "bwio.h"
+#include "common/bwio.h"
 
 typedef void (*ctr_fn)();
 

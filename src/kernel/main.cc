@@ -1,10 +1,10 @@
 #include <cstddef>
 
-#include "bwio.h"
-#include "kernel/kernel.h"
+#include "common/bwio.h"
+#include "common/priority_queue.h"
+#include "common/ts7200.h"
 #include "kernel/asm.h"
-#include "priority_queue.h"
-#include "ts7200.h"
+#include "kernel/kernel.h"
 
 extern int kmain();
 

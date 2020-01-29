@@ -1,4 +1,5 @@
-#include "bwio.h"
+#include "common/bwio.h"
+
 #include "user/syscalls.h"
 
 // Note to the TAs:
@@ -18,6 +19,7 @@ void OtherTask() {
 // FirstUserTask has a priority of 4
 void FirstUserTask() {
     int tid;
+
     tid = Create(3, OtherTask);
     bwprintf(COM2, "Created: %d\r\n", tid);
 

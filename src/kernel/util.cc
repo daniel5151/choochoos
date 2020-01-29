@@ -3,7 +3,7 @@
 #include <stddef.h>
 #include <stdio.h>
 
-#include "bwio.h"
+#include "common/bwio.h"
 #include "kernel/kernel.h"
 
 /// Print out an error message, and exit the kernel
