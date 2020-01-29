@@ -12,7 +12,7 @@ class Queue {
     T buf[N];
 
    public:
-    Queue() : start(0), len(0) {}
+    Queue() : start(0), len(0), buf() {}
     size_t size() const { return len; }
     size_t available() const { return N - len; }
     bool is_empty() const { return len == 0; }

@@ -2,20 +2,38 @@
 
 set -e
 
-folders=(k1 pingpong)
+echo "running unit tests..."
+make unit_tests
+
+folders=(k1 pingpong k2)
 
 for folder in "${folders[@]}"; do
   echo "building ${folder}..."
 
-  make clean >/dev/null
-  make $@ USER_FOLDER="${folder}" release >/dev/null
+  make $@ CURRENT_ASSIGNMENT="${folder}" >/dev/null
+
+  exe="${folder}.elf"
 
   echo "running ${folder}..."
-  ts7200 bin/choochoos.elf > "test/${folder}.actual"
+
+  input="test/${folder}.input"
+  if [[ -f $input ]]; then
+       tr '\n' '\r' < "$input" | ts7200 "$exe" > "test/${folder}.actual";
+    else
+      ts7200 "$exe" > "test/${folder}.actual";
+    fi
 done
 
 for folder in "${folders[@]}"; do
   echo -n "checking $folder: "
-  diff --strip-trailing-cr "test/$folder.actual" "test/$folder.expected"
-  echo "outputs match"
+  actual="test/$folder.actual"
+  expected="test/$folder.expected"
+  if [[ -f $expected ]]; then
+      diff --strip-trailing-cr "$actual" "$expected"
+      echo "outputs match"
+  else
+      echo "$expected does not exist, populating"
+      cp -v "$actual" "$expected"
+  fi
+
 done

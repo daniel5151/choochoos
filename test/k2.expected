@@ -1,0 +1,52 @@
+Hello from the choochoos kernel!
+random seed (>= 0): 2
+pause after each game (y/n)? n
+num players (0-32): 3
+player 1 priority  (default 1): 1
+player 1 num games (default 3): 3
+player 2 priority  (default 1): 2
+player 2 num games (default 3): 5
+player 3 priority  (default 1): 3
+player 3 num games (default 3): 3
+[Client 3] I want to play 3 games. Sending signup...
+[Client 4] I want to play 5 games. Sending signup...
+[RPSServer] matching tids 4 and 3
+[Client 4] received signup ack
+[Client 4] I want to play 5 more games. Sending scissors...
+[Client 5] I want to play 3 games. Sending signup...
+[Client 3] received signup ack
+[Client 3] I want to play 3 more games. Sending paper...
+[Client 4] I won!
+[Client 4] I want to play 4 more games. Sending paper...
+[Client 3] I lost :(
+[Client 3] I want to play 2 more games. Sending rock...
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+[Client 4] I won!
+[Client 4] I want to play 3 more games. Sending rock...
+[Client 3] I lost :(
+[Client 3] I want to play 1 more game. Sending rock...
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+[Client 4] it's a draw
+[Client 4] I want to play 2 more games. Sending rock...
+[Client 3] it's a draw
+[Client 3] sending quit
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+[RPSServer] tid 3 quit, but tid 5 is waiting. Matching tids 4 and 5
+[Client 5] received signup ack
+[Client 5] I want to play 3 more games. Sending scissors...
+[Client 3] exiting
+[Client 4] I won!
+[Client 4] I want to play 1 more game. Sending scissors...
+[Client 5] I lost :(
+[Client 5] I want to play 2 more games. Sending rock...
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+[Client 4] I lost :(
+[Client 4] sending quit
+[Client 5] I won!
+[Client 5] I want to play 1 more game. Sending paper...
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+[RPSServer] tid 4 quit, but no players are waiting.
+[Client 4] exiting
+[Client 5] other player quit! I guess I'll go home :(
+[Client 5] exiting
+Goodbye from choochoos kernel!

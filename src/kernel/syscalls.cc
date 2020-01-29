@@ -40,7 +40,6 @@ struct TaskState {
         struct {
         } unused;
         struct {
-            Mailbox mailbox;
         } ready;
         struct {
             int* tid;
@@ -59,6 +58,7 @@ class TaskDescriptor {
     size_t priority;
     TaskState state;
     int parent_tid;
+    Mailbox mailbox;
 
     void* sp;
 
@@ -66,14 +66,16 @@ class TaskDescriptor {
 
     TaskDescriptor(size_t priority, int parent_tid, void* stack_ptr)
         : priority(priority),
-          state{TaskState::READY, .ready = {.mailbox = Mailbox()}},
+          state{TaskState::READY, .ready = {}},
           parent_tid(parent_tid),
+          mailbox(),
           sp(stack_ptr) {}
 
     void reset() {
         state = {TaskState::UNUSED, .unused = {}};
         sp = nullptr;
         parent_tid = -2;
+        mailbox.clear();
     }
 };
 
@@ -173,7 +175,6 @@ class Kernel {
             case TaskState::UNUSED:
                 return -1;  // no running task with tid
             case TaskState::REPLY_WAIT:
-                return -2;  // receiver is waiting for a reply
             case TaskState::READY: {
                 Message message = {
                     .tid = sender_tid,
@@ -181,8 +182,7 @@ class Kernel {
                     .msglen = (size_t)msglen,
                 };
 
-                if (receiver.state.ready.mailbox.push_back(message) ==
-                    QueueErr::FULL) {
+                if (receiver.mailbox.push_back(message) == QueueErr::FULL) {
                     kdebug("mailbox full for task %d", receiver_tid);
                     return -2;
                 }
@@ -194,7 +194,7 @@ class Kernel {
                 memcpy(receiver.state.recv_wait.recv_buf, msg, n);
                 *receiver.state.recv_wait.tid = sender_tid;
 
-                receiver.state = {TaskState::READY, .ready = {Mailbox()}};
+                receiver.state = {TaskState::READY, .ready = {}};
                 ready_queue.push(receiver_tid, receiver.priority);
 
                 // set the return value that the receiver gets from Receive() to
@@ -222,14 +222,14 @@ class Kernel {
 
         switch (task.state.tag) {
             case TaskState::READY: {
-                if (task.state.ready.mailbox.is_empty()) {
+                if (task.mailbox.is_empty()) {
                     task.state = {TaskState::RECV_WAIT,
                                   .recv_wait = {tid, msg, (size_t)msglen}};
                     // this will be overwritten when a sender shows up
                     return -3;
                 }
                 Message m{};
-                task.state.ready.mailbox.pop_front(m);
+                task.mailbox.pop_front(m);
                 *tid = m.tid;
                 int n = min(msglen, m.msglen);
                 memcpy(msg, m.msg, n);
@@ -250,7 +250,7 @@ class Kernel {
             case TaskState::REPLY_WAIT: {
                 int n = min(receiver.state.reply_wait.len, rplen);
                 memcpy(receiver.state.reply_wait.reply_buf, reply, n);
-                receiver.state = {TaskState::READY, .ready = {Mailbox()}};
+                receiver.state = {TaskState::READY, .ready = {}};
                 ready_queue.push(tid, receiver.priority);
 
                 // Return the length of the reply to the original sender.
