@@ -112,52 +112,96 @@ would never wake up. Instead, we iterate through the send queue, waking ever
 
 ## Name Server
 
-<!-- TODO Prilik -->
+The Name Server task provides tasks with a simple to use mechanism to discover one another's Tids.
 
-## RPS Server & Client
+### Public Interface
 
-The RPS server and client are implemented in `src/assignments/k2/rps.cc`. Both
-tasks are configured by receiving a configuration message from their parent
-task after being created. When the executable is run, the `FirstUserTask`
-prompts the user for configuration, spawns the RPS server, and spawns the
-appropriate number of client tasks.
+The name server's public interface can be found under `include/user/tasks/nameserver.h`, a header file which defines the methods and constants other tasks can use to set up and communicate with the nameserver.
 
-### Client
+We've decided to use an incredibly simple closure mechanism for determining the Tid of the name server, namely, we enforce that the name server is the second user task to be spawned (after the FirstUserTask), resulting in it's Tid always being 1.
 
-Client tasks are very straightforward. After receiving their configured number
-of games, the client looks up the RPS server via `WhoIs()` and sends it a
-"signup" request. Once the server ACKs the signup request, it will play
-`num_games` games. During each game, the client generates a random move (via
-`rand()`), sends the move to the server, and waits for a response. The response
-either tells the client their result of the game (win, loss, draw), or that the
-other player quit and there are no other players to play against.
+To make working with the name server easier, instead of having tasks communicate with it directly via SRR system calls, a pair of utility methods are provided which streamline the registration and query flows:
 
-Once a client has played `num_games` games, or there are no other players to
-play against, the client exits.
+- `int WhoIs(const char*)`: returns the Tid of a task with a given name, `-1` if the name server task is not initialized, or `-2` if there was no registered task with the given name.
+- `int RegisterAs()`: returns `0` on success, `-1` if the name server task is not initialized, or `-2` if there was an error during name registration (e.g: nameserver is at capacity.)
+    - _Note:_ as described later, the nameserver currently panics if it runs out of space, so user tasks will never actually get back `-2`.
 
-### Server
+### Implementation
 
-The server task is more intricate. It has an array of `Game` objects, each
-representing the state of a single game. A `Game` can either be full or empty,
-but it cannot be half-full. The server also has a queue of size 1, to keep
-track of players that have not yet been matched in a game.
+The name server's implementation can be found under `src/user/tasks/nameserver.cc`.
 
-When a player signs up and the queue is empty, it is added to the queue, and
-the server does not immediately reply. When a player signs up and the queue is
-full, that player and the enqueued player are matched. Matching involves
-finding the first empty game in the `games` array - if there are no empty
-games, the server replies to both players with an `OUT_OF_SPACE` message.
-Otherwise, it replies to both players with an `ACK`, acknowledging the signup
-requests.
+#### Preface: A Note on Error Handling
 
-As clients send `PLAY` messages to the server, the server finds the `Game`
-associated with that client, and updates that client's `choice` in the game.
-When both players in a game have submitted their `choice`, the server
-determines the winner and sends the result as `PLAY_RESP` replies.
+At the moment, the name server's implementation will simply panic if various edge-conditions are encountered, namely, when the server runs out of space in any of it's buffers. While it would have been possible to return an error code to the user, we decided not to, as it's unlikely that the user process would be able to gracefully recover from such an error.
 
-When a client sends a `QUIT` message, the server checks the queue. If another
-player is waiting to join a game, that player will be matched with the player
-that the quitting client was playing against. In this swap, any move that the
-existing player had made will be preserved. If there is no queued player, the
-server sends the `OTHER_PLAYER_QUIT` message to the remaining player, who is
-then expected to stop sending `PLAY` messages.
+Instead, we will be tweaking the size of our name server's buffers over the course of development, striking a balance between memory usage and availability. Alternatively, we may explore implementing userspace heaps at some point, in which case, we may be able to grow the buffer on-demand when these edge conditions are hit.
+
+#### Associating Strings with Tids
+
+The core of any name server is some sort of associative data structure to associate strings to Tids.
+
+While there are many different data structures that fit this requirement, ranging from Tries, Hash Maps, BTree Maps, etc..., we've decided to use a simple, albeit potentially inefficient data structure instead: a plain old fixed-length array of ("String", Tid) pairs. This simple data structure provides O(1) registration, and O(n) lookup, which shouldn't be too bad, as we assume that most user applications won't require too many named tasks (as reflected in the specification's omission of any sort of "de-registration" functionality).
+
+##### Aside: Efficiently Storing Names
+
+Note that we've put the term "String" in quotes. This is because instead of using a fixed-size char buffer for each pair, we instead allocate strings via a separate data structure: the `StringArena`.
+
+`StringArena` is a simple class which contains a fixed-size `char` buffer, and a index to the tail of the buffer. It exposes two methods:
+
+- `size_t StringArena::add(const char* s, const size_t n)`: Copy a string of length `n` into the arena, returning a handle to the string's location within the arena (represented by a `size_t`). This handle can then be passed to the second method on the arena...
+- `const char* StringArena::get(const size_t handle)`: Return a pointer to a string associated with the given handle, or `nullptr` if the handle is invalid.
+
+Whenever `add` is called, the string is copied into the arena's fixed-size internal buffer, incrementing the tail-index to point past the end of the string. `get` simply returns a pointer into the char buffer associated with the returned handle (which at the moment, is simply an index into the char array).
+
+The `StringArena` approach allows us to avoid having to put an explicit limit on the size of name strings, as strings of varying lengths can be "packed" together in the single char buffer.
+
+#### Incoming and Outgoing Messages
+
+The `WhoIs` and `RegisterAs` functions abstract over the name server's message interface, which is comprised of two tagged unions: `Request` and `Response`.
+
+```cpp
+enum class MessageKind : size_t { WhoIs, RegisterAs, Shutdown };
+
+struct Request {
+    MessageKind kind;
+    union {
+        struct {
+            char name[NAMESERVER_MAX_NAME_LEN];
+            size_t len;
+        } who_is;
+        struct {
+            char name[NAMESERVER_MAX_NAME_LEN];
+            size_t len;
+            int tid;
+        } register_as;
+    };
+};
+
+struct Response {
+    MessageKind kind;
+    union {
+        struct {
+        } shutdown;
+        struct {
+            bool success;
+            int tid;
+        } who_is;
+        struct {
+            bool success;
+        } register_as;
+    };
+};
+```
+
+There are 3 types of request, each with a corresponding response
+- `Shutdown` - terminate the name server task
+- `WhoIs` - Return the Tid associated with a given name
+- `RegisterAs` - Register a Tid with a given name
+
+The latter two messages return a non-empty response, indicating if the operation was successful, and for `WhoIs`, a Tid (if one was found).
+
+The server uses a standard message handling loop, whereby the body of the server task is an infinite loop, which continuously waits for incoming messages, switches on their type, and handles them accordingly.
+
+#### Future Improvements
+
+We would like to split up the Request into two parts: a request "header", followed by an optional request "body." This would lift the artificially imposed `NAMESERVER_MAX_NAME_LEN` limit on names, as the request header could specify the length of the upcoming message, which the name server could then read into a variable-sized stack-allocated array (allocated via `alloca` / a VLA). This comes with a minor security risk, whereby a malicious and/or misbehaving task could specify a extremely large name, and overlow the nameserver's stack, but given the the operating system will only be running code we write ourselves, this shouldn't be too much of an issue.

@@ -1,4 +1,52 @@
-# K2 Output (RPS)
+# K2 Output - RPS
+
+## RPS Server & Client
+
+The RPS server and client are implemented in `src/assignments/k2/rps.cc`. Both
+tasks are configured by receiving a configuration message from their parent
+task after being created. When the executable is run, the `FirstUserTask`
+prompts the user for configuration, spawns the RPS server, and spawns the
+appropriate number of client tasks.
+
+### Client
+
+Client tasks are very straightforward. After receiving their configured number
+of games, the client looks up the RPS server via `WhoIs()` and sends it a
+"signup" request. Once the server ACKs the signup request, it will play
+`num_games` games. During each game, the client generates a random move (via
+`rand()`), sends the move to the server, and waits for a response. The response
+either tells the client their result of the game (win, loss, draw), or that the
+other player quit and there are no other players to play against.
+
+Once a client has played `num_games` games, or there are no other players to
+play against, the client exits.
+
+### Server
+
+The server task is more intricate. It has an array of `Game` objects, each
+representing the state of a single game. A `Game` can either be full or empty,
+but it cannot be half-full. The server also has a queue of size 1, to keep
+track of players that have not yet been matched in a game.
+
+When a player signs up and the queue is empty, it is added to the queue, and
+the server does not immediately reply. When a player signs up and the queue is
+full, that player and the enqueued player are matched. Matching involves
+finding the first empty game in the `games` array - if there are no empty
+games, the server replies to both players with an `OUT_OF_SPACE` message.
+Otherwise, it replies to both players with an `ACK`, acknowledging the signup
+requests.
+
+As clients send `PLAY` messages to the server, the server finds the `Game`
+associated with that client, and updates that client's `choice` in the game.
+When both players in a game have submitted their `choice`, the server
+determines the winner and sends the result as `PLAY_RESP` replies.
+
+When a client sends a `QUIT` message, the server checks the queue. If another
+player is waiting to join a game, that player will be matched with the player
+that the quitting client was playing against. In this swap, any move that the
+existing player had made will be preserved. If there is no queued player, the
+server sends the `OTHER_PLAYER_QUIT` message to the remaining player, who is
+then expected to stop sending `PLAY` messages.
 
 ## Transcript
 
