@@ -4,8 +4,7 @@ In K2 we implemented the Send-Receive-Reply mechanism, the Name Server, and the 
 
 ## Send-Receive-Reply
 
-SRR is implemented by adding a `state` field to each `TaskDescriptor`, which is the following
-tagged union:
+SRR is implemented by adding a `TaskState state;` field to each `TaskDescriptor`. `TaskState` is a tagged union with the following structure:
 
 ```cpp
 struct TaskState {
@@ -36,8 +35,7 @@ struct TaskState {
 ```
 
 So each `TaskDescriptor` can be in any of the states described by `tag`, at which
-point the fields in the corresponding struct under the `union` will be populated.
-Let's explain each of the states:
+point the fields in the corresponding struct under the `union` will be populated:
 
 - `UNUSED`: the `TaskDescriptor` does not represent a running task.
 - `READY`: the task is on the `ready_queue`, waiting to be scheduled.
@@ -46,9 +44,8 @@ Let's explain each of the states:
 - `RECV_WAIT`: the task has called `Receive()`, but no task has sent a message to it yet.
 - `REPLY_WAIT`: the task called `Send()` and the receiver got the message via `Receive()`, but no other task has called `Reply()` back at the task.
 
-
 To implement these state transitions, each task has a `send_queue` of tasks that
-are waiting to send to it (and thus, must be in the `SEND_WAIT` state). This send
+are waiting to send to it (and must therefore be in the `SEND_WAIT` state). This send
 queue is built as an intrusive linked list, where the `next` "pointer" is actually
 just another Tid, or `-1` to represent the end of the list. When a task wants to
 `Send()` to another task that is not in `RECV_WAIT`, it will be put on the receiver's
@@ -80,7 +77,7 @@ using the same `char* reply` that the sender saved when they went into `SEND_WAI
 ### Receiver-first
 
 If the receiver arrives first, it checks its send queue. If the send queue is
-non-empty, then we follow the same procdure as sender-first, and the new sender
+non-empty, then we follow the same procedure as sender-first, and the new sender
 is placed on the send of the receiver's send queue. If the send queue is empty,
 the receiver goes into `RECV_WAIT`, holding onto the `recv_buf` to be copied into
 once a sender arrives.
@@ -113,7 +110,7 @@ get a reply because they won't make the transition into `REPLY_WAIT`, and thus
 would never wake up. Instead, we iterate through the send queue, waking ever
 `SEND_WAIT` task up, and writing the syscall return value of `-2`.
 
-## NameServer
+## Name Server
 
 <!-- TODO Prilik -->
 
@@ -128,7 +125,7 @@ appropriate number of client tasks.
 ### Client
 
 Client tasks are very straightforward. After receiving their configured number
-of games, the client looks up the RPS server via `WhoIs()` and send it a
+of games, the client looks up the RPS server via `WhoIs()` and sends it a
 "signup" request. Once the server ACKs the signup request, it will play
 `num_games` games. During each game, the client generates a random move (via
 `rand()`), sends the move to the server, and waits for a response. The response
@@ -140,7 +137,7 @@ play against, the client exits.
 
 ### Server
 
-The server is more intricate. It has an array of `Game` objects, each
+The server task is more intricate. It has an array of `Game` objects, each
 representing the state of a single game. A `Game` can either be full or empty,
 but it cannot be half-full. The server also has a queue of size 1, to keep
 track of players that have not yet been matched in a game.
@@ -164,5 +161,3 @@ that the quitting client was playing against. In this swap, any move that the
 existing player had made will be preserved. If there is no queued player, the
 server sends the `OTHER_PLAYER_QUIT` message to the remaining player, who is
 then expected to stop sending `PLAY` messages.
-
-

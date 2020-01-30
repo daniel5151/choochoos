@@ -85,7 +85,7 @@
     10	player 3 num games (default 3): 3
 ```
 
-Game setup. The user's input is included. The random number generator is configured with a seed of 2, and we will pause for input after each game is finished.  We are running 3 client tasks, with priotities (1,2,3) respectively, that want to play (3,5,3) games respectively.
+Game setup (The user's input is included in the transcript). The random number generator is configured with a seed of 2, and we pause for input after each game is finished.  We are running 3 client tasks, with priotities (1,2,3) and wanting to play (3,5,3) games respectively.
 
 ```
     11	[Client tid=3 id=?] waiting for player config
@@ -131,8 +131,7 @@ Client 2 receives the signup ack, and sends scissors. Client 1 (the one with the
     36	~~~~~~~~~ press any key to continue ~~~~~~~~~
 ```
 
-Our first game! Client 2 send scissors and client 3 sent paper, so client
-2 wins. Both clients are informed of the result and send their next move. Since clients send their next move as soon as they see the results, client 2 sends their next move before client 3 has heard that it lost. The program pauses waiting for the user to press a key.
+Our first game! Client 2 send scissors and client 3 sent paper, so client 2 wins. Both clients are informed of the result and send their next move. Since clients send their next move as soon as they see the results, client 2 sends their next move before client 3 has heard that it lost. The program pauses waiting for the user to press a key.
 
 ```
     37	[Client tid=4 id=2] I won!
@@ -144,7 +143,6 @@ Our first game! Client 2 send scissors and client 3 sent paper, so client
 
 Client 2 sent paper and client 3 sent rock, so client 2 wins again. For the third game, both clients send rock. For client 3, it is their last game.
 
-
 ```
     42	[Client tid=4 id=2] it's a draw
     43	[Client tid=4 id=2] I want to play 2 more games. Sending rock...
@@ -153,9 +151,7 @@ Client 2 sent paper and client 3 sent rock, so client 2 wins again. For the thir
     46	~~~~~~~~~ press any key to continue ~~~~~~~~~
 ```
 
-Since both clients sent rock in the last round, it's a draw. Client
-  2 wants to play another game, so it sends rock. But client 3 doesn't want to
-play any more games, so it sends quit.
+Since both clients sent rock in the last round, it's a draw. Client 2 wants to play another game, so it sends rock. But client 3 doesn't want to play any more games, so it sends quit.
 
 ```
     47	[RPSServer] tid 5 quit, but tid 3 is waiting. Matching tids 4 and 3
@@ -169,12 +165,7 @@ play any more games, so it sends quit.
     55	~~~~~~~~~ press any key to continue ~~~~~~~~~
 ```
 
-The RPS receives client 3's quit message and removes it from the game. Since
- client 1 (Tid 3) is still waiting to join a game, and client 2 is still playing,
- the RPSServer matches client 1 and 2, and finally sends client 1
-the signup ack. Client 1 sends scissors, and since client 2 sent rock (in the
-last segment), client 2 wins. Clients 1 and 2 send another move, and client 3,
-after quitting, exits.
+The RPS receives client 3's quit message and removes it from the game. Since client 1 (Tid 3) is still waiting to join a game, and client 2 is still playing, the RPSServer matches client 1 and 2, and finally sends client 1 the signup ack. Client 1 sends scissors, and since client 2 sent rock (in the last segment), client 2 wins. Clients 1 and 2 send another move, and client 3, after quitting, exits.
 
 ```
     56	[Client tid=4 id=2] I lost :(
@@ -184,8 +175,7 @@ after quitting, exits.
     60	~~~~~~~~~ press any key to continue ~~~~~~~~~
 ```
 
-Client 1's rock beats client 2's scissors. Client 2 doesn't want to play anymore,
- so it sends quit. Client 1 doesn't know this and sends another move.
+Client 1's rock beats client 2's scissors. Client 2 doesn't want to play anymore, so it sends quit. Client 1 doesn't know this and sends another move.
 
 ```
     61	[RPSServer] tid 4 quit, but no players are waiting.
@@ -195,7 +185,4 @@ Client 1's rock beats client 2's scissors. Client 2 doesn't want to play anymore
     65	Goodbye from choochoos kernel!
 ```
 
-After client 2 quit, there are no other players waiting to join a game, so the
-RPSServer sends `OTHER_PLAYER_QUIT` to client 1. When client 1 receives this
-message, it exits. Client 2 also exits, after sending the quit message.
-
+After client 2 quit, there are no other players waiting to join a game, so the RPSServer sends `OTHER_PLAYER_QUIT` to client 1. When client 1 receives this message, it exits. Client 2 also exits, after sending the quit message.
