@@ -49,7 +49,7 @@ opt cache S 256 320
 
 ## Observations
 
-### Enabling Caches >>> Enabling Optimizations
+### Enabling Caches > Enabling Optimizations
 
 We begin with a fairly obvious observation: Enabling optimizations improves execution speed, and enabling caches improve execution speed. This should be fairly obvious, given that's what the flags / hardware is there for. What's more interesting is _just how much_ each contributes to the overall performance of the system.
 
