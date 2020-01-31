@@ -1,4 +1,4 @@
-CURRENT_ASSIGNMENT = k1
+CURRENT_ASSIGNMENT = k2
 
 TARGET ?= $(CURRENT_ASSIGNMENT)
 
@@ -112,3 +112,6 @@ $(BUILD_DIR)/test: test/test.cc
 
 k1.pdf: docs/k1/kernel.md docs/k1/output.md
 	pandoc --from markdown --to pdf $^ > k1.pdf
+
+k2.pdf: docs/k1/kernel.md docs/k2/kernel2.md docs/k2/rps.md docs/k2/performance.md
+	pandoc --toc --from markdown --to pdf $^ > k2.pdf

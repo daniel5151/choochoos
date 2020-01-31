@@ -2,8 +2,8 @@
 #include <cstdlib>
 #include <cstring>
 
-#include "common/queue.h"
 #include "common/bwio.h"
+#include "common/queue.h"
 
 #include "user/dbg.h"
 #include "user/syscalls.h"
@@ -47,6 +47,7 @@ struct Message {
 
         struct {
             size_t num_games;
+            size_t id;
         } player_config;
 
         struct {
@@ -164,6 +165,7 @@ void Server() {
     bool pause_after_each = config_msg.server_config.pause_after_each;
     Reply(tid, nullptr, 0);
 
+    printf("[RPSServer] accepting signups...\r\n");
     while (true) {
         Receive(&tid, (char*)&req, sizeof(req));
         debug("received message tag=%d from tid=%d ", req.tag, tid);
@@ -232,8 +234,8 @@ void Server() {
                             Reply(game.player2(), (char*)&res, sizeof(res));
                             game.reset();
                             printf(
-                                "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
-                                "~" ENDL);
+                                "~~~~~~~~~ press any key to continue "
+                                "~~~~~~~~~" ENDL);
                             if (pause_after_each) bwgetc(COM2);
                         }
                         break;
@@ -295,21 +297,32 @@ void Server() {
 }
 
 void Client() {
-    int server = NameServer::WhoIs(RPS_SERVER);
-    assert(server >= 0);
     char prefix[32];
-    snprintf(prefix, 32, "[Client %d] ", MyTid());
+    int my_tid = MyTid();
+    snprintf(prefix, 32, "[Client tid=%d id=?] ", my_tid);
 
     Message req;
     Message res;
 
+    printf("%swaiting for player config" ENDL, prefix);
     int tid;
     int code = Receive(&tid, (char*)&req, sizeof(req));
     assert(code >= 0);
     assert(req.tag == Message::PLAYER_CONFIG);
     size_t num_games = req.player_config.num_games;
+    size_t id = req.player_config.id;
     res = {Message::ACK, .empty = {}};
     Reply(tid, (char*)&res, sizeof(res));
+    printf("%sreceived player config (num_games=%u, id=%u)" ENDL, prefix,
+           num_games, id);
+    memset(prefix, '\0', sizeof(prefix));
+    snprintf(prefix, 32, "[Client tid=%d id=%u] ", my_tid, id);
+
+    printf("%squerying nameserver for '%s'" ENDL, prefix, RPS_SERVER);
+    int server = NameServer::WhoIs(RPS_SERVER);
+    assert(server >= 0);
+    printf("%sreceived reply from nameserver: %s=%d" ENDL, prefix, RPS_SERVER,
+           server);
 
     printf("%sI want to play %u games. Sending signup..." ENDL, prefix,
            num_games);
@@ -409,18 +422,23 @@ void setup_and_run() {
     }
 
     srand((unsigned int)seed);
+
+    // create the RPSServer with priority 0.
     int server = Create(0, rps::Server);
     Message m = {Message::SERVER_CONFIG,
                  .server_config = {.pause_after_each = pause_after_each}};
     int code = Send(server, (char*)&m, sizeof(m), nullptr, 0);
     assert(code == 0);
 
+    size_t id = 1;
     for (auto& config : players) {
         int tid = Create(config.priority, rps::Client);
         if (tid < 0) panic("unable to create player - out of task descriptors");
         m = {Message::PLAYER_CONFIG,
-             .player_config = {.num_games = config.num_games}};
+             .player_config = {.num_games = config.num_games, .id = id}};
         Send(tid, (char*)&m, sizeof(m), /* ignore response */ nullptr, 0);
+
+        id++;
     }
 }
 

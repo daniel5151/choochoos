@@ -16,15 +16,6 @@ class StringArena {
    public:
     StringArena() : buf(), index(0) {}
 
-    struct Result {
-        enum { Ok, OutOfSpace } kind;
-        union {
-            struct {
-                size_t idx;
-            } ok;
-        };
-    };
-
     // copies the provided string into the arena. returns idx
     size_t add(const char* s, const size_t n) {
         if (this->index + n >= N) {
@@ -47,6 +38,40 @@ class StringArena {
 
 namespace NameServer {
 
+enum class MessageKind : size_t { WhoIs, RegisterAs, Shutdown };
+
+struct Request {
+    MessageKind kind;
+    union {
+        struct {
+        } shutdown;
+        struct {
+            char name[NAMESERVER_MAX_NAME_LEN];
+            size_t len;
+        } who_is;
+        struct {
+            char name[NAMESERVER_MAX_NAME_LEN];
+            size_t len;
+            int tid;
+        } register_as;
+    };
+};
+
+struct Response {
+    MessageKind kind;
+    union {
+        struct {
+        } shutdown;
+        struct {
+            bool success;
+            int tid;
+        } who_is;
+        struct {
+            bool success;
+        } register_as;
+    };
+};
+
 void Task() {
     Request msg{};
     int tid;
@@ -61,8 +86,11 @@ void Task() {
     for (;;) {
         Receive(&tid, (char*)&msg, sizeof(Request));
         switch (msg.kind) {
-            case MessageKind::Shutdown:
+            case MessageKind::Shutdown: {
+                Response res = {.kind = MessageKind::Shutdown, .shutdown = {}};
+                Reply(tid, (char*)&res, sizeof(Response));
                 return;
+            } break;
             case MessageKind::WhoIs: {
                 int found_tid = -1;
 
@@ -139,7 +167,7 @@ int RegisterAs(const char* name) {
         return -1;
     }
     assert(res.kind == MessageKind::RegisterAs);
-    return res.register_as.success ? 0 : -1;
+    return res.register_as.success ? 0 : -2;
 }
 
 int WhoIs(const char* name) {
@@ -156,7 +184,7 @@ int WhoIs(const char* name) {
         return -1;
     }
     assert(res.kind == MessageKind::WhoIs);
-    return res.who_is.success ? res.who_is.tid : -1;
+    return res.who_is.success ? res.who_is.tid : -2;
 }
 
 }
