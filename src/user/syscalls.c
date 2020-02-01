@@ -14,10 +14,10 @@ int __Reply(int tid, const char* reply, int rplen);
 int __Receive(int* tid, char* msg, int msglen);
 int __Send(int tid, const char* msg, int msglen, char* reply, int rplen);
 int __Create(int priority, void (*function)());
-int __MyTid();
-int __MyParentTid();
-void __Exit() __attribute__((noreturn));
-void __Yield();
+int __MyTid(void);
+int __MyParentTid(void);
+void __Exit(void) __attribute__((noreturn));
+void __Yield(void);
 
 // Wrapper methods around raw syscalls
 
@@ -35,7 +35,7 @@ int Send(int tid, const char* msg, int msglen, char* reply, int rplen) {
 int Create(int priority, void (*function)()) {
     return __Create(priority, function);
 }
-int MyTid() { return __MyTid(); }
-int MyParentTid() { return __MyParentTid(); }
-void Exit() { __Exit(); }
-void Yield() { return __Yield(); }
+int MyTid(void) { return __MyTid(); }
+int MyParentTid(void) { return __MyParentTid(); }
+void Exit(void) { __Exit(); }
+void Yield(void) { __Yield(); }

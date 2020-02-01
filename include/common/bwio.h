@@ -27,7 +27,8 @@ int bwputx(int channel, char c);
 int bwputstr(int channel, const char* str);
 int bwputr(int channel, unsigned int reg);
 void bwputw(int channel, int n, char fc, char* bf);
-void bwprintf(int channel, const char* format, ...) __attribute__((format(printf, 2, 3)));
+void bwprintf(int channel, const char* format, ...)
+    __attribute__((format(printf, 2, 3)));
 
 void bwgetline(char* line, size_t len);
 

@@ -12,7 +12,7 @@
 enum class RPS { NONE = 0, ROCK = 1, PAPER = 2, SCISSORS = 3 };
 enum class Result { DRAW, I_WON, I_LOST };
 
-const char* str_of_rps(const RPS rps) {
+static const char* str_of_rps(const RPS rps) {
     switch (rps) {
         case RPS::ROCK:
             return "rock";
@@ -190,7 +190,7 @@ void Server() {
                 // if we're out of free games, return OUT_OF_SPACE to both
                 // clients
                 if (game == nullptr) {
-                    res = (Message){.tag = Message::OUT_OF_SPACE, .empty = {}};
+                    res = {.tag = Message::OUT_OF_SPACE, .empty = {}};
                     Reply(tid, (char*)&res, sizeof(res));
                     Reply(other_tid, (char*)&res, sizeof(res));
                 }
@@ -227,7 +227,7 @@ void Server() {
                                 r1 = Result::I_LOST;
                                 r2 = Result::I_WON;
                             }
-                            res = (Message){.tag = Message::PLAY_RESP,
+                            res = {.tag = Message::PLAY_RESP,
                                             .play_resp = {.result = r1}};
                             Reply(game.player1(), (char*)&res, sizeof(res));
                             res.play_resp.result = r2;
@@ -245,7 +245,7 @@ void Server() {
                 if (!found) {
                     // the other player must have quit, so send
                     // OTHER_PLAYER_QUIT to tid
-                    res = {Message::OTHER_PLAYER_QUIT, .empty = {}};
+                    res = {.tag = Message::OTHER_PLAYER_QUIT, .empty = {}};
                     Reply(tid, (char*)&res, sizeof(res));
                 }
             } break;
@@ -278,14 +278,14 @@ void Server() {
                             if (other_choice != RPS::NONE) {
                                 game->set(other_tid, other_choice);
                             }
-                            res = {Message::ACK, .empty = {}};
+                            res = {.tag = Message::ACK, .empty = {}};
                             Reply(waiting_tid, (char*)&res, sizeof(res));
                         }
 
                         break;
                     }
                 }
-                res = {Message::ACK, .empty = {}};
+                res = {.tag = Message::ACK, .empty = {}};
                 Reply(tid, (char*)&res, sizeof(res));
             } break;
 
@@ -311,7 +311,7 @@ void Client() {
     assert(req.tag == Message::PLAYER_CONFIG);
     size_t num_games = req.player_config.num_games;
     size_t id = req.player_config.id;
-    res = {Message::ACK, .empty = {}};
+    res = {.tag = Message::ACK, .empty = {}};
     Reply(tid, (char*)&res, sizeof(res));
     printf("%sreceived player config (num_games=%u, id=%u)" ENDL, prefix,
            num_games, id);
@@ -326,7 +326,7 @@ void Client() {
 
     printf("%sI want to play %u games. Sending signup..." ENDL, prefix,
            num_games);
-    req = (Message){.tag = Message::SIGNUP, .empty = {}};
+    req = {.tag = Message::SIGNUP, .empty = {}};
     code = Send(server, (char*)&req, sizeof(req), (char*)&res, sizeof(res));
     // TODO this happens if we exceed the mailbox size.
     if (code < 0) {
@@ -342,7 +342,7 @@ void Client() {
 
     for (size_t i = 0; i < num_games; i++) {
         RPS choice = (RPS)((rand() % 3) + 1);
-        req = (Message){.tag = Message::PLAY, .play = {.choice = choice}};
+        req = {.tag = Message::PLAY, .play = {.choice = choice}};
         printf("%sI want to play %u more %s. Sending %s..." ENDL, prefix,
                num_games - i, (num_games - i) > 1 ? "games" : "game",
                str_of_rps(req.play.choice));
@@ -372,7 +372,7 @@ void Client() {
             }
         }
     }
-    req = (Message){.tag = Message::QUIT, .empty = {}};
+    req = {.tag = Message::QUIT, .empty = {}};
     printf("%ssending quit" ENDL, prefix);
     code = Send(server, (char*)&req, sizeof(req), (char*)&res, sizeof(res));
     assert(code >= 0);
@@ -425,7 +425,7 @@ void setup_and_run() {
 
     // create the RPSServer with priority 0.
     int server = Create(0, rps::Server);
-    Message m = {Message::SERVER_CONFIG,
+    Message m = {.tag = Message::SERVER_CONFIG,
                  .server_config = {.pause_after_each = pause_after_each}};
     int code = Send(server, (char*)&m, sizeof(m), nullptr, 0);
     assert(code == 0);
@@ -434,7 +434,7 @@ void setup_and_run() {
     for (auto& config : players) {
         int tid = Create(config.priority, rps::Client);
         if (tid < 0) panic("unable to create player - out of task descriptors");
-        m = {Message::PLAYER_CONFIG,
+        m = {.tag = Message::PLAYER_CONFIG,
              .player_config = {.num_games = config.num_games, .id = id}};
         Send(tid, (char*)&m, sizeof(m), /* ignore response */ nullptr, 0);
 

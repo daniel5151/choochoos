@@ -63,14 +63,21 @@ class TaskDescriptor {
 
     void* sp;
 
-    TaskDescriptor() : state{TaskState::UNUSED, .unused = {}}, parent_tid(-2) {}
+    TaskDescriptor()
+        : my_tid(-1),
+          send_queue_head(-1),
+          send_queue_tail(-1),
+          priority(0),
+          state{.tag = TaskState::UNUSED, .unused = {}},
+          parent_tid(-2),
+          sp(nullptr) {}
 
     TaskDescriptor(int tid, size_t priority, int parent_tid, void* stack_ptr)
         : my_tid(tid),
           send_queue_head(-1),
           send_queue_tail(-1),
           priority(priority),
-          state{TaskState::READY, .ready = {}},
+          state{.tag = TaskState::READY, .ready = {}},
           parent_tid(parent_tid),
           sp(stack_ptr) {}
 
@@ -78,7 +85,7 @@ class TaskDescriptor {
 
     void reset(TaskDescriptor (&tasks)[MAX_SCHEDULED_TASKS],
                PriorityQueue<int, MAX_SCHEDULED_TASKS>& ready_queue) {
-        state = {TaskState::UNUSED, .unused = {}};
+        state = {.tag = TaskState::UNUSED, .unused = {}};
         sp = nullptr;
         parent_tid = -2;
 
@@ -97,7 +104,7 @@ class TaskDescriptor {
 
             // SRR could not be completed, return -2 to the sender
             *(int32_t*)task.sp = -2;
-            task.state = {TaskState::READY, .ready = {}};
+            task.state = {.tag = TaskState::READY, .ready = {}};
             if (ready_queue.push(tid, task.priority) != PriorityQueueErr::OK) {
                 kpanic("ready queue full");
             }
@@ -108,17 +115,21 @@ class TaskDescriptor {
 
     int tid() const { return my_tid; }
 
-    void add_to_send_queue(TaskDescriptor& task, const char* msg, size_t msglen,
-                           char* reply, size_t rplen,
+    void add_to_send_queue(TaskDescriptor& task,
+                           const char* msg,
+                           size_t msglen,
+                           char* reply,
+                           size_t rplen,
                            TaskDescriptor (&tasks)[MAX_SCHEDULED_TASKS]) {
         kassert(this->state.tag != TaskState::RECV_WAIT);
         kassert(task.state.tag == TaskState::READY);
 
-        task.state = {TaskState::SEND_WAIT, .send_wait = {.msg = msg,
-                                                          .msglen = msglen,
-                                                          .reply = reply,
-                                                          .rplen = rplen,
-                                                          .next = -1}};
+        task.state = {.tag = TaskState::SEND_WAIT,
+                      .send_wait = {.msg = msg,
+                                    .msglen = msglen,
+                                    .reply = reply,
+                                    .rplen = rplen,
+                                    .next = -1}};
         if (send_queue_is_empty()) {
             kassert(send_queue_head == -1);
             kassert(send_queue_tail == -1);
@@ -137,7 +148,9 @@ class TaskDescriptor {
         }
     }
 
-    int pop_from_send_queue(int* sender_tid, char* recv_buf, size_t len,
+    int pop_from_send_queue(int* sender_tid,
+                            char* recv_buf,
+                            size_t len,
                             TaskDescriptor (&tasks)[MAX_SCHEDULED_TASKS]) {
         kassert(!send_queue_is_empty());
         kassert(state.tag == TaskState::READY);
@@ -153,9 +166,10 @@ class TaskDescriptor {
         char* reply = task.state.send_wait.reply;
         size_t rplen = task.state.send_wait.rplen;
         int next = task.state.send_wait.next;
-        task.state = {TaskState::REPLY_WAIT, .reply_wait = {reply, rplen}};
+        task.state = {.tag = TaskState::REPLY_WAIT,
+                      .reply_wait = {reply, rplen}};
 
-        this->state = {TaskState::READY, .ready = {}};
+        this->state = {.tag = TaskState::READY, .ready = {}};
 
         send_queue_head = next;
         if (send_queue_head == -1) {
@@ -216,7 +230,8 @@ class Kernel {
                 start_of_stack, &__USER_STACKS_END__);
         }
 
-        FreshStack* stack = (FreshStack*)(start_of_stack - sizeof(FreshStack));
+        FreshStack* stack =
+            (FreshStack*)(void*)(start_of_stack - sizeof(FreshStack));
 
         // GCC complains that writing *anything* to `stack` is an out-of-bounds
         // error,  because `&__USER_STACKS_START__` is simply a `char*` with no
@@ -252,9 +267,9 @@ class Kernel {
 
     void Yield() { kdebug("Called Yield"); }
 
-    int Send(int receiver_tid, const char* msg, int msglen, char* reply,
-             int rplen) {
-        kdebug("Called Send(tid=%d msg=%s msglen=%d reply=%p rplen=%d)",
+    int Send(
+        int receiver_tid, const char* msg, int msglen, char* reply, int rplen) {
+        kdebug("Called Send(tid=%d msg=%p msglen=%d reply=%p rplen=%d)",
                receiver_tid, msg, msglen, reply, rplen);
         if (receiver_tid < 0 || receiver_tid >= MAX_SCHEDULED_TASKS)
             return -1;  // invalid tid
@@ -281,14 +296,14 @@ class Kernel {
                 memcpy(receiver.state.recv_wait.recv_buf, msg, n);
                 *receiver.state.recv_wait.tid = sender_tid;
 
-                receiver.state = {TaskState::READY, .ready = {}};
+                receiver.state = {.tag = TaskState::READY, .ready = {}};
                 ready_queue.push(receiver_tid, receiver.priority);
 
                 // set the return value that the receiver gets from Receive() to
                 // n.
                 *((int32_t*)receiver.sp) = (int32_t)n;
 
-                sender.state = {TaskState::REPLY_WAIT,
+                sender.state = {.tag = TaskState::REPLY_WAIT,
                                 .reply_wait = {reply, (size_t)rplen}};
                 // the sender should never see this - it should be overwritten
                 // by Reply()
@@ -302,14 +317,15 @@ class Kernel {
     }
 
     int Receive(int* tid, char* msg, int msglen) {
-        kdebug("Called Receive(tid=%p msg=%p msglen=%d)", tid, msg, msglen);
+        kdebug("Called Receive(tid=%p msg=%p msglen=%d)", (void*)tid, msg,
+               msglen);
 
         TaskDescriptor& task = tasks[MyTid()];
 
         switch (task.state.tag) {
             case TaskState::READY: {
                 if (task.send_queue_is_empty()) {
-                    task.state = {TaskState::RECV_WAIT,
+                    task.state = {.tag = TaskState::RECV_WAIT,
                                   .recv_wait = {tid, msg, (size_t)msglen}};
                     // this will be overwritten when a sender shows up
                     return -3;
@@ -334,7 +350,7 @@ class Kernel {
                 size_t n = std::min(receiver.state.reply_wait.rplen,
                                     (size_t)std::max(rplen, 0));
                 memcpy(receiver.state.reply_wait.reply, reply, n);
-                receiver.state = {TaskState::READY, .ready = {}};
+                receiver.state = {.tag = TaskState::READY, .ready = {}};
                 ready_queue.push(tid, receiver.priority);
 
                 // Return the length of the reply to the original sender.
