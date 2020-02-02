@@ -176,8 +176,7 @@ void Server() {
                     break;
                 }
 
-                int other_tid;
-                assert(queue.pop_front(other_tid) == QueueErr::OK);
+                int other_tid = queue.pop_front().value();
 
                 // first, look for empty games
                 Game* game = nullptr;
@@ -266,9 +265,8 @@ void Server() {
                         } else {
                             // if there is a player waiting, match them up, and
                             // send ACK to the waiting player.
-                            int waiting_tid;
-                            assert(queue.pop_front(waiting_tid) ==
-                                   QueueErr::OK);
+                            int waiting_tid = queue.pop_front().value();
+
                             RPS other_choice = game->choice_for(other_tid);
                             printf(
                                 "[RPSServer] tid %d quit, but tid %d is "

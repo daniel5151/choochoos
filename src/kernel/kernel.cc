@@ -1,5 +1,5 @@
 #include <cstring>
-#include <utility>
+#include <optional>
 
 #include "common/bwio.h"
 #include "common/priority_queue.h"
@@ -20,6 +20,16 @@ extern char __USER_STACKS_START__, __USER_STACKS_END__;
 
 #define INVALID_PRIORITY -1
 #define OUT_OF_TASK_DESCRIPTORS -2
+
+class Tid {
+    size_t id;
+
+   public:
+    operator size_t() const { return this->id; }
+
+    Tid(size_t id) : id{id} {}
+    int raw_tid() const { return this->id; }
+};
 
 struct TaskState {
     enum uint8_t { UNUSED, READY, SEND_WAIT, RECV_WAIT, REPLY_WAIT } tag;
@@ -48,23 +58,23 @@ struct TaskState {
 };
 
 class TaskDescriptor {
-    int tid;
-    std::optional<int> send_queue_head;
-    std::optional<int> send_queue_tail;
+    Tid tid;
+    std::optional<Tid> send_queue_head;
+    std::optional<Tid> send_queue_tail;
 
     // hack since Kdebug relies on a local MyTid() (TODO plsfix)
-    int MyTid() const { return tid; }
+    int MyTid() const { return tid.raw_tid(); }
 
    public:
     size_t priority;
     TaskState state;
-    std::optional<int> parent_tid;
+    std::optional<Tid> parent_tid;
 
     void* sp;
 
     TaskDescriptor() = delete;
 
-    TaskDescriptor(int tid, size_t priority, std::optional<int> parent_tid, void* stack_ptr)
+    TaskDescriptor(Tid tid, size_t priority, std::optional<Tid> parent_tid, void* stack_ptr)
         : tid {tid},
           send_queue_head {std::nullopt},
           send_queue_tail {std::nullopt},
@@ -76,7 +86,7 @@ class TaskDescriptor {
     bool send_queue_is_empty() const { return !send_queue_head.has_value(); }
 
     void reset(std::optional<TaskDescriptor> (&tasks)[MAX_SCHEDULED_TASKS],
-               PriorityQueue<int, MAX_SCHEDULED_TASKS>& ready_queue) {
+               PriorityQueue<Tid, MAX_SCHEDULED_TASKS>& ready_queue) {
         state = {.tag = TaskState::UNUSED, .unused = {}};
         sp = nullptr;
         parent_tid = std::nullopt;
@@ -84,7 +94,7 @@ class TaskDescriptor {
         if (!send_queue_head.has_value())
             return;
 
-        int tid = send_queue_head.value();
+        Tid tid = send_queue_head.value();
 
         send_queue_head = std::nullopt;
         send_queue_tail = std::nullopt;
@@ -94,10 +104,10 @@ class TaskDescriptor {
 
             auto& task = tasks[tid].value();
             kassert(task.state.tag == TaskState::SEND_WAIT);
-            std::optional<int> next_tid = task.state.send_wait.next;
+            std::optional<Tid> next_tid = task.state.send_wait.next;
 
-            kdebug("tid=%d cannot complete SRR, receiver (%d) shut down", this->tid,
-                   tid);
+            kdebug("tid=%u cannot complete SRR, receiver (%u) shut down", (size_t)this->tid,
+                   (size_t)tid);
 
             // SRR could not be completed, return -2 to the sender
             *(int32_t*)task.sp = -2;
@@ -148,7 +158,7 @@ class TaskDescriptor {
         }
     }
 
-    int pop_from_send_queue(int* sender_tid,
+    Tid pop_from_send_queue(int* sender_tid,
                             char* recv_buf,
                             size_t len,
                             std::optional<TaskDescriptor> (&tasks)[MAX_SCHEDULED_TASKS]) {
@@ -161,13 +171,13 @@ class TaskDescriptor {
         TaskDescriptor& task = tasks[send_queue_head.value()].value();
         kassert(task.state.tag == TaskState::SEND_WAIT);
 
-        int n = std::min(task.state.send_wait.msglen, len);
+        size_t n = std::min(task.state.send_wait.msglen, len);
         memcpy(recv_buf, task.state.send_wait.msg, n);
         *sender_tid = send_queue_head.value();
 
         char* reply = task.state.send_wait.reply;
         size_t rplen = task.state.send_wait.rplen;
-        std::optional<int> next = task.state.send_wait.next;
+        std::optional<Tid> next = task.state.send_wait.next;
         task.state = {.tag = TaskState::REPLY_WAIT,
                       .reply_wait = {reply, rplen}};
 
@@ -195,15 +205,15 @@ class Kernel {
     };
 
     std::optional<TaskDescriptor> tasks[MAX_SCHEDULED_TASKS];
-    PriorityQueue<int /* task descriptor */, MAX_SCHEDULED_TASKS> ready_queue;
+    PriorityQueue<Tid, MAX_SCHEDULED_TASKS> ready_queue;
 
-    int current_task = -1;
+    Tid current_task = -1;
 
-    int next_tid() {
-        for (int tid = 0; tid < MAX_SCHEDULED_TASKS; tid++) {
-            if (!tasks[tid].has_value()) return tid;
+    std::optional<Tid> next_tid() {
+        for (size_t tid = 0; tid < MAX_SCHEDULED_TASKS; tid++) {
+            if (!tasks[tid].has_value()) return Tid(tid);
         }
-        return -1;
+        return std::nullopt;
     }
 
     // ------------------ syscall handlers ----------------------
@@ -227,16 +237,19 @@ class Kernel {
         kdebug("Called Create(priority=%d, function=%p)", priority, function);
 
         if (priority < 0) return INVALID_PRIORITY;
-        int tid = next_tid();
-        if (tid < 0) return OUT_OF_TASK_DESCRIPTORS;
+        std::optional<Tid> fresh_tid = next_tid();
+        if (!fresh_tid.has_value()) return OUT_OF_TASK_DESCRIPTORS;
+        Tid tid = fresh_tid.value();
 
         if (ready_queue.push(tid, priority) == PriorityQueueErr::FULL) {
-            kpanic("out of space in ready queue (tid=%d)", tid);
+            kpanic("out of space in ready queue (tid=%u)", (size_t)tid);
         }
+
+
 
         // set up memory for the initial user stack
         char* start_of_stack =
-            &__USER_STACKS_START__ + (USER_STACK_SIZE * (tid + 1));
+            &__USER_STACKS_START__ + (USER_STACK_SIZE * ((size_t)tid + 1));
         if (start_of_stack > &__USER_STACKS_END__) {
             kpanic(
                 "Create(): stack overflow! start_of_stack (%p) > "
@@ -265,7 +278,7 @@ class Kernel {
         stack->lr = (void*)::Exit;  // implicit Exit() calls!
 #pragma GCC diagnostic pop
 
-        kdebug("Created: tid=%d priority=%d function=%p", tid, priority,
+        kdebug("Created: tid=%u priority=%d function=%p", (size_t)tid, priority,
                function);
 
         tasks[tid] =
@@ -275,7 +288,7 @@ class Kernel {
 
     void Exit() {
         kdebug("Called Exit");
-        int tid = current_task;
+        Tid tid = current_task;
         kassert(tasks[tid].has_value());
         tasks[tid]->reset(tasks, ready_queue);
         tasks[tid] = std::nullopt;
@@ -292,7 +305,7 @@ class Kernel {
         if (!tasks[receiver_tid].has_value())
             return -1;
 
-        int sender_tid = current_task;
+        Tid sender_tid = current_task;
         TaskDescriptor& sender = tasks[sender_tid].value();
         TaskDescriptor& receiver = tasks[receiver_tid].value();
         switch (receiver.state.tag) {
@@ -438,13 +451,11 @@ class Kernel {
         }
     }
 
-    int schedule() {
-        int tid;
-        if (ready_queue.pop(tid) == PriorityQueueErr::EMPTY) return -1;
-        return tid;
+    std::optional<Tid> schedule() {
+        return ready_queue.pop();
     }
 
-    void activate(int tid) {
+    void activate(Tid tid) {
         current_task = tid;
         TaskDescriptor& task = tasks[tid].value();
         task.sp = _activate_task(task.sp);
@@ -453,7 +464,7 @@ class Kernel {
             case TaskState::READY:
                 if (ready_queue.push(tid, task.priority) ==
                     PriorityQueueErr::FULL) {
-                    kpanic("out of space in ready queue (tid=%d)", tid);
+                    kpanic("out of space in ready queue (tid=%u)", (size_t)tid);
                 }
                 break;
             case TaskState::SEND_WAIT:
@@ -500,9 +511,9 @@ int kmain() {
     kern.initialize(FirstUserTask);
 
     while (true) {
-        int next_task = kern.schedule();
-        if (next_task < 0) break;
-        kern.activate(next_task);
+        std::optional<Tid> next_task = kern.schedule();
+        if (!next_task.has_value()) break;
+        kern.activate(next_task.value());
     }
 
     kprintf("Goodbye from choochoos kernel!");

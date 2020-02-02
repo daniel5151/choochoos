@@ -2,8 +2,9 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 
-enum class QueueErr : uint8_t { OK, FULL, EMPTY };
+enum class QueueErr : uint8_t { OK, FULL };
 
 template <class T, unsigned int N>
 class Queue {
@@ -25,20 +26,18 @@ class Queue {
         return QueueErr::OK;
     }
 
-    QueueErr pop_front(T& dest) {
-        if (len == 0) return QueueErr::EMPTY;
+    std::optional<T> pop_front() {
+        if (len == 0) return std::nullopt;
 
-        dest = buf[start];
+        T ret = buf[start];
         start = (start + 1) % N;
         len--;
-        return QueueErr::OK;
+        return ret;
     }
 
-    QueueErr peek_front(T& dest) const {
-        if (len == 0) return QueueErr::EMPTY;
-
-        dest = buf[start];
-        return QueueErr::OK;
+    const T* peek_front() const {
+        if (len == 0) return nullptr;
+        return &buf[start];
     }
 
     void clear() {
