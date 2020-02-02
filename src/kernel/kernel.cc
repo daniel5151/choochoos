@@ -1,4 +1,5 @@
 #include <cstring>
+#include <utility>
 
 #include "common/bwio.h"
 #include "common/priority_queue.h"
@@ -47,45 +48,38 @@ struct TaskState {
 };
 
 class TaskDescriptor {
-    int my_tid;
+    int tid;
     int send_queue_head;
     int send_queue_tail;
 
     // hack since Kdebug relies on a local MyTid() (TODO plsfix)
-    int MyTid() const { return my_tid; }
+    int MyTid() const { return tid; }
 
    public:
     size_t priority;
     TaskState state;
-    int parent_tid;
+    std::optional<int> parent_tid;
 
     void* sp;
 
-    TaskDescriptor()
-        : my_tid(-1),
-          send_queue_head(-1),
-          send_queue_tail(-1),
-          priority(0),
-          state{.tag = TaskState::UNUSED, .unused = {}},
-          parent_tid(-2),
-          sp(nullptr) {}
+    TaskDescriptor() = delete;
 
-    TaskDescriptor(int tid, size_t priority, int parent_tid, void* stack_ptr)
-        : my_tid(tid),
+    TaskDescriptor(int tid, size_t priority, std::optional<int> parent_tid, void* stack_ptr)
+        : tid(tid),
           send_queue_head(-1),
           send_queue_tail(-1),
           priority(priority),
           state{.tag = TaskState::READY, .ready = {}},
-          parent_tid(parent_tid),
+          parent_tid {parent_tid},
           sp(stack_ptr) {}
 
     bool send_queue_is_empty() const { return send_queue_head == -1; }
 
-    void reset(TaskDescriptor (&tasks)[MAX_SCHEDULED_TASKS],
+    void reset(std::optional<TaskDescriptor> (&tasks)[MAX_SCHEDULED_TASKS],
                PriorityQueue<int, MAX_SCHEDULED_TASKS>& ready_queue) {
         state = {.tag = TaskState::UNUSED, .unused = {}};
         sp = nullptr;
-        parent_tid = -2;
+        parent_tid = std::nullopt;
 
         int tid = send_queue_head;
 
@@ -93,12 +87,14 @@ class TaskDescriptor {
         send_queue_tail = -1;
 
         while (tid >= 0) {
-            auto& task = tasks[tid];
+            kassert(tasks[tid].has_value());
+
+            auto& task = tasks[tid].value();
             kassert(task.state.tag == TaskState::SEND_WAIT);
             int next_tid = task.state.send_wait.next;
 
             kdebug("tid=%d cannot complete SRR, receiver (%d) shut down", tid,
-                   my_tid);
+                   tid);
 
             // SRR could not be completed, return -2 to the sender
             *(int32_t*)task.sp = -2;
@@ -111,14 +107,12 @@ class TaskDescriptor {
         }
     }
 
-    int tid() const { return my_tid; }
-
     void add_to_send_queue(TaskDescriptor& task,
                            const char* msg,
                            size_t msglen,
                            char* reply,
                            size_t rplen,
-                           TaskDescriptor (&tasks)[MAX_SCHEDULED_TASKS]) {
+                           std::optional<TaskDescriptor> (&tasks)[MAX_SCHEDULED_TASKS]) {
         kassert(this->state.tag != TaskState::RECV_WAIT);
         kassert(task.state.tag == TaskState::READY);
 
@@ -132,29 +126,33 @@ class TaskDescriptor {
             kassert(send_queue_head == -1);
             kassert(send_queue_tail == -1);
 
-            send_queue_head = task.tid();
-            send_queue_tail = task.tid();
+            send_queue_head = task.tid;
+            send_queue_tail = task.tid;
         } else {
             kassert(send_queue_head >= 0);
             kassert(send_queue_tail >= 0);
 
-            TaskDescriptor& old_tail = tasks[send_queue_tail];
+            kassert(tasks[send_queue_tail].has_value());
+
+            TaskDescriptor& old_tail = tasks[send_queue_tail].value();
             kassert(old_tail.state.tag == TaskState::SEND_WAIT);
             kassert(old_tail.state.send_wait.next == -1);
-            old_tail.state.send_wait.next = task.tid();
-            send_queue_tail = task.tid();
+            old_tail.state.send_wait.next = task.tid;
+            send_queue_tail = task.tid;
         }
     }
 
     int pop_from_send_queue(int* sender_tid,
                             char* recv_buf,
                             size_t len,
-                            TaskDescriptor (&tasks)[MAX_SCHEDULED_TASKS]) {
+                            std::optional<TaskDescriptor> (&tasks)[MAX_SCHEDULED_TASKS]) {
         kassert(!send_queue_is_empty());
         kassert(state.tag == TaskState::READY);
         kassert(send_queue_head >= 0);
 
-        TaskDescriptor& task = tasks[send_queue_head];
+        kassert(tasks[send_queue_head].has_value());
+
+        TaskDescriptor& task = tasks[send_queue_head].value();
         kassert(task.state.tag == TaskState::SEND_WAIT);
 
         int n = std::min(task.state.send_wait.msglen, len);
@@ -190,14 +188,14 @@ class Kernel {
         void* lr;
     };
 
-    TaskDescriptor tasks[MAX_SCHEDULED_TASKS];
+    std::optional<TaskDescriptor> tasks[MAX_SCHEDULED_TASKS];
     PriorityQueue<int /* task descriptor */, MAX_SCHEDULED_TASKS> ready_queue;
 
     int current_task = -1;
 
     int next_tid() {
         for (int tid = 0; tid < MAX_SCHEDULED_TASKS; tid++) {
-            if (tasks[tid].state.tag == TaskState::UNUSED) return tid;
+            if (!tasks[tid].has_value()) return tid;
         }
         return -1;
     }
@@ -205,7 +203,19 @@ class Kernel {
     // ------------------ syscall handlers ----------------------
 
     int MyTid() { return current_task; }
-    int MyParentTid() { return tasks[MyTid()].parent_tid; }
+
+    int MyParentTid() {
+        if (tasks[current_task].has_value()) {
+            TaskDescriptor& task = tasks[current_task].value();
+            if (task.parent_tid.has_value()) {
+                return task.parent_tid.value();
+            } else {
+                return -1; // implementation defined
+            }
+        } else {
+            return -1; // implementation defined
+        }
+    }
 
     int Create(int priority, void* function) {
         kdebug("Called Create(priority=%d, function=%p)", priority, function);
@@ -253,14 +263,16 @@ class Kernel {
                function);
 
         tasks[tid] =
-            TaskDescriptor(tid, (size_t)priority, MyTid(), (void*)stack);
+            TaskDescriptor(tid, (size_t)priority, current_task, (void*)stack);
         return tid;
     }
 
     void Exit() {
         kdebug("Called Exit");
-        int tid = MyTid();
-        tasks[tid].reset(tasks, ready_queue);
+        int tid = current_task;
+        kassert(tasks[tid].has_value());
+        tasks[tid]->reset(tasks, ready_queue);
+        tasks[tid] = std::nullopt;
     }
 
     void Yield() { kdebug("Called Yield"); }
@@ -271,9 +283,12 @@ class Kernel {
                receiver_tid, msg, msglen, reply, rplen);
         if (receiver_tid < 0 || receiver_tid >= MAX_SCHEDULED_TASKS)
             return -1;  // invalid tid
-        int sender_tid = MyTid();
-        TaskDescriptor& sender = tasks[sender_tid];
-        TaskDescriptor& receiver = tasks[receiver_tid];
+        if (!tasks[receiver_tid].has_value())
+            return -1;
+
+        int sender_tid = current_task;
+        TaskDescriptor& sender = tasks[sender_tid].value();
+        TaskDescriptor& receiver = tasks[receiver_tid].value();
         switch (receiver.state.tag) {
             case TaskState::UNUSED:
                 return -1;  // no running task with tid
@@ -310,7 +325,7 @@ class Kernel {
 
             default:
                 kpanic("invalid state %d for task %d",
-                       (int)tasks[receiver_tid].state.tag, receiver_tid);
+                       (int)receiver.state.tag, receiver_tid);
         }
     }
 
@@ -318,7 +333,7 @@ class Kernel {
         kdebug("Called Receive(tid=%p msg=%p msglen=%d)", (void*)tid, msg,
                msglen);
 
-        TaskDescriptor& task = tasks[MyTid()];
+        TaskDescriptor& task = tasks[current_task].value();
 
         switch (task.state.tag) {
             case TaskState::READY: {
@@ -342,7 +357,8 @@ class Kernel {
     int Reply(int tid, const char* reply, int rplen) {
         kdebug("Called Reply(tid=%d reply=%p rplen=%d)", tid, reply, rplen);
         if (tid < 0 || tid >= MAX_SCHEDULED_TASKS) return -1;
-        TaskDescriptor& receiver = tasks[tid];
+        if (!tasks[tid].has_value()) return -1;
+        TaskDescriptor& receiver = tasks[tid].value();
         switch (receiver.state.tag) {
             case TaskState::REPLY_WAIT: {
                 size_t n = std::min(receiver.state.reply_wait.rplen,
@@ -382,7 +398,7 @@ class Kernel {
     };
 
    public:
-    Kernel() : tasks{TaskDescriptor()}, ready_queue() {}
+    Kernel() : tasks{ std::nullopt }, ready_queue() {}
 
     int handle_syscall(uint32_t no, void* user_sp) {
         SwiUserStack* user_stack = (SwiUserStack*)user_sp;
@@ -424,11 +440,12 @@ class Kernel {
 
     void activate(int tid) {
         current_task = tid;
-        tasks[tid].sp = _activate_task(tasks[tid].sp);
+        TaskDescriptor& task = tasks[tid].value();
+        task.sp = _activate_task(task.sp);
 
-        switch (tasks[tid].state.tag) {
+        switch (task.state.tag) {
             case TaskState::READY:
-                if (ready_queue.push(tid, tasks[tid].priority) ==
+                if (ready_queue.push(tid, task.priority) ==
                     PriorityQueueErr::FULL) {
                     kpanic("out of space in ready queue (tid=%d)", tid);
                 }
