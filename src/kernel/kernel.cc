@@ -33,7 +33,7 @@ struct TaskState {
             size_t msglen;
             char* reply;
             size_t rplen;
-            int next;
+            std::optional<int> next;
         } send_wait;
         struct {
             int* tid;
@@ -49,8 +49,8 @@ struct TaskState {
 
 class TaskDescriptor {
     int tid;
-    int send_queue_head;
-    int send_queue_tail;
+    std::optional<int> send_queue_head;
+    std::optional<int> send_queue_tail;
 
     // hack since Kdebug relies on a local MyTid() (TODO plsfix)
     int MyTid() const { return tid; }
@@ -65,15 +65,15 @@ class TaskDescriptor {
     TaskDescriptor() = delete;
 
     TaskDescriptor(int tid, size_t priority, std::optional<int> parent_tid, void* stack_ptr)
-        : tid(tid),
-          send_queue_head(-1),
-          send_queue_tail(-1),
-          priority(priority),
+        : tid {tid},
+          send_queue_head {std::nullopt},
+          send_queue_tail {std::nullopt},
+          priority {priority},
           state{.tag = TaskState::READY, .ready = {}},
           parent_tid {parent_tid},
-          sp(stack_ptr) {}
+          sp{stack_ptr} {}
 
-    bool send_queue_is_empty() const { return send_queue_head == -1; }
+    bool send_queue_is_empty() const { return !send_queue_head.has_value(); }
 
     void reset(std::optional<TaskDescriptor> (&tasks)[MAX_SCHEDULED_TASKS],
                PriorityQueue<int, MAX_SCHEDULED_TASKS>& ready_queue) {
@@ -81,19 +81,22 @@ class TaskDescriptor {
         sp = nullptr;
         parent_tid = std::nullopt;
 
-        int tid = send_queue_head;
+        if (!send_queue_head.has_value())
+            return;
 
-        send_queue_head = -1;
-        send_queue_tail = -1;
+        int tid = send_queue_head.value();
 
-        while (tid >= 0) {
+        send_queue_head = std::nullopt;
+        send_queue_tail = std::nullopt;
+
+        while (true) {
             kassert(tasks[tid].has_value());
 
             auto& task = tasks[tid].value();
             kassert(task.state.tag == TaskState::SEND_WAIT);
-            int next_tid = task.state.send_wait.next;
+            std::optional<int> next_tid = task.state.send_wait.next;
 
-            kdebug("tid=%d cannot complete SRR, receiver (%d) shut down", tid,
+            kdebug("tid=%d cannot complete SRR, receiver (%d) shut down", this->tid,
                    tid);
 
             // SRR could not be completed, return -2 to the sender
@@ -103,7 +106,10 @@ class TaskDescriptor {
                 kpanic("ready queue full");
             }
 
-            tid = next_tid;
+            if (!next_tid.has_value())
+                break;
+
+            tid = next_tid.value();
         }
     }
 
@@ -121,22 +127,22 @@ class TaskDescriptor {
                                     .msglen = msglen,
                                     .reply = reply,
                                     .rplen = rplen,
-                                    .next = -1}};
+                                    .next = std::nullopt}};
         if (send_queue_is_empty()) {
-            kassert(send_queue_head == -1);
-            kassert(send_queue_tail == -1);
+            kassert(!send_queue_head.has_value());
+            kassert(!send_queue_tail.has_value());
 
             send_queue_head = task.tid;
             send_queue_tail = task.tid;
         } else {
-            kassert(send_queue_head >= 0);
-            kassert(send_queue_tail >= 0);
+            kassert(send_queue_head.has_value());
+            kassert(send_queue_tail.has_value());
 
-            kassert(tasks[send_queue_tail].has_value());
+            kassert(tasks[send_queue_tail.value()].has_value());
 
-            TaskDescriptor& old_tail = tasks[send_queue_tail].value();
+            TaskDescriptor& old_tail = tasks[send_queue_tail.value()].value();
             kassert(old_tail.state.tag == TaskState::SEND_WAIT);
-            kassert(old_tail.state.send_wait.next == -1);
+            kassert(!old_tail.state.send_wait.next.has_value());
             old_tail.state.send_wait.next = task.tid;
             send_queue_tail = task.tid;
         }
@@ -148,30 +154,30 @@ class TaskDescriptor {
                             std::optional<TaskDescriptor> (&tasks)[MAX_SCHEDULED_TASKS]) {
         kassert(!send_queue_is_empty());
         kassert(state.tag == TaskState::READY);
-        kassert(send_queue_head >= 0);
+        kassert(send_queue_head.has_value());
 
-        kassert(tasks[send_queue_head].has_value());
+        kassert(tasks[send_queue_head.value()].has_value());
 
-        TaskDescriptor& task = tasks[send_queue_head].value();
+        TaskDescriptor& task = tasks[send_queue_head.value()].value();
         kassert(task.state.tag == TaskState::SEND_WAIT);
 
         int n = std::min(task.state.send_wait.msglen, len);
         memcpy(recv_buf, task.state.send_wait.msg, n);
-        *sender_tid = send_queue_head;
+        *sender_tid = send_queue_head.value();
 
         char* reply = task.state.send_wait.reply;
         size_t rplen = task.state.send_wait.rplen;
-        int next = task.state.send_wait.next;
+        std::optional<int> next = task.state.send_wait.next;
         task.state = {.tag = TaskState::REPLY_WAIT,
                       .reply_wait = {reply, rplen}};
 
         this->state = {.tag = TaskState::READY, .ready = {}};
 
         send_queue_head = next;
-        if (send_queue_head == -1) {
-            send_queue_tail = -1;
+        if (!send_queue_head.has_value()) {
+            send_queue_tail = std::nullopt;
         } else {
-            kassert(send_queue_tail >= 0);
+            kassert(send_queue_tail.has_value());
         }
 
         return n;
