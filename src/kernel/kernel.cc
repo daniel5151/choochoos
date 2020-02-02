@@ -20,8 +20,6 @@ extern char __USER_STACKS_START__, __USER_STACKS_END__;
 #define INVALID_PRIORITY -1
 #define OUT_OF_TASK_DESCRIPTORS -2
 
-namespace kernel {
-
 struct TaskState {
     enum uint8_t { UNUSED, READY, SEND_WAIT, RECV_WAIT, REPLY_WAIT } tag;
     union {
@@ -464,11 +462,10 @@ class Kernel {
         if (tid < 0) kpanic("could not create tasks (error code %d)", tid);
     }
 };  // class Kernel
-}  // namespace kernel
 
 extern void FirstUserTask();
 
-static kernel::Kernel kern;
+static Kernel kern;
 
 extern "C" int handle_syscall(uint32_t no, void* user_sp) {
     return kern.handle_syscall(no, user_sp);
