@@ -43,7 +43,7 @@ struct TaskState {
             size_t msglen;
             char* reply;
             size_t rplen;
-            std::optional<int> next;
+            std::optional<Tid> next;
         } send_wait;
         struct {
             int* tid;
@@ -221,16 +221,8 @@ class Kernel {
     int MyTid() { return current_task; }
 
     int MyParentTid() {
-        if (tasks[current_task].has_value()) {
-            TaskDescriptor& task = tasks[current_task].value();
-            if (task.parent_tid.has_value()) {
-                return task.parent_tid.value();
-            } else {
-                return -1; // implementation defined
-            }
-        } else {
-            return -1; // implementation defined
-        }
+        if (!tasks[current_task].has_value()) return -1;
+        return tasks[current_task].value().parent_tid.value_or(-1);
     }
 
     int Create(int priority, void* function) {
