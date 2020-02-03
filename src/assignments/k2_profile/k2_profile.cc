@@ -6,9 +6,9 @@
 #include "user/tasks/nameserver.h"
 
 #include "common/ts7200.h"
-#define TIMER3_LDR  (volatile uint32_t*)(TIMER3_BASE + LDR_OFFSET)
+#define TIMER3_LDR (volatile uint32_t*)(TIMER3_BASE + LDR_OFFSET)
 #define TIMER3_CTRL (volatile uint32_t*)(TIMER3_BASE + CRTL_OFFSET)
-#define TIMER3_VAL  (volatile uint32_t*)(TIMER3_BASE + VAL_OFFSET)
+#define TIMER3_VAL (volatile uint32_t*)(TIMER3_BASE + VAL_OFFSET)
 
 #define NUM_ITERS 4096 * 4
 
@@ -30,7 +30,8 @@ void Sender() {
     memset(msg, '.', sizeof(msg));
 
     for (int i = 0; i < NUM_ITERS; i++) {
-        Send(params.reciever_tid, (char*)&msg, params.msg_size, (char*)&resp, params.msg_size);
+        Send(params.reciever_tid, (char*)&msg, params.msg_size, (char*)&resp,
+             params.msg_size);
     }
 
     Send(first_task_tid, nullptr, 0, nullptr, 0);
@@ -63,7 +64,7 @@ void FirstUserTask() {
 
     // init timer 3
     *TIMER3_LDR = 0xffffffff;
-    *TIMER3_CTRL = ENABLE_MASK | CLKSEL_MASK; // free running + 508 kHz
+    *TIMER3_CTRL = ENABLE_MASK | CLKSEL_MASK;  // free running + 508 kHz
 
 #ifdef NO_OPTIMIZATION
     const char* opt_lvl = "noopt";
@@ -78,7 +79,8 @@ void FirstUserTask() {
 
     for (char send_priority : {'R', 'S'}) {
         for (size_t msg_size : {4, 64, 256}) {
-            printf("%s %s %c %d ", opt_lvl, cache_state, send_priority, msg_size);
+            printf("%s %s %c %d ", opt_lvl, cache_state, send_priority,
+                   msg_size);
 
             int sender_tid = Create(2, Sender);
             int reciever_tid;
@@ -90,13 +92,16 @@ void FirstUserTask() {
                 reciever_tid = Create(1, Reciever);
             }
 
-            SenderParams sender_params = {.msg_size = msg_size, .reciever_tid = reciever_tid};
+            SenderParams sender_params = {.msg_size = msg_size,
+                                          .reciever_tid = reciever_tid};
             RecieverParams reciever_params = {.msg_size = msg_size};
 
             uint32_t start_time = *TIMER3_VAL;
 
-            Send(sender_tid, (char*)&sender_params, sizeof(sender_params), nullptr, 0);
-            Send(reciever_tid, (char*)&reciever_params, sizeof(reciever_params), nullptr, 0);
+            Send(sender_tid, (char*)&sender_params, sizeof(sender_params),
+                 nullptr, 0);
+            Send(reciever_tid, (char*)&reciever_params, sizeof(reciever_params),
+                 nullptr, 0);
 
             // wait for tasks to finish
             int dummy;

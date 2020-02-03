@@ -16,7 +16,21 @@ LD = $(XBINDIR)/arm-none-eabi-ld
 
 #------------- Flags -------------#
 
-WARNING_FLAGS = -Wall -Wextra -Wconversion
+# vla - VLAs are pretty useful, even if they aren't strictly standards compliant
+DISABLED_WARNINGS = -Wno-vla
+
+WARNING_FLAGS =                \
+	-Wall                      \
+	-Wextra                    \
+	-Wconversion               \
+	-pedantic                  \
+	-Wcast-align               \
+	-Wformat=2                 \
+	-Wmissing-format-attribute \
+	-Wmissing-include-dirs     \
+	-Wredundant-decls          \
+	 $(DISABLED_WARNINGS)
+
 COMMON_INCLUDES = -I. -I./include
 COMMON_FLAGS = -fPIC -mcpu=arm920t -msoft-float -MP -MMD -MT $@ $(WARNING_FLAGS) $(COMMON_INCLUDES)
 
@@ -25,7 +39,10 @@ ifdef ENABLE_CACHES
 endif
 
 ifdef DEBUG
-    COMMON_FLAGS += -Og -g
+	# For debugging, we wrap bwputstr behind a snprintf, imposing an artifical
+	# and arbitrary truncation limit. It's fine though, since it's just for
+	# debugging (hence the format-truncation)
+    COMMON_FLAGS += -Og -g -Wno-format-truncation
 else
     COMMON_FLAGS += -g -Werror -DRELEASE_MODE
 	ifdef NO_OPTIMIZATION
@@ -36,7 +53,7 @@ else
 endif
 
 CCFLAGS = $(COMMON_FLAGS) -std=c11
-CXXFLAGS = $(COMMON_FLAGS) -std=c++17 -fno-rtti -fno-exceptions -fno-unwind-tables
+CXXFLAGS = $(COMMON_FLAGS) -std=c++2a -fno-rtti -fno-exceptions -fno-unwind-tables
 
 LDFLAGS =                   \
     -static                 \

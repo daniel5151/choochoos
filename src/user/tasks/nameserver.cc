@@ -105,9 +105,9 @@ void Task() {
 
                 Response res;
                 if (found_tid == -1) {
-                    res = {msg.kind, .who_is = {false, -1}};
+                    res = {.kind = msg.kind, .who_is = {false, -1}};
                 } else {
-                    res = {msg.kind, .who_is = {true, found_tid}};
+                    res = {.kind = msg.kind, .who_is = {true, found_tid}};
                 }
 
                 debug("NameServer returning %d for %s (to tid %d)", found_tid,
@@ -142,7 +142,7 @@ void Task() {
                     names_head += 1;
                 }
 
-                Response res = {msg.kind, .register_as = {true}};
+                Response res = {.kind = msg.kind, .register_as = {true}};
                 debug("NameServer registered %d for %s", msg.register_as.tid,
                       msg.register_as.name);
                 Reply(tid, (char*)&res, sizeof(Response));
@@ -156,7 +156,7 @@ int RegisterAs(const char* name) {
     size_t len = strlen(name);
     assert(len < NAMESERVER_MAX_NAME_LEN);
     NameServer::Request req{
-        MessageKind::RegisterAs,
+        .kind = MessageKind::RegisterAs,
         .register_as = {.name = {'\0'}, .len = len, .tid = MyTid()}};
     strcpy(req.register_as.name, name);
 
@@ -173,18 +173,19 @@ int RegisterAs(const char* name) {
 int WhoIs(const char* name) {
     size_t len = strlen(name);
     assert(len < NAMESERVER_MAX_NAME_LEN);
-    NameServer::Request req{MessageKind::WhoIs,
+    NameServer::Request req{.kind = MessageKind::WhoIs,
                             .who_is = {.name = {'\0'}, .len = len}};
     strcpy(req.who_is.name, name);
 
     NameServer::Response res;
 
-    if (Send(NameServer::TID, (char*)&req, sizeof(req), (char*)&res,
-             sizeof(res)) != sizeof(res)) {
+    const int res_len = Send(NameServer::TID, (char*)&req, sizeof(req),
+                             (char*)&res, sizeof(res));
+    if (res_len != sizeof(res)) {
         return -1;
     }
     assert(res.kind == MessageKind::WhoIs);
     return res.who_is.success ? res.who_is.tid : -2;
 }
 
-}
+}  // namespace NameServer

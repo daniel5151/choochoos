@@ -23,58 +23,60 @@
     } while (false)
 
 #if defined(DISABLE_KDEBUG_PRINTS) || defined(RELEASE_MODE)
-#define debug(fmt, args...)
+#define debug(fmt, ...)
 #else
-#define debug(fmt, args...)                                             \
+#define debug(fmt, ...)                                                 \
     do {                                                                \
         char buf[LOG_BUFFER_SIZE];                                      \
         snprintf(buf, LOG_BUFFER_SIZE,                                  \
                  VT_CYAN "[debug:" __FILE__ ":%d tid=%d] " VT_NOFMT fmt \
                          "\r\n",                                        \
-                 __LINE__, MyTid(), ##args);                            \
+                 __LINE__, MyTid(), ##__VA_ARGS__);                     \
         bwputstr(COM2, buf);                                            \
     } while (false)
 #endif
 
 #if defined(DISABLE_KDEBUG_PRINTS) || defined(RELEASE_MODE)
-#define log(fmt, args...)                                                    \
-    do {                                                                     \
-        char buf[LOG_BUFFER_SIZE];                                           \
-        snprintf(buf, LOG_BUFFER_SIZE,                                       \
-                 VT_GREEN "[tid=%d] " VT_NOFMT fmt "\r\n", MyTid(), ##args); \
-        bwputstr(COM2, buf);                                                 \
+#define log(fmt, ...)                                               \
+    do {                                                            \
+        char buf[LOG_BUFFER_SIZE];                                  \
+        snprintf(buf, LOG_BUFFER_SIZE,                              \
+                 VT_GREEN "[tid=%d] " VT_NOFMT fmt "\r\n", MyTid(), \
+                 ##__VA_ARGS__);                                    \
+        bwputstr(COM2, buf);                                        \
     } while (false)
 #else
-#define log(fmt, args...)                                                      \
+#define log(fmt, ...)                                                          \
     do {                                                                       \
         char buf[LOG_BUFFER_SIZE];                                             \
         snprintf(buf, LOG_BUFFER_SIZE,                                         \
                  VT_GREEN "[log:" __FILE__ ":%d tid=%d] " VT_NOFMT fmt "\r\n", \
-                 __LINE__, MyTid(), ##args);                                   \
+                 __LINE__, MyTid(), ##__VA_ARGS__);                            \
         bwputstr(COM2, buf);                                                   \
     } while (false)
 #endif
 
 #undef panic
-#define panic(fmt, args...)                                                    \
+#define panic(fmt, ...)                                                        \
     do {                                                                       \
         bwprintf(COM2,                                                         \
                  VT_RED "[panic:" __FILE__ ":%d tid=%d] " VT_NOFMT fmt "\r\n", \
-                 __LINE__, MyTid(), ##args);                                   \
+                 __LINE__, MyTid(), ##__VA_ARGS__);                            \
         Exit();                                                                \
     } while (false)
 
 // the (null-terminated) output has been completely written if and only if the
 // returned value is nonnegative and less than buf_size
 #define PRINTF_BUF_SIZE 1024
-#define printf(fmt, args...)                                                   \
-    do {                                                                       \
-        char __printf_buf[PRINTF_BUF_SIZE];                                    \
-        int __printf_n = snprintf(__printf_buf, PRINTF_BUF_SIZE, fmt, ##args); \
-        if (__printf_n < 0 || __printf_n >= PRINTF_BUF_SIZE) {                 \
-            panic("printf: short write (n=%d, buf_size=%d)  [" __FILE__        \
-                  ":%d]",                                                      \
-                  __printf_n, PRINTF_BUF_SIZE, __LINE__);                      \
-        }                                                                      \
-        bwputstr(COM2, __printf_buf);                                          \
+#define printf(fmt, ...)                                                 \
+    do {                                                                 \
+        char __printf_buf[PRINTF_BUF_SIZE];                              \
+        int __printf_n =                                                 \
+            snprintf(__printf_buf, PRINTF_BUF_SIZE, fmt, ##__VA_ARGS__); \
+        if (__printf_n < 0 || __printf_n >= PRINTF_BUF_SIZE) {           \
+            panic("printf: short write (n=%d, buf_size=%d)  [" __FILE__  \
+                  ":%d]",                                                \
+                  __printf_n, PRINTF_BUF_SIZE, __LINE__);                \
+        }                                                                \
+        bwputstr(COM2, __printf_buf);                                    \
     } while (false)

@@ -2,9 +2,9 @@
 
 #include <algorithm>
 #include <cassert>
-#include "queue.h"
+#include <optional>
 
-enum class PriorityQueueErr : uint8_t { OK, FULL, EMPTY };
+enum class PriorityQueueErr : uint8_t { OK, FULL };
 
 template <class T, unsigned int N>
 class PriorityQueue {
@@ -17,7 +17,7 @@ class PriorityQueue {
         // a higher ticket. This helps preserve FIFO within a given priority.
         size_t ticket;
 
-        T data;
+        std::optional<T> data;
 
         Element() = default;
         Element(T data, int priority, size_t ticket)
@@ -56,23 +56,22 @@ class PriorityQueue {
         return PriorityQueueErr::OK;
     }
 
-    PriorityQueueErr pop(T& dest) {
-        if (len == 0) return PriorityQueueErr::EMPTY;
+    std::optional<T> pop() {
+        if (len == 0) return std::nullopt;
 
         Element* first = &arr[0];
         Element* last = &arr[len];
 
         std::pop_heap(first, last);
 
-        dest = arr[len - 1].data;
+        T ret = arr[len - 1].data.value();
         len--;
 
-        return PriorityQueueErr::OK;
+        return ret;
     }
 
-    PriorityQueueErr peek(T& dest) const {
-        if (len == 0) return PriorityQueueErr::EMPTY;
-        dest = arr[0].data;
-        return PriorityQueueErr::OK;
+    const T* peek() const {
+        if (len == 0) return nullptr;
+        return &arr[0].data.value();
     }
 };

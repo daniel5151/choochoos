@@ -1,7 +1,8 @@
 BasedOnStyle: Google
 IndentWidth: 4
 ---
-Language: Cpp
+BinPackParameters: false
 DerivePointerAlignment: false
+Language: Cpp
 PointerAlignment: Left
 PointerBindsToType: true
