@@ -53,7 +53,8 @@ else
 endif
 
 CCFLAGS = $(COMMON_FLAGS) -std=c11
-CXXFLAGS = $(COMMON_FLAGS) -std=c++2a -fno-rtti -fno-exceptions -fno-unwind-tables
+CXX_SPECIFIC_FLAGS = -std=c++2a -fno-rtti -fno-exceptions -fno-unwind-tables
+CXXFLAGS = $(COMMON_FLAGS) $(CXX_SPECIFIC_FLAGS)
 
 LDFLAGS =                   \
     -static                 \
@@ -116,16 +117,15 @@ $(BUILD_DIR)/%.o: $(SRC_DIR)/%.s
 ################################################################################
 
 .PHONY: unit_tests
-unit_tests: $(BUILD_DIR)/test
+unit_tests: $(BUILD_DIR)/unit_tests
 
-$(BUILD_DIR)/test: test/test.cc
+$(BUILD_DIR)/unit_tests: test/test.cc Makefile
 	@mkdir -p $(BUILD_DIR)/test
-	g++ -std=c++17 -fno-rtti -fno-exceptions \
-		$(COMMON_INCLUDES) $(WARNING_FLAGS) \
+	g++ $(CXX_SPECIFIC_FLAGS) $(COMMON_INCLUDES) $(WARNING_FLAGS) \
 		-MMD -MF $(BUILD_DIR)/test/test.d \
 		-Werror \
-		$< -o $(BUILD_DIR)/test/test
-	$(BUILD_DIR)/test/test
+		$< -o $@
+	$@
 
 k1.pdf: docs/k1/kernel.md docs/k1/output.md
 	pandoc --from markdown --to pdf $^ > k1.pdf
