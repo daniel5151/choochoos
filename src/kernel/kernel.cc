@@ -3,6 +3,7 @@
 
 #include "common/bwio.h"
 #include "common/priority_queue.h"
+#include "common/ts7200.h"
 #include "kernel/asm.h"
 #include "kernel/kernel.h"
 
@@ -44,7 +45,14 @@ class Tid {
 };
 
 struct TaskState {
-    enum uint8_t { UNUSED, READY, SEND_WAIT, RECV_WAIT, REPLY_WAIT } tag;
+    enum uint8_t {
+        UNUSED,
+        READY,
+        SEND_WAIT,
+        RECV_WAIT,
+        REPLY_WAIT,
+        EVENT_WAIT
+    } tag;
     union {
         struct {
         } unused;
@@ -66,6 +74,8 @@ struct TaskState {
             char* reply;
             size_t rplen;
         } reply_wait;
+        struct {
+        } event_wait;
     };
 };
 
@@ -214,6 +224,26 @@ class TaskDescriptor {
     }
 };
 
+static std::optional<size_t> current_interrupt() {
+    uint32_t vic1_bits = *((uint32_t*)VIC1_BASE + VIC_IRQ_STATUS_OFFSET);
+
+    for (size_t i = 0; i < 32; i++) {
+        if (vic1_bits & (1 << i)) {
+            return i;
+        }
+    }
+
+    uint32_t vic2_bits = *((uint32_t*)VIC2_BASE + VIC_IRQ_STATUS_OFFSET);
+
+    for (size_t i = 0; i < 32; i++) {
+        if (vic2_bits & (1 << i)) {
+            return 32 + i;
+        }
+    }
+
+    return std::nullopt;
+}
+
 class Kernel {
     /// Helper POD struct to init new user task stacks
     struct FreshStack {
@@ -224,6 +254,7 @@ class Kernel {
     };
 
     std::optional<TaskDescriptor> tasks[MAX_SCHEDULED_TASKS];
+    std::optional<Tid> event_queue[64];
     PriorityQueue<Tid, MAX_SCHEDULED_TASKS> ready_queue;
 
     Tid current_task = -1;
@@ -412,10 +443,10 @@ class Kernel {
     }
 
    public:
-    Kernel() : tasks{std::nullopt}, ready_queue() {}
+    Kernel() : tasks{std::nullopt}, event_queue{std::nullopt}, ready_queue() {}
 
     void handle_syscall(uint32_t no, void* user_sp) {
-        assert(tasks[current_task].has_value());
+        kassert(tasks[current_task].has_value());
 
         tasks[current_task].value().sp = user_sp;
 
@@ -460,6 +491,42 @@ class Kernel {
         }
     }
 
+    void handle_interrupt(void* user_sp) {
+        auto curr_interrupt = current_interrupt();
+        kassert(curr_interrupt.has_value());
+        uint32_t no = curr_interrupt.value();
+
+        kdebug("handle_interrupt: no=%lu user_sp=%p", no, user_sp);
+
+        kassert(tasks[current_task].has_value());
+        kassert(no < 64);
+
+        // current_task was preempted, so update its stack pointer and put it
+        // back on the ready_queue
+        TaskDescriptor& preempted_task = tasks[current_task].value();
+        preempted_task.sp = user_sp;
+
+        if (ready_queue.push(current_task, preempted_task.priority) ==
+            PriorityQueueErr::FULL) {
+            kpanic("ready queue full");
+        }
+
+        // if nobody is waiting for the interrupt, drop it
+        // TODO should we buffer it?
+        if (!event_queue[no].has_value()) return;
+
+        Tid blocked_tid = event_queue[no].value();
+        kassert(tasks[blocked_tid].has_value());
+        TaskDescriptor& blocked_task = tasks[blocked_tid].value();
+        kassert(blocked_task.state.tag = TaskState::EVENT_WAIT);
+        blocked_task.state = {.tag = TaskState::READY, .ready = {}};
+
+        if (ready_queue.push(blocked_tid, blocked_task.priority) ==
+            PriorityQueueErr::FULL) {
+            kpanic("ready queue full");
+        }
+    }
+
     std::optional<Tid> schedule() { return ready_queue.pop(); }
 
     void activate(Tid tid) {
@@ -477,6 +544,7 @@ class Kernel {
             case TaskState::SEND_WAIT:
             case TaskState::RECV_WAIT:
             case TaskState::REPLY_WAIT:
+            case TaskState::EVENT_WAIT:
             case TaskState::UNUSED:
                 break;
         }
@@ -510,6 +578,10 @@ static Kernel kern;
 
 extern "C" void handle_syscall(uint32_t no, void* user_sp) {
     kern.handle_syscall(no, user_sp);
+}
+
+extern "C" void handle_interrupt(void* user_sp) {
+    kern.handle_interrupt(user_sp);
 }
 
 int kmain() {

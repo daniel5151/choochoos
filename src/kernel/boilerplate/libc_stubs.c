@@ -1,7 +1,7 @@
 #include "kernel/kernel.h"
 
 #define STUB(fn) \
-  void fn() { kpanic("newlib tried to call" #fn); }
+    void fn() { kpanic("newlib tried to call " #fn); }
 
 STUB(_exit)
 STUB(_sbrk)
