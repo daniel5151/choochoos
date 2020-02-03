@@ -23,13 +23,68 @@ _swi_handler:
     mov     r0,lr
     str     r0,[r4, #60] // 14 * 4 + 4
 
-    // r0 = khandlesyscall 1st param = syscall number
+    // r0 = handle_syscall 1st param = syscall number
     ldr     r0,[r0, #-4]      // Load the last-executed SWI instr into r0...
     bic     r0,r0,#0xff000000 // ...and mask off the top 8 bits to get SWI no
-    // r1 = khandlesyscall 2nd param = pointer to user's registers + CPSR
+    // r1 = handle_syscall 2nd param = user's stack pointer (with saved state)
     mov     r1,r4
     bl      handle_syscall
     // handle_syscall writes the syscall return value directly into the user's
+    // stack (i.e: overwriting the value of the saved r0 register)
+
+    // At this point, the user's stack looks like this:
+    //
+    // +----------- hi mem -----------+
+    // | ... rest of user's stack ... |
+    // |   [ ret addr             ]   |
+    // |   [ lr                   ]   |
+    // |   [ r0                   ]   |
+    // |   ...                        |
+    // |   [ r12                  ]   |
+    // |   [ spsr                 ]   |
+    // |         <--- sp --->         |
+    // | ....... unused stack ....... |
+    // +----------- lo mem -----------+
+
+    // Return the final user SP via r0
+    mov     r0, r4
+
+    // Restore the kernel's context, and return to the caller of _activate_task
+    ldmfd   sp!,{r4-r12,pc}
+
+.global _irq_handler
+_irq_handler:
+    // Switch to system mode (IRQs disabled)
+    // This banks in the user's LR and SP
+    msr     cpsr_c, #0xdf
+
+    // set aside some space to hold the user return address
+    sub     sp,sp,#4
+
+    // Stack user registers on user stack
+    stmfd   sp!,{r0-r12,lr}
+    mov     r4,sp // hold on to user sp
+
+    // Switch to irq mode (IRQs disabled)
+    // This banks in the irq's SP and LR.
+    msr     cpsr_c, #0xd2
+
+    // store user mode spsr
+    mrs     r0,spsr
+    stmfd   r4!,{r0}
+
+    // store user mode return address (compensating with -4)
+    sub     r0,lr,#4
+    str     r0,[r4, #60] // 14 * 4 + 4
+
+    // Switch to kernel mode (IRQs disabled)
+    // This banks in the irq's SP and LR.
+    msr     cpsr_c, #0xd3
+
+    // r1 = handle_interrupt 1nd param = user's stack pointer (with saved state)
+    mov     r0,r4
+    bl      handle_interrupt
+    // handle_interrupt writes the syscall return value directly into the user's
     // stack (i.e: overwriting the value of the saved r0 register)
 
     // At this point, the user's stack looks like this:

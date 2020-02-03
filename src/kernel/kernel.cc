@@ -309,7 +309,7 @@ class Kernel {
         // doesn't, so we must squelch -Warray-bounds.
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Warray-bounds"
-        stack->spsr = 0xd0;
+        stack->spsr = 0x50;
         stack->start_addr = function;
         for (uint32_t i = 0; i < 13;
              i++)  // set regs to their own vals, for debug
@@ -501,6 +501,15 @@ class Kernel {
         kassert(tasks[current_task].has_value());
         kassert(no < 64);
 
+        // assert interrupt
+        switch (no) {
+            case 51:
+                *(volatile uint32_t*)(TIMER3_BASE + CLR_OFFSET) = 1;
+                break;
+            default:
+                kpanic("unexpected interrupt number (%d)", no);
+        }
+
         // current_task was preempted, so update its stack pointer and put it
         // back on the ready_queue
         TaskDescriptor& preempted_task = tasks[current_task].value();
@@ -552,6 +561,7 @@ class Kernel {
 
     void initialize(void (*user_main)()) {
         *((uint32_t*)0x028) = (uint32_t)((void*)_swi_handler);
+        *((uint32_t*)0x038) = (uint32_t)((void*)_irq_handler);
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Warray-bounds"
