@@ -21,6 +21,18 @@ extern char __USER_STACKS_START__, __USER_STACKS_END__;
 #define INVALID_PRIORITY -1
 #define OUT_OF_TASK_DESCRIPTORS -2
 
+/// Helper POD struct which can should be casted from a void* that points to
+/// a user's stack.
+struct SwiUserStack {
+    uint32_t spsr;
+    uint32_t regs[13];
+    void* lr;
+    void* start_addr;
+    // C++ doesn't support flexible array members, so instead, we use an
+    // array of size 1, and just do "OOB" memory access lol
+    uint32_t additional_params[1];
+};
+
 class Tid {
     size_t id;
 
@@ -74,13 +86,16 @@ class TaskDescriptor {
 
     TaskDescriptor() = delete;
 
-    TaskDescriptor(Tid tid, size_t priority, std::optional<Tid> parent_tid, void* stack_ptr)
-        : tid {tid},
-          send_queue_head {std::nullopt},
-          send_queue_tail {std::nullopt},
-          priority {priority},
+    TaskDescriptor(Tid tid,
+                   size_t priority,
+                   std::optional<Tid> parent_tid,
+                   void* stack_ptr)
+        : tid{tid},
+          send_queue_head{std::nullopt},
+          send_queue_tail{std::nullopt},
+          priority{priority},
           state{.tag = TaskState::READY, .ready = {}},
-          parent_tid {parent_tid},
+          parent_tid{parent_tid},
           sp{stack_ptr} {}
 
     bool send_queue_is_empty() const { return !send_queue_head.has_value(); }
@@ -91,8 +106,7 @@ class TaskDescriptor {
         sp = nullptr;
         parent_tid = std::nullopt;
 
-        if (!send_queue_head.has_value())
-            return;
+        if (!send_queue_head.has_value()) return;
 
         Tid tid = send_queue_head.value();
 
@@ -106,29 +120,29 @@ class TaskDescriptor {
             kassert(task.state.tag == TaskState::SEND_WAIT);
             std::optional<Tid> next_tid = task.state.send_wait.next;
 
-            kdebug("tid=%u cannot complete SRR, receiver (%u) shut down", (size_t)this->tid,
-                   (size_t)tid);
+            kdebug("tid=%u cannot complete SRR, receiver (%u) shut down",
+                   (size_t)this->tid, (size_t)tid);
 
             // SRR could not be completed, return -2 to the sender
-            *(int32_t*)task.sp = -2;
+            task.write_syscall_return_value(-2);
             task.state = {.tag = TaskState::READY, .ready = {}};
             if (ready_queue.push(tid, task.priority) != PriorityQueueErr::OK) {
                 kpanic("ready queue full");
             }
 
-            if (!next_tid.has_value())
-                break;
+            if (!next_tid.has_value()) break;
 
             tid = next_tid.value();
         }
     }
 
-    void add_to_send_queue(TaskDescriptor& task,
-                           const char* msg,
-                           size_t msglen,
-                           char* reply,
-                           size_t rplen,
-                           std::optional<TaskDescriptor> (&tasks)[MAX_SCHEDULED_TASKS]) {
+    void add_to_send_queue(
+        TaskDescriptor& task,
+        const char* msg,
+        size_t msglen,
+        char* reply,
+        size_t rplen,
+        std::optional<TaskDescriptor> (&tasks)[MAX_SCHEDULED_TASKS]) {
         kassert(this->state.tag != TaskState::RECV_WAIT);
         kassert(task.state.tag == TaskState::READY);
 
@@ -158,10 +172,11 @@ class TaskDescriptor {
         }
     }
 
-    Tid pop_from_send_queue(int* sender_tid,
-                            char* recv_buf,
-                            size_t len,
-                            std::optional<TaskDescriptor> (&tasks)[MAX_SCHEDULED_TASKS]) {
+    Tid pop_from_send_queue(
+        int* sender_tid,
+        char* recv_buf,
+        size_t len,
+        std::optional<TaskDescriptor> (&tasks)[MAX_SCHEDULED_TASKS]) {
         kassert(!send_queue_is_empty());
         kassert(state.tag == TaskState::READY);
         kassert(send_queue_head.has_value());
@@ -192,16 +207,20 @@ class TaskDescriptor {
 
         return n;
     }
+
+    void write_syscall_return_value(int32_t value) {
+        SwiUserStack* stack = (SwiUserStack*)sp;
+        *((int32_t*)&stack->regs[0]) = value;
+    }
 };
 
 class Kernel {
     /// Helper POD struct to init new user task stacks
     struct FreshStack {
-        uint32_t dummy_syscall_response;
-        void* start_addr;
         uint32_t spsr;
         uint32_t regs[13];
         void* lr;
+        void* start_addr;
     };
 
     std::optional<TaskDescriptor> tasks[MAX_SCHEDULED_TASKS];
@@ -237,8 +256,6 @@ class Kernel {
             kpanic("out of space in ready queue (tid=%u)", (size_t)tid);
         }
 
-
-
         // set up memory for the initial user stack
         char* start_of_stack =
             &__USER_STACKS_START__ + (USER_STACK_SIZE * ((size_t)tid + 1));
@@ -261,7 +278,6 @@ class Kernel {
         // doesn't, so we must squelch -Warray-bounds.
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Warray-bounds"
-        stack->dummy_syscall_response = 0xdeadbeef;
         stack->spsr = 0xd0;
         stack->start_addr = function;
         for (uint32_t i = 0; i < 13;
@@ -294,8 +310,7 @@ class Kernel {
                receiver_tid, msg, msglen, reply, rplen);
         if (receiver_tid < 0 || receiver_tid >= MAX_SCHEDULED_TASKS)
             return -1;  // invalid tid
-        if (!tasks[receiver_tid].has_value())
-            return -1;
+        if (!tasks[receiver_tid].has_value()) return -1;
 
         Tid sender_tid = current_task;
         TaskDescriptor& sender = tasks[sender_tid].value();
@@ -325,7 +340,7 @@ class Kernel {
 
                 // set the return value that the receiver gets from Receive() to
                 // n.
-                *((int32_t*)receiver.sp) = (int32_t)n;
+                receiver.write_syscall_return_value((int32_t)n);
 
                 sender.state = {.tag = TaskState::REPLY_WAIT,
                                 .reply_wait = {reply, (size_t)rplen}};
@@ -335,8 +350,8 @@ class Kernel {
             }
 
             default:
-                kpanic("invalid state %d for task %d",
-                       (int)receiver.state.tag, receiver_tid);
+                kpanic("invalid state %d for task %d", (int)receiver.state.tag,
+                       receiver_tid);
         }
     }
 
@@ -384,7 +399,7 @@ class Kernel {
                 // in the TaskDescriptor points at the top of the stack. Since
                 // the top of the stack represents the syscall return word, we
                 // can write directly to the stack pointer.
-                *((int32_t*)receiver.sp) = (int32_t)n;
+                receiver.write_syscall_return_value((int32_t)n);
 
                 // Return the length of the reply to the original receiver.
                 return (int)n;
@@ -396,56 +411,56 @@ class Kernel {
         }
     }
 
-    /// Helper POD struct which can should be casted from a void* that points to
-    /// a user's stack.
-    struct SwiUserStack {
-        void* start_addr;
-        uint32_t spsr;
-        uint32_t regs[13];
-        void* lr;
-        // C++ doesn't support flexible array members, so instead, we use an
-        // array of size 1, and just do "OOB" memory access lol
-        uint32_t additional_params[1];
-    };
-
    public:
-    Kernel() : tasks{ std::nullopt }, ready_queue() {}
+    Kernel() : tasks{std::nullopt}, ready_queue() {}
 
-    int handle_syscall(uint32_t no, void* user_sp) {
+    void handle_syscall(uint32_t no, void* user_sp) {
+        assert(tasks[current_task].has_value());
+
+        tasks[current_task].value().sp = user_sp;
+
         SwiUserStack* user_stack = (SwiUserStack*)user_sp;
+        std::optional<int> ret = std::nullopt;
         switch (no) {
             case 0:
                 Yield();
-                return 0;
+                break;
             case 1:
                 Exit();
-                return 0;
+                break;
             case 2:
-                return MyParentTid();
+                ret = MyParentTid();
+                break;
             case 3:
-                return MyTid();
+                ret = MyTid();
+                break;
             case 4:
-                return Create(user_stack->regs[0], (void*)user_stack->regs[1]);
+                ret = Create(user_stack->regs[0], (void*)user_stack->regs[1]);
+                break;
             case 5:
-                return Send(user_stack->regs[0],
-                            (const char*)user_stack->regs[1],
-                            user_stack->regs[2], (char*)user_stack->regs[3],
-                            user_stack->additional_params[0]);
+                ret =
+                    Send(user_stack->regs[0], (const char*)user_stack->regs[1],
+                         user_stack->regs[2], (char*)user_stack->regs[3],
+                         user_stack->additional_params[0]);
+                break;
             case 6:
-                return Receive((int*)user_stack->regs[0],
-                               (char*)user_stack->regs[1], user_stack->regs[2]);
+                ret = Receive((int*)user_stack->regs[0],
+                              (char*)user_stack->regs[1], user_stack->regs[2]);
+                break;
             case 7:
-                return Reply(user_stack->regs[0],
-                             (const char*)user_stack->regs[1],
-                             user_stack->regs[2]);
+                ret =
+                    Reply(user_stack->regs[0], (const char*)user_stack->regs[1],
+                          user_stack->regs[2]);
+                break;
             default:
                 kpanic("invalid syscall %lu", no);
         }
+        if (ret.has_value()) {
+            tasks[current_task].value().write_syscall_return_value(ret.value());
+        }
     }
 
-    std::optional<Tid> schedule() {
-        return ready_queue.pop();
-    }
+    std::optional<Tid> schedule() { return ready_queue.pop(); }
 
     void activate(Tid tid) {
         current_task = tid;
@@ -493,8 +508,8 @@ extern void FirstUserTask();
 
 static Kernel kern;
 
-extern "C" int handle_syscall(uint32_t no, void* user_sp) {
-    return kern.handle_syscall(no, user_sp);
+extern "C" void handle_syscall(uint32_t no, void* user_sp) {
+    kern.handle_syscall(no, user_sp);
 }
 
 int kmain() {

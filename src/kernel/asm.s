@@ -4,6 +4,9 @@ _swi_handler:
     // This banks in the user's LR and SP
     msr     cpsr_c, #0xdf
 
+    // set aside some space to hold the user return address
+    sub     sp,sp,#4
+
     // Stack user registers on user stack
     stmfd   sp!,{r0-r12,lr}
     mov     r4,sp // hold on to user sp
@@ -12,12 +15,13 @@ _swi_handler:
     // This banks in the kernel's SP and LR.
     msr     cpsr_c, #0xd3
 
-    // get user mode return address (which is in lr_svc)
+    // store user mode spsr
+    mrs     r0,spsr
+    stmfd   r4!,{r0}
+
+    // store user mode return address (which is in lr_svc)
     mov     r0,lr
-    // get user mode spsr
-    mrs     r1,spsr
-    // and stack both of them on the user stack
-    stmfd   r4!,{r0,r1}
+    str     r0,[r4, #60] // 14 * 4 + 4
 
     // r0 = khandlesyscall 1st param = syscall number
     ldr     r0,[r0, #-4]      // Load the last-executed SWI instr into r0...
@@ -25,21 +29,19 @@ _swi_handler:
     // r1 = khandlesyscall 2nd param = pointer to user's registers + CPSR
     mov     r1,r4
     bl      handle_syscall
-    // r0 now contains the syscall return value
-    // we'll store it alongside the rest of the user's state
-    stmfd   r4!, {r0}
+    // handle_syscall writes the syscall return value directly into the user's
+    // stack (i.e: overwriting the value of the saved r0 register)
 
     // At this point, the user's stack looks like this:
     //
     // +----------- hi mem -----------+
     // | ... rest of user's stack ... |
+    // |   [ ret addr             ]   |
     // |   [ lr                   ]   |
     // |   [ r0                   ]   |
     // |   ...                        |
     // |   [ r12                  ]   |
     // |   [ spsr                 ]   |
-    // |   [ ret addr             ]   |
-    // |   [ syscall response     ]   |
     // |         <--- sp --->         |
     // | ....... unused stack ....... |
     // +----------- lo mem -----------+
@@ -51,7 +53,7 @@ _swi_handler:
     ldmfd   sp!,{r4-r12,pc}
 
 // void* _activate_task(void* next_sp)
-// returns final SP after _swi_handler is finished
+// returns final SP after _swi_handler is finished (via _swi/irq_handler method)
 .global _activate_task
 _activate_task:
     // save the kernel's context
@@ -62,16 +64,14 @@ _activate_task:
     // move provided SP into sp
     mov     sp,r0
 
-    // r0=syscall return value, r1=swi return address, r2=spsr
-    ldmfd   sp!,{r0-r2}
-
-    // restore user registers from stack
-    add     sp,sp,#16 // skip popping r0 through r3
-    ldmfd   sp!,{r4-r12,lr}
+    // get spsr off stack
+    ldmfd   sp!,{r0}
 
     // set the spsr to the user's saved spsr
-    msr     spsr,r2
-    movs    pc,r1
+    msr     spsr,r0
+
+    // restore user registers from stack
+    ldmfd   sp!,{r0-r12,lr,pc}^
 
 .global _enable_caches
 _enable_caches:
