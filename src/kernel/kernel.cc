@@ -224,7 +224,7 @@ class TaskDescriptor {
     }
 };
 
-static std::optional<size_t> current_interrupt() {
+static size_t current_interrupt() {
     uint32_t vic1_bits = *((uint32_t*)VIC1_BASE + VIC_IRQ_STATUS_OFFSET);
 
     for (size_t i = 0; i < 32; i++) {
@@ -241,7 +241,7 @@ static std::optional<size_t> current_interrupt() {
         }
     }
 
-    return std::nullopt;
+    kpanic("no interrupts are set");
 }
 
 class Kernel {
@@ -492,9 +492,7 @@ class Kernel {
     }
 
     void handle_interrupt(void* user_sp) {
-        auto curr_interrupt = current_interrupt();
-        kassert(curr_interrupt.has_value());
-        uint32_t no = curr_interrupt.value();
+        uint32_t no = current_interrupt();
 
         kdebug("handle_interrupt: no=%lu user_sp=%p", no, user_sp);
 
@@ -503,6 +501,10 @@ class Kernel {
 
         // assert interrupt
         switch (no) {
+            case 4:
+                *(volatile uint32_t*)(TIMER1_BASE + CLR_OFFSET) = 1;
+            case 5:
+                *(volatile uint32_t*)(TIMER2_BASE + CLR_OFFSET) = 1;
             case 51:
                 *(volatile uint32_t*)(TIMER3_BASE + CLR_OFFSET) = 1;
                 break;
@@ -562,6 +564,24 @@ class Kernel {
     void initialize(void (*user_main)()) {
         *((uint32_t*)0x028) = (uint32_t)((void*)_swi_handler);
         *((uint32_t*)0x038) = (uint32_t)((void*)_irq_handler);
+
+        // disable protection
+        *(volatile uint32_t*)(VIC1_BASE + VIC_INT_PROTECTION_OFFSET) = 0;
+        // all IRQs
+        *(volatile uint32_t*)(VIC1_BASE + VIC_INT_SELECT_OFFSET) = 0;
+        // enable timer1 and timer2
+        *(volatile uint32_t*)(VIC1_BASE + VIC_INT_ENABLE_OFFSET) =
+            (1 << 4) | (1 << 5);
+
+        *(volatile uint32_t*)(TIMER1_BASE + CRTL_OFFSET) = 0;
+        *(volatile uint32_t*)(TIMER1_BASE + LDR_OFFSET) = 3000;
+        *(volatile uint32_t*)(TIMER1_BASE + CRTL_OFFSET) =
+            ENABLE_MASK | MODE_MASK;  // periodic
+
+        *(volatile uint32_t*)(TIMER2_BASE + CRTL_OFFSET) = 0;
+        *(volatile uint32_t*)(TIMER2_BASE + LDR_OFFSET) = 2000;
+        *(volatile uint32_t*)(TIMER2_BASE + CRTL_OFFSET) =
+            ENABLE_MASK | MODE_MASK;  // periodic
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Warray-bounds"
