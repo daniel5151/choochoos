@@ -5,7 +5,8 @@
 
 void Idle() {
     while (true) {
-        // Yield();
+        char c = (char)bwgetc(COM2);
+        if (c == 'q') return;
     }
 }
 void FirstUserTask() {

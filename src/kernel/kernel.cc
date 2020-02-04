@@ -548,16 +548,6 @@ class Kernel {
                 kpanic("unexpected interrupt number (%lu)", no);
         }
 
-        // current_task was preempted, so update its stack pointer and put it
-        // back on the ready_queue
-        TaskDescriptor& preempted_task = tasks[current_task].value();
-        preempted_task.sp = user_sp;
-
-        if (ready_queue.push(current_task, preempted_task.priority) ==
-            PriorityQueueErr::FULL) {
-            kpanic("ready queue full");
-        }
-
         // if nobody is waiting for the interrupt, drop it
         if (!event_queue[no].has_value()) return;
 
@@ -578,7 +568,9 @@ class Kernel {
     std::optional<Tid> schedule() { return ready_queue.pop(); }
 
     void activate(Tid tid) {
+        kdebug("activating tid %lu", (size_t)tid);
         current_task = tid;
+        if (!tasks[tid].has_value()) return;
         TaskDescriptor& task = tasks[tid].value();
         task.sp = _activate_task(task.sp);
 

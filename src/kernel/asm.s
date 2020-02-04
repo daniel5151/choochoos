@@ -125,6 +125,13 @@ _activate_task:
     // set the spsr to the user's saved spsr
     msr     spsr,r0
 
+	// TODO for prilik: I don't know what I'm doing here, but somehow this works.
+    // I think we were never actually switching back into user mode - or if we
+    // were, we never enabled interrupts.
+
+    // Switch to user mode (IRQs enabled)
+    msr     cpsr_c, #0x10
+
     // restore user registers from stack
     ldmfd   sp!,{r0-r12,lr,pc}^
 
