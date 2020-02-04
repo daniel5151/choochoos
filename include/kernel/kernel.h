@@ -11,6 +11,7 @@ void kprintf(const char* fmt, ...) __attribute__((format(printf, 1, 2)));
 
 // #define DISABLE_KDEBUG_PRINTS // TODO: make this a build-time flag
 
+#undef assert
 #define kassert(expr)                                                 \
     do {                                                              \
         if (!(expr)) {                                                \

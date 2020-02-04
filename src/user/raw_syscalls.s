@@ -1,3 +1,8 @@
+.global __AwaitEvent
+__AwaitEvent:
+    swi #8
+    bx lr
+
 .global __Reply
 __Reply:
     swi #7

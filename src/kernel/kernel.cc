@@ -224,8 +224,9 @@ class TaskDescriptor {
     }
 };
 
-static std::optional<size_t> current_interrupt() {
-    uint32_t vic1_bits = *((uint32_t*)VIC1_BASE + VIC_IRQ_STATUS_OFFSET);
+static size_t current_interrupt() {
+    uint32_t vic1_bits =
+        *((volatile uint32_t*)VIC1_BASE + VIC_IRQ_STATUS_OFFSET);
 
     for (size_t i = 0; i < 32; i++) {
         if (vic1_bits & (1 << i)) {
@@ -233,7 +234,8 @@ static std::optional<size_t> current_interrupt() {
         }
     }
 
-    uint32_t vic2_bits = *((uint32_t*)VIC2_BASE + VIC_IRQ_STATUS_OFFSET);
+    uint32_t vic2_bits =
+        *((volatile uint32_t*)VIC2_BASE + VIC_IRQ_STATUS_OFFSET);
 
     for (size_t i = 0; i < 32; i++) {
         if (vic2_bits & (1 << i)) {
@@ -241,7 +243,7 @@ static std::optional<size_t> current_interrupt() {
         }
     }
 
-    return std::nullopt;
+    kpanic("current_interrupt(): no interrupts are set");
 }
 
 class Kernel {
@@ -442,6 +444,30 @@ class Kernel {
         }
     }
 
+    int AwaitEvent(int eventid) {
+        switch (eventid) {
+            case 4:
+            case 5:
+            case 51:
+                break;
+            default:
+                kdebug("AwaitEvent(%d): invalid eventid", eventid);
+                return -1;
+        }
+        kassert(tasks[current_task].has_value());
+
+        if (event_queue[eventid].has_value()) {
+            kpanic("AwaitEvent(%d): tid %d already waiting for this event",
+                   eventid, event_queue[eventid]->raw_tid());
+        }
+
+        event_queue[eventid] = current_task;
+        tasks[current_task].value().state = {.tag = TaskState::EVENT_WAIT,
+                                             .event_wait = {}};
+
+        return -3;
+    }
+
    public:
     Kernel() : tasks{std::nullopt}, event_queue{std::nullopt}, ready_queue() {}
 
@@ -483,6 +509,9 @@ class Kernel {
                     Reply(user_stack->regs[0], (const char*)user_stack->regs[1],
                           user_stack->regs[2]);
                 break;
+            case 8:
+                ret = AwaitEvent(user_stack->regs[0]);
+                break;
             default:
                 kpanic("invalid syscall %lu", no);
         }
@@ -492,22 +521,31 @@ class Kernel {
     }
 
     void handle_interrupt(void* user_sp) {
-        auto curr_interrupt = current_interrupt();
-        kassert(curr_interrupt.has_value());
-        uint32_t no = curr_interrupt.value();
+        uint32_t no = current_interrupt();
 
         kdebug("handle_interrupt: no=%lu user_sp=%p", no, user_sp);
 
         kassert(tasks[current_task].has_value());
         kassert(no < 64);
 
-        // assert interrupt
+        int ret;
+
+        // assert interrupt, get return value
         switch (no) {
+            case 4:
+                *(volatile uint32_t*)(TIMER1_BASE + CLR_OFFSET) = 1;
+                ret = 0;
+                break;
+            case 5:
+                *(volatile uint32_t*)(TIMER2_BASE + CLR_OFFSET) = 1;
+                ret = 0;
+                break;
             case 51:
                 *(volatile uint32_t*)(TIMER3_BASE + CLR_OFFSET) = 1;
+                ret = 0;
                 break;
             default:
-                kpanic("unexpected interrupt number (%d)", no);
+                kpanic("unexpected interrupt number (%lu)", no);
         }
 
         // current_task was preempted, so update its stack pointer and put it
@@ -521,14 +559,15 @@ class Kernel {
         }
 
         // if nobody is waiting for the interrupt, drop it
-        // TODO should we buffer it?
         if (!event_queue[no].has_value()) return;
 
         Tid blocked_tid = event_queue[no].value();
+        event_queue[no] = std::nullopt;
         kassert(tasks[blocked_tid].has_value());
         TaskDescriptor& blocked_task = tasks[blocked_tid].value();
         kassert(blocked_task.state.tag = TaskState::EVENT_WAIT);
         blocked_task.state = {.tag = TaskState::READY, .ready = {}};
+        blocked_task.write_syscall_return_value(ret);
 
         if (ready_queue.push(blocked_tid, blocked_task.priority) ==
             PriorityQueueErr::FULL) {
