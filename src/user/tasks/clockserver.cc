@@ -145,6 +145,11 @@ void Server() {
             }
             case Request::Delay: {
                 debug("Clock::Server: Delay(%d)", req.delay);
+                if (req.delay <= 0) {
+                    res = {.tag = Response::Empty, .empty = {}};
+                    Reply(tid, (char*)&res, sizeof(res));
+                    break;
+                }
                 uint32_t user_delay = (uint32_t)std::max(0, req.delay);
                 uint16_t timer_delay = (uint16_t)std::min(
                     user_delay * TIMER_TICKS_PER_SEC / USER_TICKS_PER_SEC,

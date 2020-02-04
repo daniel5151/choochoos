@@ -19,4 +19,8 @@ void FirstUserTask() {
     printf("got time %d" ENDL, Clock::Time(clockserver));
     Clock::Delay(clockserver, 50);
     printf("got time %d" ENDL, Clock::Time(clockserver));
+    Clock::Delay(clockserver, 1);
+    printf("got time %d" ENDL, Clock::Time(clockserver));
+    Clock::Delay(clockserver, 0);
+    printf("got time %d" ENDL, Clock::Time(clockserver));
 }
