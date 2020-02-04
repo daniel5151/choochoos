@@ -25,8 +25,6 @@ static volatile uint32_t* timer3_value_reg =
 
 static volatile uint32_t* vic1_enable_reg =
     (volatile uint32_t*)(VIC1_BASE + VIC_INT_ENABLE_OFFSET);
-static volatile uint32_t* vic2_enable_reg =
-    (volatile uint32_t*)(VIC2_BASE + VIC_INT_ENABLE_OFFSET);
 
 class DelayedTask {
    public:
@@ -82,7 +80,6 @@ static void schedule_timer_interrupt(uint16_t ticks) {
 static void stop_timer_interrupts() { *timer2_ctrl_reg = 0; }
 
 void Server() {
-    // TODO use a different timer for Time() vs Delay();
     // initialize timer 3 for Time() calls
     *timer3_load_reg = UINT32_MAX;
     *timer3_ctrl_reg = ENABLE_MASK;
@@ -91,8 +88,8 @@ void Server() {
     int notifier_tid = Create(INT_MAX, Notifier);
     assert(notifier_tid >= 0);
 
+    // enable interrupts for TC2 (for Delay()s)
     *vic1_enable_reg = 1 << 5;
-    *vic2_enable_reg = 1 << (51 - 32);
 
     int tid;
     Request req;
@@ -158,6 +155,8 @@ void Server() {
                 int priority = (int)(tick_threshold - UINT32_MAX);
                 debug("enqueing tid=%d, tick_thresh=0x%lx priority=%d", tid,
                       tick_threshold, priority);
+                // TODO only schedule a delay if tick_threshold >
+                // pq.peek()->tick_threshold.
                 assert(pq.push(DelayedTask(tid, tick_threshold), priority) !=
                        PriorityQueueErr::FULL);
                 schedule_timer_interrupt(timer_delay);
