@@ -520,10 +520,10 @@ class Kernel {
         }
     }
 
-    void handle_interrupt(void* user_sp) {
+    void handle_interrupt() {
         uint32_t no = current_interrupt();
 
-        kdebug("handle_interrupt: no=%lu user_sp=%p", no, user_sp);
+        kdebug("handle_interrupt: no=%lu", no);
 
         kassert(tasks[current_task].has_value());
         kassert(no < 64);
@@ -621,9 +621,7 @@ extern "C" void handle_syscall(uint32_t no, void* user_sp) {
     kern.handle_syscall(no, user_sp);
 }
 
-extern "C" void handle_interrupt(void* user_sp) {
-    kern.handle_interrupt(user_sp);
-}
+extern "C" void handle_interrupt() { kern.handle_interrupt(); }
 
 int kmain() {
     kprintf("Hello from the choochoos kernel!");

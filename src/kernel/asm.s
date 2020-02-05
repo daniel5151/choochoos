@@ -81,8 +81,6 @@ _irq_handler:
     // This banks in the irq's SP and LR.
     msr     cpsr_c, #0xd3
 
-    // r1 = handle_interrupt 1nd param = user's stack pointer (with saved state)
-    mov     r0,r4
     bl      handle_interrupt
     // handle_interrupt writes the syscall return value directly into the user's
     // stack (i.e: overwriting the value of the saved r0 register)
