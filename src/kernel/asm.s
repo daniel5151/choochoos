@@ -4,9 +4,6 @@ _swi_handler:
     // This banks in the user's LR and SP
     msr     cpsr_c, #0xdf
 
-    // set aside some space to hold the user return address
-    sub     sp,sp,#4
-
     // Stack user registers on user stack
     stmfd   sp!,{r0-r12,lr}
     mov     r4,sp // hold on to user sp
@@ -20,11 +17,10 @@ _swi_handler:
     stmfd   r4!,{r0}
 
     // store user mode return address (which is in lr_svc)
-    mov     r0,lr
-    str     r0,[r4, #60] // 14 * 4 + 4
+    stmfd   r4!,{lr}
 
     // r0 = handle_syscall 1st param = syscall number
-    ldr     r0,[r0, #-4]      // Load the last-executed SWI instr into r0...
+    ldr     r0,[lr, #-4]      // Load the last-executed SWI instr into r0...
     bic     r0,r0,#0xff000000 // ...and mask off the top 8 bits to get SWI no
     // r1 = handle_syscall 2nd param = user's stack pointer (with saved state)
     mov     r1,r4
@@ -36,12 +32,12 @@ _swi_handler:
     //
     // +----------- hi mem -----------+
     // | ... rest of user's stack ... |
-    // |   [ ret addr             ]   |
     // |   [ lr                   ]   |
     // |   [ r0                   ]   |
     // |   ...                        |
     // |   [ r12                  ]   |
     // |   [ spsr                 ]   |
+    // |   [ ret addr             ]   |
     // |         <--- sp --->         |
     // | ....... unused stack ....... |
     // +----------- lo mem -----------+
@@ -58,9 +54,6 @@ _irq_handler:
     // This banks in the user's LR and SP
     msr     cpsr_c, #0xdf
 
-    // set aside some space to hold the user return address
-    sub     sp,sp,#4
-
     // Stack user registers on user stack
     stmfd   sp!,{r0-r12,lr}
     mov     r4,sp // hold on to user sp
@@ -75,7 +68,7 @@ _irq_handler:
 
     // store user mode return address (compensating with -4)
     sub     r0,lr,#4
-    str     r0,[r4, #60] // 14 * 4 + 4
+    stmfd   r4!,{r0}
 
     // Switch to kernel mode (IRQs disabled)
     // This banks in the irq's SP and LR.
@@ -91,12 +84,12 @@ _irq_handler:
     //
     // +----------- hi mem -----------+
     // | ... rest of user's stack ... |
-    // |   [ ret addr             ]   |
     // |   [ lr                   ]   |
     // |   [ r0                   ]   |
     // |   ...                        |
     // |   [ r12                  ]   |
     // |   [ spsr                 ]   |
+    // |   [ ret addr             ]   |
     // |         <--- sp --->         |
     // | ....... unused stack ....... |
     // +----------- lo mem -----------+
@@ -114,26 +107,31 @@ _activate_task:
     // save the kernel's context
     stmfd   sp!,{r4-r12,lr}
 
-    // Switch to system mode (IRQs disabled)
-    msr     cpsr_c, #0xdf
-    // move provided SP into sp
-    mov     sp,r0
-
-    // get spsr off stack
-    ldmfd   sp!,{r0}
+    // pop ret addr and spsr from user stack
+    // r1 = ret addr, r2 = spsr
+    ldmfd   r0!,{r1,r2}
 
     // set the spsr to the user's saved spsr
-    msr     spsr,r0
+    msr     spsr,r2
 
-	// TODO for prilik: I don't know what I'm doing here, but somehow this works.
-    // I think we were never actually switching back into user mode - or if we
-    // were, we never enabled interrupts.
+    // push user ret val to top of kernel stack
+    stmfd   sp!,{r1}
 
-    // Switch to user mode (IRQs enabled)
-    msr     cpsr_c, #0x10
+    // Switch to system mode (IRQs disabled)
+    msr     cpsr_c, #0xdf
+
+    // install user SP
+    mov     sp,r0
 
     // restore user registers from stack
-    ldmfd   sp!,{r0-r12,lr,pc}^
+    ldmfd   sp!,{r0-r12,lr}
+
+    // Switch to supervisor mode (IRQs disabled)
+    msr     cpsr_c, #0xd3
+
+    // jump back to user code, updating the spsr
+    ldmfd   sp!,{pc}^
+
 
 .global _enable_caches
 _enable_caches:

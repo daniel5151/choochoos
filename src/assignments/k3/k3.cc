@@ -9,4 +9,5 @@ void FirstUserTask() {
     printf("Compiled %s" ENDL, COMPILED_AT);
     printf("press any key to exit" ENDL);
     bwgetc(COM2);
+    printf("bye!" ENDL);
 }

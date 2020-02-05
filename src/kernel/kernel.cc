@@ -25,10 +25,10 @@ extern char __USER_STACKS_START__, __USER_STACKS_END__;
 /// Helper POD struct which can should be casted from a void* that points to
 /// a user's stack.
 struct SwiUserStack {
+    void* start_addr;
     uint32_t spsr;
     uint32_t regs[13];
     void* lr;
-    void* start_addr;
     // C++ doesn't support flexible array members, so instead, we use an
     // array of size 1, and just do "OOB" memory access lol
     uint32_t additional_params[1];
@@ -247,10 +247,10 @@ static size_t current_interrupt() {
 class Kernel {
     /// Helper POD struct to init new user task stacks
     struct FreshStack {
+        void* start_addr;
         uint32_t spsr;
         uint32_t regs[13];
         void* lr;
-        void* start_addr;
     };
 
     std::optional<TaskDescriptor> tasks[MAX_SCHEDULED_TASKS];
@@ -503,13 +503,15 @@ class Kernel {
         switch (no) {
             case 4:
                 *(volatile uint32_t*)(TIMER1_BASE + CLR_OFFSET) = 1;
+                break;
             case 5:
                 *(volatile uint32_t*)(TIMER2_BASE + CLR_OFFSET) = 1;
+                break;
             case 51:
                 *(volatile uint32_t*)(TIMER3_BASE + CLR_OFFSET) = 1;
                 break;
             default:
-                kpanic("unexpected interrupt number (%d)", no);
+                kpanic("unexpected interrupt number (%ld)", no);
         }
 
         // current_task was preempted, so update its stack pointer and put it
@@ -541,6 +543,8 @@ class Kernel {
     std::optional<Tid> schedule() { return ready_queue.pop(); }
 
     void activate(Tid tid) {
+        kdebug("activating tid=%u", (size_t)tid);
+
         current_task = tid;
         TaskDescriptor& task = tasks[tid].value();
         task.sp = _activate_task(task.sp);
@@ -562,12 +566,13 @@ class Kernel {
     }
 
     void initialize(void (*user_main)()) {
+        // install interrupt handlers
         *((uint32_t*)0x028) = (uint32_t)((void*)_swi_handler);
         *((uint32_t*)0x038) = (uint32_t)((void*)_irq_handler);
 
-        // disable protection
+        // disable vic protection (so user mode can poke vic registers)
         *(volatile uint32_t*)(VIC1_BASE + VIC_INT_PROTECTION_OFFSET) = 0;
-        // all IRQs
+        // set all interrupts to IRQs (and not FIQs)
         *(volatile uint32_t*)(VIC1_BASE + VIC_INT_SELECT_OFFSET) = 0;
         // enable timer1 and timer2
         *(volatile uint32_t*)(VIC1_BASE + VIC_INT_ENABLE_OFFSET) =
@@ -604,7 +609,7 @@ class Kernel {
 
 extern void FirstUserTask();
 
-static Kernel kern;
+static Kernel kern = Kernel();
 
 extern "C" void handle_syscall(uint32_t no, void* user_sp) {
     kern.handle_syscall(no, user_sp);
