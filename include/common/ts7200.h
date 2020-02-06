@@ -1,4 +1,5 @@
 #pragma once
+// clang-format off
 
 /*
  * ts7200.h - definitions describing the ts7200 peripheral registers
@@ -82,3 +83,28 @@
 #define UART_HDLCAM_OFFSET  0x214
 #define UART_HDLCRIB_OFFSET 0x218
 #define UART_HDLCSTS_OFFSET 0x21c
+
+
+// VICs
+
+#define VIC1_BASE 0x800b0000
+#define VIC2_BASE 0x800c0000
+
+// IRQ Status Register. The VICxIRQStatus register provides the status of
+// interrupts after IRQ masking.
+// Interrupts 0 - 31 are in VIC1IRQStatus.
+// Interrupts 32 - 63 are in VIC2IRQStatus.
+#define VIC_IRQ_STATUS_OFFSET 0x0000
+
+// Interrupt Select Register. The VICxIntSelect register selects whether the
+// corresponding interrupt source generates an FIQ or an IRQ interrupt.
+// 1 = FIQ interrupt
+// 0 = IRQ interrupt
+#define VIC_INT_SELECT_OFFSET 0x000C
+
+// Interrupt Enable Register. The VICxIntEnable register enables the interrupt
+// requests by unmasking the interrupt sources. On reset, all interrupts are
+// disabled (masked).
+#define VIC_INT_ENABLE_OFFSET 0x0010
+
+#define VIC_INT_PROTECTION_OFFSET 0x20

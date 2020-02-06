@@ -1,4 +1,4 @@
-CURRENT_ASSIGNMENT = k2
+CURRENT_ASSIGNMENT = k3
 
 TARGET ?= $(CURRENT_ASSIGNMENT)
 
@@ -13,6 +13,8 @@ CC = $(XBINDIR)/arm-none-eabi-gcc
 CXX = $(XBINDIR)/arm-none-eabi-g++
 AS = $(XBINDIR)/arm-none-eabi-as
 LD = $(XBINDIR)/arm-none-eabi-ld
+
+
 
 #------------- Flags -------------#
 

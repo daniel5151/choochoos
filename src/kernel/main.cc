@@ -12,7 +12,6 @@ int main(int argc, char* argv[]) {
     (void)argc;
     (void)argv;
 
-    // hardware init
     bwsetfifo(COM2, false);
 
 #ifdef ENABLE_CACHES

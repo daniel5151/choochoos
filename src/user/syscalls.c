@@ -10,6 +10,7 @@
 
 // Raw Syscall signatures
 
+int __AwaitEvent(int eventid);
 int __Reply(int tid, const char* reply, int rplen);
 int __Receive(int* tid, char* msg, int msglen);
 int __Send(int tid, const char* msg, int msglen, char* reply, int rplen);
@@ -21,6 +22,7 @@ void __Yield(void);
 
 // Wrapper methods around raw syscalls
 
+int AwaitEvent(int eventid) { return __AwaitEvent(eventid); }
 int Reply(int tid, const char* reply, int rplen) {
     return __Reply(tid, reply, rplen);
 }

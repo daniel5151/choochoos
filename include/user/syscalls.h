@@ -20,6 +20,8 @@ int Receive(int* tid, char* msg, int msglen);
 
 int Reply(int tid, const char* reply, int rplen);
 
+int AwaitEvent(int eventid);
+
 #ifdef __cplusplus
 }
 #endif
