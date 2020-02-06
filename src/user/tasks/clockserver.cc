@@ -11,16 +11,6 @@
 
 namespace Clock {
 
-// TODO if we're going to expose peripheral registers to this user task, we
-// should encapsulate them in a header file, with appropriate constness.
-static volatile uint32_t* timer2_load_reg =
-    (volatile uint32_t*)(TIMER2_BASE + LDR_OFFSET);
-static volatile uint32_t* timer2_ctrl_reg =
-    (volatile uint32_t*)(TIMER2_BASE + CRTL_OFFSET);
-
-static volatile uint32_t* timer3_value_reg =
-    (volatile uint32_t*)(TIMER3_BASE + VAL_OFFSET);
-
 class DelayedTask {
    public:
     int tid;
@@ -55,29 +45,19 @@ struct Response {
 void Notifier() {
     debug("clockserver notifier started");
     int parent = MyParentTid();
-    Request msg;
+    Request msg = {.tag = Request::NotifierTick, .notifier_tick = {}};
     while (true) {
         AwaitEvent(5);
-        debug("clockserver notifier sending tick");
-        msg = {.tag = Request::NotifierTick, .notifier_tick = {}};
         Send(parent, (char*)&msg, sizeof(msg), nullptr, 0);
     }
 }
-
-static void schedule_timer_interrupt(uint16_t ticks) {
-    debug("scheduling delay in %d timer ticks", ticks);
-    *timer2_ctrl_reg = 0;
-    *timer2_load_reg = (uint32_t)ticks;
-    // periodic + 2 kHz
-    *timer2_ctrl_reg = ENABLE_MASK | MODE_MASK;
-}
-
-static void stop_timer_interrupts() { *timer2_ctrl_reg = 0; }
 
 void Server() {
     debug("clockserver started");
     int notifier_tid = Create(INT_MAX, Notifier);
     assert(notifier_tid >= 0);
+
+    uint32_t current_time = 0;
 
     int tid;
     Request req;
@@ -91,17 +71,14 @@ void Server() {
 
         switch (req.tag) {
             case Request::NotifierTick: {
-                stop_timer_interrupts();
                 assert(tid == notifier_tid);
-                debug("Clock::Server: NotifierTick current_time=0x%lx",
-                      *timer3_value_reg);
                 Reply(tid, nullptr, 0);
+                current_time++;
 
-                debug("%d tasks are queued", pq.size());
                 while (true) {
                     const DelayedTask* delayed_task = pq.peek();
                     if (delayed_task == nullptr) break;
-                    if (delayed_task->tick_threshold < *timer3_value_reg) break;
+                    if (delayed_task->tick_threshold > current_time) break;
 
                     pq.pop();
                     debug("waking up tid %d", delayed_task->tid);
@@ -109,22 +86,12 @@ void Server() {
                     Reply(delayed_task->tid, (char*)&res, sizeof(res));
                 }
 
-                const DelayedTask* delayed_task = pq.peek();
-                if (delayed_task != nullptr) {
-                    uint16_t timer_ticks = (uint16_t)std::min(
-                        (uint32_t)UINT16_MAX,
-                        *timer3_value_reg - delayed_task->tick_threshold);
-                    schedule_timer_interrupt(timer_ticks);
-                }
-
                 break;
             }
             case Request::Time: {
                 debug("Clock::Server: Time");
-                int timer3_ticks = (int)(UINT32_MAX - *timer3_value_reg);
-                int user_ticks =
-                    timer3_ticks * USER_TICKS_PER_SEC / TIMER_TICKS_PER_SEC;
-                res = {.tag = Response::Time, .time = user_ticks};
+                assert(current_time < INT_MAX);
+                res = {.tag = Response::Time, .time = (int)current_time};
                 Reply(tid, (char*)&res, sizeof(res));
                 break;
             }
@@ -135,19 +102,15 @@ void Server() {
                     Reply(tid, (char*)&res, sizeof(res));
                     break;
                 }
-                uint32_t user_delay = (uint32_t)std::max(0, req.delay);
-                uint16_t timer_delay = (uint16_t)std::min(
-                    user_delay * TIMER_TICKS_PER_SEC / USER_TICKS_PER_SEC,
-                    (uint32_t)UINT16_MAX);
-                uint32_t tick_threshold = *timer3_value_reg - timer_delay;
-                int priority = (int)(tick_threshold - UINT32_MAX);
+                uint32_t tick_threshold = current_time + (uint32_t)req.delay;
+
+                // Delayed tasks with a smaller tick_threshold should be woken
+                // up first, so they should have a higher priority.
+                int priority = (int)(-tick_threshold);
                 debug("enqueing tid=%d, tick_thresh=0x%lx priority=%d", tid,
                       tick_threshold, priority);
-                // TODO only schedule a delay if tick_threshold >
-                // pq.peek()->tick_threshold.
                 assert(pq.push(DelayedTask(tid, tick_threshold), priority) !=
                        PriorityQueueErr::FULL);
-                schedule_timer_interrupt(timer_delay);
 
                 break;
             }
