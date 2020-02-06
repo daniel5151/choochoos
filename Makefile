@@ -34,7 +34,7 @@ WARNING_FLAGS =                \
 	 $(DISABLED_WARNINGS)
 
 COMMON_INCLUDES = -I. -I./include
-COMMON_FLAGS = -fPIC -mcpu=arm920t -msoft-float -MP -MMD -MT $@ $(WARNING_FLAGS) $(COMMON_INCLUDES) -DCOMPILED_AT="\"$(DATE)\""
+COMMON_FLAGS = -fPIC -mcpu=arm920t -msoft-float -MP -MMD -MT $@ $(WARNING_FLAGS) $(COMMON_INCLUDES)
 
 ifdef ENABLE_CACHES
     COMMON_FLAGS += -DENABLE_CACHES
@@ -74,8 +74,6 @@ BUILD_DIR = build
 
 ALL_USER_SRCS_GLOB = $(SRC_DIR)/assignments/*/**
 USER_SRC_DIR = $(SRC_DIR)/assignments/$(TARGET)
-
-DATE = $(shell date)
 
 SRCS = $(shell find $(SRC_DIR) \
                             \( -name '*.c' -or -name '*.cc' -or -name '*.s' \) \
