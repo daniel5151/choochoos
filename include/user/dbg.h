@@ -4,6 +4,7 @@
 
 #include "common/bwio.h"
 #include "common/vt_escapes.h"
+#include "user/syscalls.h"
 
 #define LOG_BUFFER_SIZE 128
 

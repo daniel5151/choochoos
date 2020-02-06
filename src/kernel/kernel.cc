@@ -594,6 +594,24 @@ class Kernel {
         *((uint32_t*)0x028) = (uint32_t)((void*)_swi_handler);
         *((uint32_t*)0x038) = (uint32_t)((void*)_irq_handler);
 
+        // disable protection
+        *(volatile uint32_t*)(VIC1_BASE + VIC_INT_PROTECTION_OFFSET) = 0;
+        // all IRQs
+        *(volatile uint32_t*)(VIC1_BASE + VIC_INT_SELECT_OFFSET) = 0;
+        // enable timer1 and timer2
+        *(volatile uint32_t*)(VIC1_BASE + VIC_INT_ENABLE_OFFSET) =
+            (1 << 4) | (1 << 5);
+
+        *(volatile uint32_t*)(TIMER1_BASE + CRTL_OFFSET) = 0;
+        *(volatile uint32_t*)(TIMER1_BASE + LDR_OFFSET) = 3000;
+        *(volatile uint32_t*)(TIMER1_BASE + CRTL_OFFSET) =
+            ENABLE_MASK | MODE_MASK;  // periodic
+
+        *(volatile uint32_t*)(TIMER2_BASE + CRTL_OFFSET) = 0;
+        *(volatile uint32_t*)(TIMER2_BASE + LDR_OFFSET) = 2000;
+        *(volatile uint32_t*)(TIMER2_BASE + CRTL_OFFSET) =
+            ENABLE_MASK | MODE_MASK;  // periodic
+
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Warray-bounds"
         char* actual_user_stacks_end =

@@ -106,3 +106,5 @@
 // requests by unmasking the interrupt sources. On reset, all interrupts are
 // disabled (masked).
 #define VIC_INT_ENABLE_OFFSET 0x0010
+
+#define VIC_INT_PROTECTION_OFFSET 0x20
