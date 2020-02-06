@@ -601,15 +601,17 @@ class Kernel {
         // enable timer2 interrupts
         *(volatile uint32_t*)(VIC1_BASE + VIC_INT_ENABLE_OFFSET) = (1 << 5);
 
-        // initialize timer 3 to count down from UINT32_MAX
-        // TODO timer3 should run at 508Khz mode so we always have one high
-        // resolution clock going.
+        // initialize timer 3 to count down from UINT32_MAX at 508KHz
         *(volatile uint32_t*)(TIMER3_BASE + CRTL_OFFSET) = 0;
         *(volatile uint32_t*)(TIMER3_BASE + LDR_OFFSET) = UINT32_MAX;
-        *(volatile uint32_t*)(TIMER3_BASE + CRTL_OFFSET) = ENABLE_MASK;
+        *(volatile uint32_t*)(TIMER3_BASE + CRTL_OFFSET) =
+            ENABLE_MASK | CLKSEL_MASK;
 
-        // disable timer2 - will be enabled later by the clock server
+        // initialize timer2 to fire interrupts every 10 ms
         *(volatile uint32_t*)(TIMER2_BASE + CRTL_OFFSET) = 0;
+        *(volatile uint32_t*)(TIMER2_BASE + LDR_OFFSET) = 20;
+        *(volatile uint32_t*)(TIMER2_BASE + CRTL_OFFSET) =
+            ENABLE_MASK | MODE_MASK;
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Warray-bounds"
