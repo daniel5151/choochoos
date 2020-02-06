@@ -11,20 +11,15 @@
 
 namespace Clock {
 
+// TODO if we're going to expose peripheral registers to this user task, we
+// should encapsulate them in a header file, with appropriate constness.
 static volatile uint32_t* timer2_load_reg =
     (volatile uint32_t*)(TIMER2_BASE + LDR_OFFSET);
 static volatile uint32_t* timer2_ctrl_reg =
     (volatile uint32_t*)(TIMER2_BASE + CRTL_OFFSET);
 
-static volatile uint32_t* timer3_load_reg =
-    (volatile uint32_t*)(TIMER3_BASE + LDR_OFFSET);
-static volatile uint32_t* timer3_ctrl_reg =
-    (volatile uint32_t*)(TIMER3_BASE + CRTL_OFFSET);
 static volatile uint32_t* timer3_value_reg =
     (volatile uint32_t*)(TIMER3_BASE + VAL_OFFSET);
-
-static volatile uint32_t* vic1_enable_reg =
-    (volatile uint32_t*)(VIC1_BASE + VIC_INT_ENABLE_OFFSET);
 
 class DelayedTask {
    public:
@@ -80,16 +75,9 @@ static void schedule_timer_interrupt(uint16_t ticks) {
 static void stop_timer_interrupts() { *timer2_ctrl_reg = 0; }
 
 void Server() {
-    // initialize timer 3 for Time() calls
-    *timer3_load_reg = UINT32_MAX;
-    *timer3_ctrl_reg = ENABLE_MASK;
-
     debug("clockserver started");
     int notifier_tid = Create(INT_MAX, Notifier);
     assert(notifier_tid >= 0);
-
-    // enable interrupts for TC2 (for Delay()s)
-    *vic1_enable_reg = 1 << 5;
 
     int tid;
     Request req;
