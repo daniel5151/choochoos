@@ -1,7 +1,5 @@
 #include <string.h>
 
-#include "common/bwio.h"
-
 typedef void (*ctr_fn)();
 
 // Defined by the linker script
@@ -10,8 +8,8 @@ extern ctr_fn __INIT_ARRAY_START__, __INIT_ARRAY_END__;
 
 static void* redboot_return_addr;
 
-// TODO: move this out of crt0
-void kexit(int status) {
+// TODO: _exit should perform cleanup (i.e: call global destructors)
+void _exit(int status) {
     __asm__ volatile("mov r0, %0" ::"r"(status));
     __asm__ volatile("mov pc, %0" ::"r"(redboot_return_addr));
 }

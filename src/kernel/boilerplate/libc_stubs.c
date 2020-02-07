@@ -3,7 +3,7 @@
 #define STUB(fn) \
     void fn() { kpanic("newlib tried to call " #fn); }
 
-STUB(_exit)
+// STUB(_exit) // defined in crt0, returns to redboot
 STUB(_sbrk)
 STUB(_kill)
 STUB(_getpid)

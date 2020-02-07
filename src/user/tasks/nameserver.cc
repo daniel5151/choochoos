@@ -4,7 +4,7 @@
 #include <cstring>
 
 #include "common/bwio.h"
-#include "user/dbg.h"
+#include "user/debug.h"
 #include "user/syscalls.h"
 
 template <size_t N>

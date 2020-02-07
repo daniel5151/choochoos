@@ -8,7 +8,6 @@ extern "C" {
  * bwio.h
  */
 
-#include <stdarg.h>
 #include <stddef.h>
 
 #define COM1 0
@@ -22,11 +21,10 @@ int bwsetspeed(int channel, int speed);
 
 int bwputc(int channel, char c);
 int bwgetc(int channel);
-
-int bwputx(int channel, char c);
 int bwputstr(int channel, const char* str);
-int bwputr(int channel, unsigned int reg);
-void bwputw(int channel, int n, char fc, char* bf);
+
+#define BWPRINTF_BUF_SIZE 1024
+
 void bwprintf(int channel, const char* format, ...)
     __attribute__((format(printf, 2, 3)));
 

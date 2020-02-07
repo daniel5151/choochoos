@@ -3,7 +3,7 @@
 
 #include "common/bwio.h"
 
-#include "user/dbg.h"
+#include "user/debug.h"
 #include "user/syscalls.h"
 
 void PongTask() {
@@ -27,11 +27,11 @@ void Echo() {
     while (true) {
         // receive 12 bytes
         int n = Receive(&tid, buf, sizeof(buf));
-        printf("[tid %d] Echo received %d bytes" ENDL, my_tid, n);
+        bwprintf(COM2, "[tid %d] Echo received %d bytes" ENDL, my_tid, n);
 
         // reply with the first 8
         n = Reply(tid, buf, 8);
-        printf("[tid %d] Echo sent %d bytes" ENDL, my_tid, n);
+        bwprintf(COM2, "[tid %d] Echo sent %d bytes" ENDL, my_tid, n);
     }
 }
 

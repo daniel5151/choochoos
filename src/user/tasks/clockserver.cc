@@ -3,7 +3,7 @@
 
 #include "common/priority_queue.h"
 #include "common/ts7200.h"
-#include "user/dbg.h"
+#include "user/debug.h"
 #include "user/syscalls.h"
 
 #define USER_TICKS_PER_SEC 100    // 10ms

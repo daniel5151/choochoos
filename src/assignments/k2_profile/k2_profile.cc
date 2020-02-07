@@ -1,11 +1,13 @@
 #include <cstring>
 #include <initializer_list>
 
-#include "user/dbg.h"
+#include "common/bwio.h"
+#include "common/ts7200.h"
+
+#include "user/debug.h"
 #include "user/syscalls.h"
 #include "user/tasks/nameserver.h"
 
-#include "common/ts7200.h"
 #define TIMER3_LDR (volatile uint32_t*)(TIMER3_BASE + LDR_OFFSET)
 #define TIMER3_CTRL (volatile uint32_t*)(TIMER3_BASE + CRTL_OFFSET)
 #define TIMER3_VAL (volatile uint32_t*)(TIMER3_BASE + VAL_OFFSET)
@@ -79,7 +81,7 @@ void FirstUserTask() {
 
     for (char send_priority : {'R', 'S'}) {
         for (size_t msg_size : {4, 64, 256}) {
-            printf("%s %s %c %d ", opt_lvl, cache_state, send_priority,
+            bwprintf(COM2, "%s %s %c %d ", opt_lvl, cache_state, send_priority,
                    msg_size);
 
             int sender_tid = Create(2, Sender);
@@ -112,7 +114,7 @@ void FirstUserTask() {
 
             uint32_t total_time = start_time - *TIMER3_VAL;
             uint64_t micros = (((uint64_t)total_time) * 1000 / 508) / NUM_ITERS;
-            printf("%llu (%lu)" ENDL, micros, total_time);
+            bwprintf(COM2, "%llu (%lu)" ENDL, micros, total_time);
         }
     }
 }

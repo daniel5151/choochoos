@@ -5,7 +5,7 @@
 #include "common/bwio.h"
 #include "common/queue.h"
 
-#include "user/dbg.h"
+#include "user/debug.h"
 #include "user/syscalls.h"
 #include "user/tasks/nameserver.h"
 
@@ -165,7 +165,7 @@ void Server() {
     bool pause_after_each = config_msg.server_config.pause_after_each;
     Reply(tid, nullptr, 0);
 
-    printf("[RPSServer] accepting signups...\r\n");
+    bwprintf(COM2, "[RPSServer] accepting signups...\r\n");
     while (true) {
         Receive(&tid, (char*)&req, sizeof(req));
         debug("received message tag=%d from tid=%d ", req.tag, tid);
@@ -196,8 +196,8 @@ void Server() {
 
                 // otherwise, assign the clients to a game and  send ACKS to
                 // both clients
-                printf("[RPSServer] matching tids %d and %d" ENDL, tid,
-                       other_tid);
+                bwprintf(COM2, "[RPSServer] matching tids %d and %d" ENDL, tid,
+                         other_tid);
                 *game = Game(tid, other_tid);
                 res = {.tag = Message::ACK, .empty = {}};
                 Reply(tid, (char*)&res, sizeof(res));
@@ -227,14 +227,14 @@ void Server() {
                                 r2 = Result::I_WON;
                             }
                             res = {.tag = Message::PLAY_RESP,
-                                            .play_resp = {.result = r1}};
+                                   .play_resp = {.result = r1}};
                             Reply(game.player1(), (char*)&res, sizeof(res));
                             res.play_resp.result = r2;
                             Reply(game.player2(), (char*)&res, sizeof(res));
                             game.reset();
-                            printf(
-                                "~~~~~~~~~ press any key to continue "
-                                "~~~~~~~~~" ENDL);
+                            bwprintf(COM2,
+                                     "~~~~~~~~~ press any key to continue "
+                                     "~~~~~~~~~" ENDL);
                             if (pause_after_each) bwgetc(COM2);
                         }
                         break;
@@ -258,7 +258,8 @@ void Server() {
                             // clear the game. If the player sends PLAY at this
                             // point, they will receive OTHER_PLAYER_QUIT.
                             *game = Game();
-                            printf(
+                            bwprintf(
+                                COM2,
                                 "[RPSServer] tid %d quit, but no players are "
                                 "waiting." ENDL,
                                 tid);
@@ -268,10 +269,10 @@ void Server() {
                             int waiting_tid = queue.pop_front().value();
 
                             RPS other_choice = game->choice_for(other_tid);
-                            printf(
-                                "[RPSServer] tid %d quit, but tid %d is "
-                                "waiting. Matching tids %d and %d" ENDL,
-                                tid, waiting_tid, other_tid, waiting_tid);
+                            bwprintf(COM2,
+                                     "[RPSServer] tid %d quit, but tid %d is "
+                                     "waiting. Matching tids %d and %d" ENDL,
+                                     tid, waiting_tid, other_tid, waiting_tid);
                             *game = Game(other_tid, waiting_tid);
                             if (other_choice != RPS::NONE) {
                                 game->set(other_tid, other_choice);
@@ -302,7 +303,7 @@ void Client() {
     Message req;
     Message res;
 
-    printf("%swaiting for player config" ENDL, prefix);
+    bwprintf(COM2, "%swaiting for player config" ENDL, prefix);
     int tid;
     int code = Receive(&tid, (char*)&req, sizeof(req));
     assert(code >= 0);
@@ -311,19 +312,19 @@ void Client() {
     size_t id = req.player_config.id;
     res = {.tag = Message::ACK, .empty = {}};
     Reply(tid, (char*)&res, sizeof(res));
-    printf("%sreceived player config (num_games=%u, id=%u)" ENDL, prefix,
-           num_games, id);
+    bwprintf(COM2, "%sreceived player config (num_games=%u, id=%u)" ENDL,
+             prefix, num_games, id);
     memset(prefix, '\0', sizeof(prefix));
     snprintf(prefix, 32, "[Client tid=%d id=%u] ", my_tid, id);
 
-    printf("%squerying nameserver for '%s'" ENDL, prefix, RPS_SERVER);
+    bwprintf(COM2, "%squerying nameserver for '%s'" ENDL, prefix, RPS_SERVER);
     int server = NameServer::WhoIs(RPS_SERVER);
     assert(server >= 0);
-    printf("%sreceived reply from nameserver: %s=%d" ENDL, prefix, RPS_SERVER,
-           server);
+    bwprintf(COM2, "%sreceived reply from nameserver: %s=%d" ENDL, prefix,
+             RPS_SERVER, server);
 
-    printf("%sI want to play %u games. Sending signup..." ENDL, prefix,
-           num_games);
+    bwprintf(COM2, "%sI want to play %u games. Sending signup..." ENDL, prefix,
+             num_games);
     req = {.tag = Message::SIGNUP, .empty = {}};
     code = Send(server, (char*)&req, sizeof(req), (char*)&res, sizeof(res));
     // TODO this happens if we exceed the mailbox size.
@@ -332,7 +333,7 @@ void Client() {
     }
     switch (res.tag) {
         case Message::ACK:
-            printf("%sreceived signup ack" ENDL, prefix);
+            bwprintf(COM2, "%sreceived signup ack" ENDL, prefix);
             break;
         default:
             panic("received non-ack response" ENDL);
@@ -341,9 +342,9 @@ void Client() {
     for (size_t i = 0; i < num_games; i++) {
         RPS choice = (RPS)((rand() % 3) + 1);
         req = {.tag = Message::PLAY, .play = {.choice = choice}};
-        printf("%sI want to play %u more %s. Sending %s..." ENDL, prefix,
-               num_games - i, (num_games - i) > 1 ? "games" : "game",
-               str_of_rps(req.play.choice));
+        bwprintf(COM2, "%sI want to play %u more %s. Sending %s..." ENDL,
+                 prefix, num_games - i, (num_games - i) > 1 ? "games" : "game",
+                 str_of_rps(req.play.choice));
         int code =
             Send(server, (char*)&req, sizeof(req), (char*)&res, sizeof(res));
         // TODO this seems to fail if we exceed the Mailbox size
@@ -354,15 +355,17 @@ void Client() {
         switch (res.tag) {
             case Message::PLAY_RESP: {
                 Result result = res.play_resp.result;
-                printf("%s%s" ENDL, prefix,
-                       result == Result::DRAW
-                           ? "it's a draw"
-                           : result == Result::I_WON ? "I won!" : "I lost :(");
+                bwprintf(
+                    COM2, "%s%s" ENDL, prefix,
+                    result == Result::DRAW
+                        ? "it's a draw"
+                        : result == Result::I_WON ? "I won!" : "I lost :(");
             } break;
             case Message::OTHER_PLAYER_QUIT: {
-                printf("%sother player quit! I guess I'll go home :(" ENDL,
-                       prefix);
-                printf("%sexiting" ENDL, prefix);
+                bwprintf(COM2,
+                         "%sother player quit! I guess I'll go home :(" ENDL,
+                         prefix);
+                bwprintf(COM2, "%sexiting" ENDL, prefix);
                 Exit();
             }
             default: {
@@ -371,10 +374,10 @@ void Client() {
         }
     }
     req = {.tag = Message::QUIT, .empty = {}};
-    printf("%ssending quit" ENDL, prefix);
+    bwprintf(COM2, "%ssending quit" ENDL, prefix);
     code = Send(server, (char*)&req, sizeof(req), (char*)&res, sizeof(res));
     assert(code >= 0);
-    printf("%sexiting" ENDL, prefix);
+    bwprintf(COM2, "%sexiting" ENDL, prefix);
 }
 
 void setup_and_run() {
@@ -383,18 +386,18 @@ void setup_and_run() {
     bool pause_after_each = false;
 
     char line[24];
-    printf("random seed (>= 0): ");
+    bwprintf(COM2, "random seed (>= 0): ");
     bwgetline(line, sizeof(line));
     sscanf(line, "%d", &seed);
     assert(seed >= 0);
 
-    printf("pause after each game (y/n)? ");
+    bwprintf(COM2, "pause after each game (y/n)? ");
     bwgetline(line, 100);
     sscanf(line, "%c", &c);
     pause_after_each = (c == 'y');
 
     size_t num_players = 0;
-    printf("num players (0-32): ");
+    bwprintf(COM2, "num players (0-32): ");
     bwgetline(line, 100);
     sscanf(line, "%u", &num_players);
     assert(num_players <= 32);
@@ -406,11 +409,11 @@ void setup_and_run() {
 
     for (size_t i = 0; i < num_players; i++) {
         int priority = 1;
-        printf("player %u priority  (default 1): ", i + 1);
+        bwprintf(COM2, "player %u priority  (default 1): ", i + 1);
         bwgetline(line, 100);
         sscanf(line, "%d", &priority);
         size_t num_games = 3;
-        printf("player %u num games (default 3): ", i + 1);
+        bwprintf(COM2, "player %u num games (default 3): ", i + 1);
         bwgetline(line, 100);
         sscanf(line, "%u", &num_games);
         assert(num_games < 100);
