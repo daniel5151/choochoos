@@ -36,9 +36,10 @@ void DelayerTask() {
         mytid, cfg.delay, cfg.n);
     for (size_t i = 0; i < cfg.n; i++) {
         Clock::Delay(clockserver, (int)cfg.delay);
-        bwprintf(COM2,
-                 "time=%-3d tid=%-2d delay_interval=%-2u completed=%-2u" ENDL,
-                 Clock::Time(clockserver), mytid, cfg.delay, i + 1);
+        bwprintf(
+            COM2,
+            "time=%-3d tid=%-2d delay_interval=%-2u completed=%2u/%-2u" ENDL,
+            Clock::Time(clockserver), mytid, cfg.delay, i + 1, cfg.n);
     }
 }
 

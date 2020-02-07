@@ -17,8 +17,8 @@ class DelayedTask {
    public:
     int tid;
     // make the task ready once *timer3_value_reg < tick_threshold
-    uint32_t tick_threshold;
-    DelayedTask(int tid, uint32_t tick_threshold)
+    int tick_threshold;
+    DelayedTask(int tid, int tick_threshold)
         : tid(tid), tick_threshold(tick_threshold) {}
 };
 
@@ -61,7 +61,7 @@ void Server() {
     int notifier_tid = Create(INT_MAX, Notifier);
     assert(notifier_tid >= 0);
 
-    uint32_t current_time = 0;
+    int current_time = 0;
 
     int tid;
     Request req;
@@ -106,18 +106,18 @@ void Server() {
                     Reply(tid, (char*)&res, sizeof(res));
                     break;
                 }
-                uint32_t tick_threshold = current_time + (uint32_t)req.delay;
+                int tick_threshold = current_time + req.delay;
 
                 // Delayed tasks with a smaller tick_threshold should be woken
                 // up first, so they should have a higher priority.
-                int priority = (int)(-tick_threshold);
-                debug("enqueing tid=%d, tick_thresh=0x%lx priority=%d", tid,
-                      tick_threshold, priority);
-                assert(pq.push(DelayedTask(tid, tick_threshold), priority) !=
-                       PriorityQueueErr::FULL);
+                int priority = -tick_threshold;
+                auto err = pq.push(DelayedTask(tid, tick_threshold), priority);
+                if (err == PriorityQueueErr::FULL) panic("timer buffer full");
+                assert(pq.peek()->tick_threshold <= tick_threshold);
 
                 break;
             }
+                // TODO implement DelayUntil
             default:
                 panic("Clock::Server: Receive() bad tag %d", (int)req.tag);
         }
