@@ -1,12 +1,19 @@
-#include <ctype.h>
-#include <stdarg.h>
-#include <stddef.h>
-#include <stdio.h>
-
-#include "common/bwio.h"
 #include "kernel/kernel.h"
 
-/// Print out an error message, and exit the kernel
+// #include <cctype>
+#include <cstdarg>
+#include <cstdio>
+
+#include "common/bwio.h"
+
+extern "C" {
+    void _exit(int status) __attribute__((noreturn));
+}
+
+void kexit(int status) {
+    _exit(status);
+}
+
 // TODO: implement a backtrace / crash-dump mechanism?
 void kpanic(const char* fmt, ...) {
     char buf[1024];

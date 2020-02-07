@@ -1,7 +1,5 @@
 #pragma once
 
-#include <cstddef>
-
 #define NAMESERVER_MAX_NAME_LEN 128
 
 namespace NameServer {

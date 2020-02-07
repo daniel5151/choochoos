@@ -2,7 +2,7 @@
 
 #include <stdbool.h>
 
-#include "user/dbg.h"
+#include "user/debug.h"
 #include "user/syscalls.h"
 
 #pragma GCC diagnostic ignored "-Wunused-parameter"

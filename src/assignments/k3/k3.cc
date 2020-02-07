@@ -1,5 +1,7 @@
 #include <climits>
-#include "user/dbg.h"
+
+#include "common/bwio.h"
+#include "user/debug.h"
 #include "user/syscalls.h"
 #include "user/tasks/clockserver.h"
 
@@ -15,16 +17,16 @@ void Idle() {
 void FirstUserTask() {
     Create(0, Idle);
     int clockserver = Create(INT_MAX, Clock::Server);
-    printf("started clock server" ENDL);
+    bwprintf(COM2, "started clock server" ENDL);
 
-    printf("got time %d" ENDL, Clock::Time(clockserver));
+    bwprintf(COM2, "got time %d" ENDL, Clock::Time(clockserver));
 
     Clock::Delay(clockserver, 100);
-    printf("got time %d" ENDL, Clock::Time(clockserver));
+    bwprintf(COM2, "got time %d" ENDL, Clock::Time(clockserver));
     Clock::Delay(clockserver, 50);
-    printf("got time %d" ENDL, Clock::Time(clockserver));
+    bwprintf(COM2, "got time %d" ENDL, Clock::Time(clockserver));
     Clock::Delay(clockserver, 1);
-    printf("got time %d" ENDL, Clock::Time(clockserver));
+    bwprintf(COM2, "got time %d" ENDL, Clock::Time(clockserver));
     Clock::Delay(clockserver, 0);
-    printf("got time %d" ENDL, Clock::Time(clockserver));
+    bwprintf(COM2, "got time %d" ENDL, Clock::Time(clockserver));
 }
