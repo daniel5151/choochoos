@@ -25,10 +25,10 @@ extern char __USER_STACKS_START__, __USER_STACKS_END__;
 /// Helper POD struct which can should be casted from a void* that points to
 /// a user's stack.
 struct SwiUserStack {
+    void* start_addr;
     uint32_t spsr;
     uint32_t regs[13];
     void* lr;
-    void* start_addr;
     // C++ doesn't support flexible array members, so instead, we use an
     // array of size 1, and just do "OOB" memory access lol
     uint32_t additional_params[1];
@@ -249,10 +249,10 @@ static size_t current_interrupt() {
 class Kernel {
     /// Helper POD struct to init new user task stacks
     struct FreshStack {
+        void* start_addr;
         uint32_t spsr;
         uint32_t regs[13];
         void* lr;
-        void* start_addr;
     };
 
     std::optional<TaskDescriptor> tasks[MAX_SCHEDULED_TASKS];
@@ -568,7 +568,7 @@ class Kernel {
     std::optional<Tid> schedule() { return ready_queue.pop(); }
 
     void activate(Tid tid) {
-        kdebug("activating tid %lu", (size_t)tid);
+        kdebug("activating tid %u", (size_t)tid);
         current_task = tid;
         if (!tasks[tid].has_value()) return;
         TaskDescriptor& task = tasks[tid].value();
