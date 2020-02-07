@@ -9,6 +9,7 @@
  */
 
 #include "common/bwio.h"
+#include "common/printf.h"
 #include "common/ts7200.h"
 
 #include <ctype.h>
@@ -123,20 +124,19 @@ int bwgetc(int channel) {
     return c;
 }
 
-void bwprintf(int channel, const char* format, ...) {
-    char buf[BWPRINTF_BUF_SIZE];
+void bwputc_(char c, void* arg) {
+    // arg cannot be null
+    bwputc(*(int*)arg, c);
+}
+
+int bwprintf(int channel, const char* format, ...) {
     va_list va;
 
     va_start(va, format);
-    int n = vsnprintf(buf, BWPRINTF_BUF_SIZE, format, va);
+    const int n = vfctprintf(&bwputc_, &channel, format, va);
     va_end(va);
 
-    if (n < 0 || n >= BWPRINTF_BUF_SIZE) {
-        bwprintf(channel, "WARNING: bwprintf: short write (n=%d, buf_size=%d)", n,
-                 BWPRINTF_BUF_SIZE);
-    }
-
-    bwputstr(channel, buf);
+    return n;
 }
 
 //----------------------------- Custom Additions -----------------------------//

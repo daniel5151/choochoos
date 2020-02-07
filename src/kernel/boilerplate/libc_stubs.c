@@ -13,3 +13,8 @@ STUB(_fstat)
 STUB(_isatty)
 STUB(_lseek)
 STUB(_read)
+
+void _putchar(char c) {
+    (void)c;
+    kpanic("tried to use raw printf method (instead of a fctprintf wrapper)");
+}

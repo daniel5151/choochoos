@@ -23,9 +23,7 @@ int bwputc(int channel, char c);
 int bwgetc(int channel);
 int bwputstr(int channel, const char* str);
 
-#define BWPRINTF_BUF_SIZE 1024
-
-void bwprintf(int channel, const char* format, ...)
+int bwprintf(int channel, const char* format, ...)
     __attribute__((format(printf, 2, 3)));
 
 void bwgetline(char* line, size_t len);
