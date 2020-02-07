@@ -80,14 +80,16 @@ void Server() {
                 current_time++;
 
                 while (true) {
-                    const DelayedTask* delayed_task = pq.peek();
-                    if (delayed_task == nullptr) break;
-                    if (delayed_task->tick_threshold > current_time) break;
+                    const DelayedTask* hd = pq.peek();
+                    if (hd == nullptr) break;
+                    if (hd->tick_threshold > current_time) break;
 
-                    pq.pop();
-                    debug("waking up tid %d", delayed_task->tid);
+                    // hd != nullptr, so we know pop() returns a value.
+                    DelayedTask delayed_task = pq.pop().value();
+                    debug("current_time=%d waking up tid %d", current_time,
+                          delayed_task.tid);
                     res = {.tag = Response::Empty, .empty = {}};
-                    Reply(delayed_task->tid, (char*)&res, sizeof(res));
+                    Reply(delayed_task.tid, (char*)&res, sizeof(res));
                 }
 
                 break;
@@ -111,6 +113,8 @@ void Server() {
                 // Delayed tasks with a smaller tick_threshold should be woken
                 // up first, so they should have a higher priority.
                 int priority = -tick_threshold;
+                debug("putting tid %d in pq tick_thresh=%d priority=%d", tid,
+                      tick_threshold, priority);
                 auto err = pq.push(DelayedTask(tid, tick_threshold), priority);
                 if (err == PriorityQueueErr::FULL) panic("timer buffer full");
                 assert(pq.peek()->tick_threshold <= tick_threshold);
