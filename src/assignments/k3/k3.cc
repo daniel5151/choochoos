@@ -27,7 +27,8 @@ void DelayerTask() {
     int clockserver = NameServer::WhoIs(Clock::SERVER_ID);
     assert(clockserver >= 0);
     int mytid = MyTid();
-    int n = Send(MyParentTid(), nullptr, 0, (char*)&cfg, sizeof(cfg));
+    int myparent = MyParentTid();
+    int n = Send(myparent, nullptr, 0, (char*)&cfg, sizeof(cfg));
     assert(n == sizeof(cfg));
 
     bwprintf(
@@ -41,6 +42,7 @@ void DelayerTask() {
             "time=%-3d tid=%-2d delay_interval=%-2u completed=%2u/%-2u" ENDL,
             Clock::Time(clockserver), mytid, cfg.delay, i + 1, cfg.n);
     }
+    Send(myparent, nullptr, 0, nullptr, 0);
 }
 
 static Config configs[4] = {{3, 10, 20}, {4, 23, 9}, {5, 33, 6}, {6, 71, 3}};
@@ -61,4 +63,10 @@ void FirstUserTask() {
         Receive(&tid, nullptr, 0);
         Reply(tid, (char*)&cfg, sizeof(cfg));
     }
+    for (auto& _ : configs) {
+        (void)_;
+        Receive(&tid, nullptr, 0);
+        Reply(tid, nullptr, 0);
+    }
+    Clock::Shutdown(clockserver);
 }
