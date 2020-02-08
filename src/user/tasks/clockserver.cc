@@ -25,13 +25,15 @@ class DelayedTask {
 static PriorityQueue<DelayedTask, 32> pq;
 
 struct Request {
-    enum { Time, Delay, DelayUntil, NotifierTick } tag;
+    enum { Time, Delay, DelayUntil, NotifierTick, Shutdown } tag;
     union {
         struct {
         } time;
         struct {
         } notifier_tick;
         int delay;
+        struct {
+        } shutdown;
     };
 };
 
@@ -48,9 +50,15 @@ void Notifier() {
     debug("clockserver notifier started");
     int parent = MyParentTid();
     Request msg = {.tag = Request::NotifierTick, .notifier_tick = {}};
+    bool shutdown = false;
     while (true) {
         AwaitEvent(5);
-        Send(parent, (char*)&msg, sizeof(msg), nullptr, 0);
+        Send(parent, (char*)&msg, sizeof(msg), (char*)&shutdown,
+             sizeof(shutdown));
+        if (shutdown) {
+            debug("shutting down notifier");
+            return;
+        }
     }
 }
 
@@ -76,7 +84,8 @@ void Server() {
         switch (req.tag) {
             case Request::NotifierTick: {
                 assert(tid == notifier_tid);
-                Reply(tid, nullptr, 0);
+                bool shutdown = false;
+                Reply(tid, (char*)&shutdown, sizeof(shutdown));
                 current_time++;
 
                 while (true) {
@@ -122,6 +131,20 @@ void Server() {
                 break;
             }
                 // TODO implement DelayUntil
+            case Request::Shutdown: {
+                while (true) {
+                    Receive(&tid, (char*)&req, sizeof(req));
+                    if (tid != notifier_tid) {
+                        panic(
+                            "clockserver received user message after "
+                            "Shutdown!");
+                    }
+                    bool shutdown = true;
+                    Reply(tid, (char*)&shutdown, sizeof(shutdown));
+                    return;
+                }
+            }
+
             default:
                 panic("Clock::Server: Receive() bad tag %d", (int)req.tag);
         }
@@ -146,6 +169,11 @@ int Delay(int clockserver, int ticks) {
     if (n != sizeof(res)) return -1;
     if (res.tag != Response::Empty) return -1;
     return 0;
+}
+
+void Shutdown(int clockserver) {
+    Request req = {.tag = Request::Shutdown, .shutdown = {}};
+    Send(clockserver, (char*)&req, sizeof(req), nullptr, 0);
 }
 
 }  // namespace Clock
