@@ -14,8 +14,6 @@ CXX = $(XBINDIR)/arm-none-eabi-g++
 AS = $(XBINDIR)/arm-none-eabi-as
 LD = $(XBINDIR)/arm-none-eabi-ld
 
-
-
 #------------- Flags -------------#
 
 # vla - VLAs are pretty useful, even if they aren't strictly standards compliant
@@ -41,10 +39,7 @@ ifdef ENABLE_CACHES
 endif
 
 ifdef DEBUG
-	# For debugging, we wrap bwputstr behind a snprintf, imposing an artifical
-	# and arbitrary truncation limit. It's fine though, since it's just for
-	# debugging (hence the format-truncation)
-    COMMON_FLAGS += -Og -g -Wno-format-truncation
+    COMMON_FLAGS += -Og -g
 else
     COMMON_FLAGS += -g -Werror -DRELEASE_MODE
 	ifdef NO_OPTIMIZATION
@@ -52,6 +47,10 @@ else
 	else
 		COMMON_FLAGS += -O3
 	endif
+endif
+
+ifdef KDEBUG
+	COMMON_FLAGS += -DKDEBUG
 endif
 
 CCFLAGS = $(COMMON_FLAGS) -std=c11

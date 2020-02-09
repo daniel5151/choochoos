@@ -26,7 +26,7 @@ void kprintf(const char* fmt, ...) __attribute__((format(printf, 1, 2)));
     } while (false)
 #endif
 
-#ifdef RELEASE_MODE
+#if defined(RELEASE_MODE) || !defined(KDEBUG)
 #define kdebug(...)
 #else
 #include "common/vt_escapes.h"
