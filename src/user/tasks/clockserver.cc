@@ -122,8 +122,6 @@ void Server() {
                 // Delayed tasks with a smaller tick_threshold should be woken
                 // up first, so they should have a higher priority.
                 int priority = -tick_threshold;
-                debug("putting tid %d in pq tick_thresh=%d priority=%d", tid,
-                      tick_threshold, priority);
                 auto err = pq.push(DelayedTask(tid, tick_threshold), priority);
                 if (err == PriorityQueueErr::FULL) panic("timer buffer full");
                 assert(pq.peek()->tick_threshold <= tick_threshold);

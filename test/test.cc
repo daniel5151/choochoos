@@ -2,6 +2,7 @@
 #include <iostream>
 #include <optional>
 
+#include "common/opt_array.h"
 #include "common/priority_queue.h"
 #include "common/queue.h"
 
@@ -81,9 +82,37 @@ void test_priority_queue() {
     assert(pq.pop() == 1);
 }
 
+void test_opt_array() {
+    OptArray<char, 8> arr;
+    assert(arr.num_present() == 0);
+
+    arr.put('a', 0);
+    assert(arr.num_present() == 1);
+    assert(arr.has(0));
+    assert(arr.get(0) == 'a');
+    assert(arr[0] == 'a');
+
+    arr.put('b', 1);
+    assert(arr.num_present() == 2);
+    assert(arr.has(1));
+    assert(arr.get(1) == 'b');
+    assert(arr[1] == 'b');
+
+    assert(!arr.has(2));
+    arr.put('A', 0);
+    assert(arr.num_present() == 2);
+    assert(arr.get(0) == 'A');
+
+    assert(arr.take(0) == 'A');
+    assert(arr.num_present() == 1);
+    assert(!arr.has(0));
+    assert(!arr.get(0).has_value());
+}
+
 int main() {
     test_queue();
     test_priority_queue();
+    test_opt_array();
 
     std::cout << "unit tests passed" << std::endl;
 }
