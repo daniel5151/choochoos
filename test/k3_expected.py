@@ -11,9 +11,17 @@ events = [
     for i in range(task.num_delays)
 ]
 
+print("Hello from the choochoos kernel!")
 events.sort(key=lambda evt: [evt.time, -evt.task.priority])
 for event in events:
     print(
-        "time=%-3d tid=%d interval=%-2d completed=%-2d"
-        % (event.time, event.task.priority, event.task.delay, event.delays_completed)
+        "time=%-3d tid=%d interval=%-2d completed=%2d/%d"
+        % (
+            event.time,
+            event.task.priority,
+            event.task.delay,
+            event.delays_completed,
+            event.task.num_delays,
+        )
     )
+print("Goodbye from choochoos kernel!")

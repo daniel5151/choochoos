@@ -5,12 +5,12 @@ set -e
 echo "running unit tests..."
 make unit_tests
 
-folders=(k1 k2 test_msgpass)
+folders=(k1 k2 test_msgpass test_clock k3)
 
 for folder in "${folders[@]}"; do
   echo "building ${folder}..."
 
-  make $@ TARGET="${folder}" >/dev/null
+  make $@ TARGET="${folder}" TESTS=1 >/dev/null
 
   exe="${folder}.elf"
 
@@ -35,5 +35,9 @@ for folder in "${folders[@]}"; do
       echo "$expected does not exist, populating"
       cp -v "$actual" "$expected"
   fi
-
 done
+
+echo -n "validating k3: "
+python3 test/k3_expected.py > test/k3_expected.py.out
+diff --strip-trailing-cr "test/k3.actual" "test/k3_expected.py.out"
+echo "ok"

@@ -53,6 +53,10 @@ ifdef KDEBUG
 	COMMON_FLAGS += -DKDEBUG
 endif
 
+ifdef TESTS
+	COMMON_FLAGS += -DNO_IDLE_MEASUREMENTS
+endif
+
 CCFLAGS = $(COMMON_FLAGS) -std=c11
 CXX_SPECIFIC_FLAGS = -std=c++2a -fno-rtti -fno-exceptions -fno-unwind-tables
 CXXFLAGS = $(COMMON_FLAGS) $(CXX_SPECIFIC_FLAGS)
