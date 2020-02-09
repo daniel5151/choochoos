@@ -9,6 +9,7 @@ extern "C" {
  */
 
 #include <stddef.h>
+#include <stdarg.h>
 
 #define COM1 0
 #define COM2 1
@@ -23,6 +24,7 @@ int bwputc(int channel, char c);
 int bwgetc(int channel);
 int bwputstr(int channel, const char* str);
 
+int vbwprintf(int channel, const char* format, va_list va);
 int bwprintf(int channel, const char* format, ...)
     __attribute__((format(printf, 2, 3)));
 
