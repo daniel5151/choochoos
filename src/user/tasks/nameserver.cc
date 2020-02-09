@@ -89,6 +89,7 @@ void Task() {
             case MessageKind::Shutdown: {
                 Response res = {.kind = MessageKind::Shutdown, .shutdown = {}};
                 Reply(tid, (char*)&res, sizeof(Response));
+                debug("nameserver is shutting down");
                 return;
             } break;
             case MessageKind::WhoIs: {
@@ -186,6 +187,14 @@ int WhoIs(const char* name) {
     }
     assert(res.kind == MessageKind::WhoIs);
     return res.who_is.success ? res.who_is.tid : -2;
+}
+
+void Shutdown() {
+    NameServer::Request req{.kind = MessageKind::Shutdown, .shutdown = {}};
+    NameServer::Response res;
+    const int res_len = Send(NameServer::TID, (char*)&req, sizeof(req), (char*)&res, sizeof(res));
+    assert(res_len == sizeof(res));
+    assert(res.kind == MessageKind::Shutdown);
 }
 
 }  // namespace NameServer
