@@ -10,5 +10,6 @@ void Task();
 
 int RegisterAs(const char* name);
 int WhoIs(const char* name);
+void Shutdown();
 
 }  // namespace NameServer
