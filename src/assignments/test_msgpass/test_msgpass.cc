@@ -102,4 +102,7 @@ void FirstUserTask() {
         assert(Send(pong_tid_1, "ping1", 6, resp, sizeof(resp) - 1) >= 0);
         bwprintf(COM2, "FirstUserTask recieved reply '%s'" ENDL, resp);
     }
+
+    // we shouldn't be able to spawn tasks with negative priority
+    assert(Create(-1, PongTask) == -1);
 }

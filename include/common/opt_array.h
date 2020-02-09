@@ -30,7 +30,10 @@ class OptArray {
         return std::nullopt;
     }
 
-    std::optional<const T> operator[](size_t index) const { return get(index); }
+    const std::optional<T>& operator[](size_t index) { return arr[index]; }
+    const std::optional<const T>& operator[](size_t index) const {
+        return arr[index];
+    }
 
     std::optional<T> take(size_t index) {
         if (index >= N) return std::nullopt;

@@ -289,12 +289,9 @@ class Kernel {
         return tasks[current_task].value().parent_tid.value_or(-1);
     }
 
-    int Create(int priority, void* function, std::optional<Tid> force_tid) {
-        kdebug("Called Create(priority=%d, function=%p)", priority, function);
-
-        // XXX: this is only commented out because the idle task should be a
-        // super low priority!
-        // if (priority < 0) return INVALID_PRIORITY;
+    int _create_task(int priority,
+                     void* function,
+                     std::optional<Tid> force_tid) {
         std::optional<Tid> fresh_tid = next_tid();
         if (!fresh_tid.has_value()) return OUT_OF_TASK_DESCRIPTORS;
         Tid tid = fresh_tid.value();
@@ -345,6 +342,15 @@ class Kernel {
         tasks[tid] =
             TaskDescriptor(tid, (size_t)priority, current_task, (void*)stack);
         return tid;
+    }
+
+    // Create calls out to _create_task, but ensures that priority is
+    // non-negative. This lets us enforce that all user tasks have higher
+    // priority than the kernel's idle task.
+    int Create(int priority, void* function) {
+        kdebug("Called Create(priority=%d, function=%p)", priority, function);
+        if (priority < 0) return INVALID_PRIORITY;
+        return _create_task(priority, function, /* force_tid */ std::nullopt);
     }
 
     void Exit() {
@@ -512,8 +518,7 @@ class Kernel {
                 ret = MyTid();
                 break;
             case 4:
-                ret = Create(user_stack->regs[0], (void*)user_stack->regs[1],
-                             std::nullopt);
+                ret = Create(user_stack->regs[0], (void*)user_stack->regs[1]);
                 break;
             case 5:
                 ret =
@@ -648,8 +653,10 @@ class Kernel {
         }
 #pragma GCC diagnostic pop
 
-        Create(-1, (void*)IdleTask, Tid(MAX_SCHEDULED_TASKS - 1));
-        Create(4, (void*)FirstUserTask, std::nullopt);
+        // Spawn the idle task with a direct call to _create_task, which allows
+        // negative priority and a forced Tid.
+        _create_task(-1, (void*)IdleTask, Tid(MAX_SCHEDULED_TASKS - 1));
+        Create(4, (void*)FirstUserTask);
     }
 
     size_t num_event_blocked_tasks() const { return event_queue.num_present(); }
