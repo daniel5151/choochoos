@@ -6,15 +6,6 @@
 #include "user/tasks/clockserver.h"
 #include "user/tasks/nameserver.h"
 
-// TODO james: this is DEFINITELY NOT where this function belongs.
-// We should either put this in src/user/tasks/idle.cc, or the kernel.
-void Idle() {
-    while (true) {
-        char c = (char)bwgetc(COM2);
-        if (c == 'q') return;
-    }
-}
-
 struct Config {
     // smaller priority is higher
     int priority;
@@ -49,7 +40,6 @@ static Config configs[4] = {{3, 10, 20}, {4, 23, 9}, {5, 33, 6}, {6, 71, 3}};
 
 void FirstUserTask() {
     Create(1, NameServer::Task);
-    Create(0, Idle);
     int clockserver = Create(INT_MAX, Clock::Server);
     (void)clockserver;
 
@@ -69,4 +59,5 @@ void FirstUserTask() {
         Reply(tid, nullptr, 0);
     }
     Clock::Shutdown(clockserver);
+    NameServer::Shutdown();
 }
