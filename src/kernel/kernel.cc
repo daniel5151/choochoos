@@ -4,6 +4,7 @@
 #include "common/bwio.h"
 #include "common/priority_queue.h"
 #include "common/ts7200.h"
+#include "common/vt_escapes.h"
 #include "kernel/asm.h"
 #include "kernel/kernel.h"
 
@@ -17,7 +18,7 @@ extern char __USER_STACKS_START__, __USER_STACKS_END__;
 
 #define USER_STACK_SIZE 0x40000
 
-#define MAX_SCHEDULED_TASKS 48
+#define MAX_SCHEDULED_TASKS 32
 
 #define INVALID_PRIORITY -1
 #define OUT_OF_TASK_DESCRIPTORS -2
@@ -246,6 +247,16 @@ static size_t current_interrupt() {
     kpanic("current_interrupt(): no interrupts are set");
 }
 
+// CONTRACT: userland must supply a FirstUserTask function
+extern void FirstUserTask();
+
+const Tid IDLE_TASK_TID = Tid(MAX_SCHEDULED_TASKS - 1);
+void IdleTask() {
+    for (;;) {
+        // TODO: mine dogecoin
+    }
+}
+
 class Kernel {
     /// Helper POD struct to init new user task stacks
     struct FreshStack {
@@ -268,7 +279,7 @@ class Kernel {
         return std::nullopt;
     }
 
-    // ------------------ syscall handlers ----------------------
+    // ------------------ syscall handlers ---------------------- //
 
     int MyTid() { return current_task; }
 
@@ -277,13 +288,21 @@ class Kernel {
         return tasks[current_task].value().parent_tid.value_or(-1);
     }
 
-    int Create(int priority, void* function) {
+    int Create(int priority, void* function, std::optional<Tid> force_tid) {
         kdebug("Called Create(priority=%d, function=%p)", priority, function);
 
-        if (priority < 0) return INVALID_PRIORITY;
+        // XXX: this is only commented out because the idle task should be a
+        // super low priority!
+        // if (priority < 0) return INVALID_PRIORITY;
         std::optional<Tid> fresh_tid = next_tid();
         if (!fresh_tid.has_value()) return OUT_OF_TASK_DESCRIPTORS;
         Tid tid = fresh_tid.value();
+
+        if (force_tid.has_value()) {
+            tid = force_tid.value();
+        }
+
+        kassert(!tasks[tid].has_value());
 
         if (ready_queue.push(tid, priority) == PriorityQueueErr::FULL) {
             kpanic("out of space in ready queue (tid=%u)", (size_t)tid);
@@ -299,9 +318,6 @@ class Kernel {
                 start_of_stack, &__USER_STACKS_END__);
         }
 
-        FreshStack* stack =
-            (FreshStack*)(void*)(start_of_stack - sizeof(FreshStack));
-
         // GCC complains that writing *anything* to `stack` is an out-of-bounds
         // error,  because `&__USER_STACKS_START__` is simply a `char*` with no
         // bounds information (and hence, `start_of_stack` also has no bounds
@@ -311,6 +327,9 @@ class Kernel {
         // doesn't, so we must squelch -Warray-bounds.
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Warray-bounds"
+        FreshStack* stack =
+            (FreshStack*)(void*)(start_of_stack - sizeof(FreshStack));
+
         stack->spsr = 0x50;
         stack->start_addr = function;
         for (uint32_t i = 0; i < 13;
@@ -492,7 +511,8 @@ class Kernel {
                 ret = MyTid();
                 break;
             case 4:
-                ret = Create(user_stack->regs[0], (void*)user_stack->regs[1]);
+                ret = Create(user_stack->regs[0], (void*)user_stack->regs[1],
+                             std::nullopt);
                 break;
             case 5:
                 ret =
@@ -590,7 +610,7 @@ class Kernel {
         }
     }
 
-    void initialize(void (*user_main)()) {
+    void initialize() {
         *((uint32_t*)0x028) = (uint32_t)((void*)_swi_handler);
         *((uint32_t*)0x038) = (uint32_t)((void*)_irq_handler);
 
@@ -627,12 +647,10 @@ class Kernel {
         }
 #pragma GCC diagnostic pop
 
-        int tid = Create(4, (void*)user_main);
-        if (tid < 0) kpanic("could not create tasks (error code %d)", tid);
+        Create(-1, (void*)IdleTask, Tid(MAX_SCHEDULED_TASKS - 1));
+        Create(4, (void*)FirstUserTask, std::nullopt);
     }
 };  // class Kernel
-
-extern void FirstUserTask();
 
 static Kernel kern;
 
@@ -645,12 +663,37 @@ extern "C" void handle_interrupt() { kern.handle_interrupt(); }
 int kmain() {
     kprintf("Hello from the choochoos kernel!");
 
-    kern.initialize(FirstUserTask);
+    kern.initialize();
+
+    const volatile uint32_t* TIMER3_VAL =
+        (volatile uint32_t*)(TIMER3_BASE + VAL_OFFSET);
+
+    uint32_t idle_time = 0;
+    uint32_t idle_timer;
 
     while (true) {
         std::optional<Tid> next_task = kern.schedule();
-        if (!next_task.has_value()) break;
-        kern.activate(next_task.value());
+        if (next_task.has_value()) {
+            const Tid tid = next_task.value();
+
+            if (tid == IDLE_TASK_TID) {
+                idle_timer = *TIMER3_VAL;
+
+                kern.activate(tid);
+
+                idle_time += idle_timer - *TIMER3_VAL;
+
+                bwprintf(COM2,
+                         VT_SAVE VT_ROWCOL(1, 60)
+                         "[Idle Time %%%lu]" VT_RESTORE,
+                         100 * idle_time / (UINT32_MAX - *TIMER3_VAL));
+            } else {
+                // no idle timing
+                kern.activate(tid);
+            }
+        } else {
+            kpanic("kernel should never be out of tasks to run!");
+        }
     }
 
     kprintf("Goodbye from choochoos kernel!");
