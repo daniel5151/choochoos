@@ -46,3 +46,17 @@ Goodbye from choochoos kernel!
 ```
 
 ## Explanation
+
+Each client task displays the current time as it executes. The `time` should
+always equal `interval * num_completed`, which holds for every line in the
+transcript.  This means that when multiple tasks are blocked for different
+amounts of time, the tasks are woken up in the right order as early as
+possible.
+
+We wrote a python script in `test/k3_expected.py` that calculates the exact
+output of the `k3` tasks (based on the above formula), and the output of the
+python script matches our execution transcript exactly.
+
+Idle measurements are printed to the top right of the screen in real-time.
+However, since these measurements are not deterministic, they are omitted from
+the transcript.
