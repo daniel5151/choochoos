@@ -16,16 +16,13 @@ void kexit(int status) {
 
 // TODO: implement a backtrace / crash-dump mechanism?
 void kpanic(const char* fmt, ...) {
-    char buf[1024];
     va_list va;
 
     va_start(va, fmt);
-    vsnprintf(buf, 1024, fmt, va);
-    va_end(va);
-
     bwputstr(COM2, "Kernel panic! ");
-    bwputstr(COM2, buf);
+    vbwprintf(COM2, fmt, va);
     bwputstr(COM2, "\r\n");
+    va_end(va);
 
     kexit(1);
 }
@@ -33,13 +30,10 @@ void kpanic(const char* fmt, ...) {
 // TODO: cache kprintf's in-memory,  only flushing them when requested/required
 // e.g: via a user command / when a kpanic fires
 void kprintf(const char* fmt, ...) {
-    char buf[1024];
     va_list va;
 
     va_start(va, fmt);
-    vsnprintf(buf, 1024, fmt, va);
-    va_end(va);
-
-    bwputstr(COM2, buf);
+    vbwprintf(COM2, fmt, va);
     bwputstr(COM2, "\r\n");
+    va_end(va);
 }

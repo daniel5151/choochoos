@@ -124,16 +124,20 @@ int bwgetc(int channel) {
     return c;
 }
 
-void bwputc_(char c, void* arg) {
-    // arg cannot be null
+static void bwputc_(char c, void* arg) {
+    // arg is not null
     bwputc(*(int*)arg, c);
+}
+
+int vbwprintf(int channel, const char* format, va_list va) {
+    return vfctprintf(&bwputc_, &channel, format, va);
 }
 
 int bwprintf(int channel, const char* format, ...) {
     va_list va;
 
     va_start(va, format);
-    const int n = vfctprintf(&bwputc_, &channel, format, va);
+    const int n = vbwprintf(channel, format, va);
     va_end(va);
 
     return n;
