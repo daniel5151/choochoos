@@ -2,6 +2,7 @@
 #include <optional>
 
 #include "common/bwio.h"
+#include "common/opt_array.h"
 #include "common/priority_queue.h"
 #include "common/ts7200.h"
 #include "common/vt_escapes.h"
@@ -267,7 +268,7 @@ class Kernel {
     };
 
     std::optional<TaskDescriptor> tasks[MAX_SCHEDULED_TASKS];
-    std::optional<Tid> event_queue[64];
+    OptArray<Tid, 64> event_queue;
     PriorityQueue<Tid, MAX_SCHEDULED_TASKS> ready_queue;
 
     Tid current_task = -1;
@@ -475,12 +476,12 @@ class Kernel {
         }
         kassert(tasks[current_task].has_value());
 
-        if (event_queue[eventid].has_value()) {
-            kpanic("AwaitEvent(%d): tid %d already waiting for this event",
-                   eventid, event_queue[eventid]->raw_tid());
+        if (event_queue.has(eventid)) {
+            kpanic("AwaitEvent(%d): tid %u already waiting for this event",
+                   eventid, event_queue.get(eventid)->raw_tid());
         }
 
-        event_queue[eventid] = current_task;
+        event_queue.put(current_task, eventid);
         tasks[current_task].value().state = {.tag = TaskState::EVENT_WAIT,
                                              .event_wait = {}};
 
@@ -488,7 +489,7 @@ class Kernel {
     }
 
    public:
-    Kernel() : tasks{std::nullopt}, event_queue{std::nullopt}, ready_queue() {}
+    Kernel() : tasks{std::nullopt}, event_queue{}, ready_queue{} {}
 
     void handle_syscall(uint32_t no, void* user_sp) {
         kassert(tasks[current_task].has_value());
@@ -569,10 +570,10 @@ class Kernel {
         }
 
         // if nobody is waiting for the interrupt, drop it
-        if (!event_queue[no].has_value()) return;
+        std::optional<Tid> blocked_tid_opt = event_queue.take(no);
+        if (!blocked_tid_opt.has_value()) return;
 
-        Tid blocked_tid = event_queue[no].value();
-        event_queue[no] = std::nullopt;
+        Tid blocked_tid = blocked_tid_opt.value();
         kassert(tasks[blocked_tid].has_value());
         TaskDescriptor& blocked_task = tasks[blocked_tid].value();
         kassert(blocked_task.state.tag = TaskState::EVENT_WAIT);
@@ -650,6 +651,8 @@ class Kernel {
         Create(-1, (void*)IdleTask, Tid(MAX_SCHEDULED_TASKS - 1));
         Create(4, (void*)FirstUserTask, std::nullopt);
     }
+
+    size_t num_event_blocked_tasks() const { return event_queue.num_present(); }
 };  // class Kernel
 
 static Kernel kern;
@@ -677,16 +680,27 @@ int kmain() {
             const Tid tid = next_task.value();
 
             if (tid == IDLE_TASK_TID) {
+                // The idle task must be the lowest priority task. Therefore,
+                // if the idle task gets scheduled, there is only more work to
+                // do if some tasks are blocked on events (waiting for
+                // interrupts). If no such tasks exist, we can exit from the
+                // main loop and return to RedBoot.
+                if (kern.num_event_blocked_tasks() == 0) {
+                    break;
+                }
+
+                // Otherwise, we can record idle time until the idle task is
+                // preempted by an interrupt.
                 idle_timer = *TIMER3_VAL;
 
                 kern.activate(tid);
 
                 idle_time += idle_timer - *TIMER3_VAL;
 
-                bwprintf(COM2,
-                         VT_SAVE VT_ROWCOL(1, 60)
-                         "[Idle Time %%%lu]" VT_RESTORE,
-                         100 * idle_time / (UINT32_MAX - *TIMER3_VAL));
+                bwprintf(
+                    COM2,
+                    VT_SAVE VT_ROWCOL(1, 60) "[Idle Time %lu%%]" VT_RESTORE,
+                    100 * idle_time / (UINT32_MAX - *TIMER3_VAL));
             } else {
                 // no idle timing
                 kern.activate(tid);
