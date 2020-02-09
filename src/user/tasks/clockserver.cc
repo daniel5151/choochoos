@@ -32,6 +32,7 @@ struct Request {
         struct {
         } notifier_tick;
         int delay;
+        int delay_until;
         struct {
         } shutdown;
     };
@@ -60,6 +61,15 @@ void Notifier() {
             return;
         }
     }
+}
+
+static void enqueue_task(int tid, int tick_threshold) {
+    // Delayed tasks with a smaller tick_threshold should be woken
+    // up first, so they should have a higher priority.
+    int priority = -tick_threshold;
+    auto err = pq.push(DelayedTask(tid, tick_threshold), priority);
+    if (err == PriorityQueueErr::FULL) panic("timer buffer full");
+    assert(pq.peek()->tick_threshold <= tick_threshold);
 }
 
 void Server() {
@@ -118,17 +128,22 @@ void Server() {
                     break;
                 }
                 int tick_threshold = current_time + req.delay;
-
-                // Delayed tasks with a smaller tick_threshold should be woken
-                // up first, so they should have a higher priority.
-                int priority = -tick_threshold;
-                auto err = pq.push(DelayedTask(tid, tick_threshold), priority);
-                if (err == PriorityQueueErr::FULL) panic("timer buffer full");
-                assert(pq.peek()->tick_threshold <= tick_threshold);
+                enqueue_task(tid, tick_threshold);
 
                 break;
             }
-                // TODO implement DelayUntil
+            case Request::DelayUntil: {
+                debug("Clock::Server: DelayUntil(%d)", req.delay_until);
+                if (req.delay_until <= current_time) {
+                    res = {.tag = Response::Empty, .empty = {}};
+                    Reply(tid, (char*)&res, sizeof(res));
+                    break;
+                }
+                int tick_threshold = req.delay_until;
+                enqueue_task(tid, tick_threshold);
+
+                break;
+            }
             case Request::Shutdown: {
                 while (true) {
                     int tid_;
@@ -164,6 +179,16 @@ int Time(int clockserver) {
 
 int Delay(int clockserver, int ticks) {
     Request req = {.tag = Request::Delay, .delay = ticks};
+    Response res;
+    int n =
+        Send(clockserver, (char*)&req, sizeof(req), (char*)&res, sizeof(res));
+    if (n != sizeof(res)) return -1;
+    if (res.tag != Response::Empty) return -1;
+    return 0;
+}
+
+int DelayUntil(int clockserver, int ticks) {
+    Request req = {.tag = Request::DelayUntil, .delay_until = ticks};
     Response res;
     int n =
         Send(clockserver, (char*)&req, sizeof(req), (char*)&res, sizeof(res));

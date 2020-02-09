@@ -1,0 +1,10 @@
+Hello from the choochoos kernel!
+tid=4 50
+tid=5 70
+tid=6 80
+tid=7 90
+tid=4 150
+tid=5 150
+tid=6 150
+tid=7 150
+Goodbye from choochoos kernel!
