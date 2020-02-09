@@ -137,3 +137,6 @@ k1.pdf: docs/k1/kernel.md docs/k1/output.md
 
 k2.pdf: docs/k1/kernel.md docs/k2/kernel2.md docs/k2/rps.md docs/k2/performance.md
 	pandoc --toc --from markdown --to pdf $^ > k2.pdf
+
+k3.pdf: docs/k1/kernel.md docs/k2/kernel2.md docs/k3/k3.md docs/k3/transcript.md
+	pandoc --toc --from markdown --to pdf $^ > k3.pdf
