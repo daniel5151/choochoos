@@ -133,14 +133,17 @@ void Server() {
                 // TODO implement DelayUntil
             case Request::Shutdown: {
                 while (true) {
-                    Receive(&tid, (char*)&req, sizeof(req));
-                    if (tid != notifier_tid) {
+                    int tid_;
+                    Receive(&tid_, (char*)&req, sizeof(req));
+                    if (tid_ != notifier_tid) {
                         panic(
                             "clockserver received user message after "
                             "Shutdown!");
                     }
                     bool shutdown = true;
-                    Reply(tid, (char*)&shutdown, sizeof(shutdown));
+                    Reply(tid_, (char*)&shutdown, sizeof(shutdown));
+                    Reply(tid, nullptr, 0);
+                    debug("shutting down clockserver");
                     return;
                 }
             }
