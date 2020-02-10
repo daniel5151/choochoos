@@ -35,7 +35,7 @@ void Echo() {
     }
 }
 
-void FirstUserTask() {
+void TrueFirstUserTask() {
     int pong_tid_1 = Create(3, PongTask);  // lower priority
     int pong_tid_2 = Create(5, PongTask);  // higher priority
 
@@ -105,4 +105,8 @@ void FirstUserTask() {
 
     // we shouldn't be able to spawn tasks with negative priority
     assert(Create(-1, PongTask) == -1);
+}
+
+void FirstUserTask() {
+    Create(4, TrueFirstUserTask);
 }
