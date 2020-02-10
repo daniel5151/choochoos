@@ -644,6 +644,17 @@ class Kernel {
         Create(4, (void*)FirstUserTask);
     }
 
+    void shutdown() {
+        // clear the timers
+        *(volatile uint32_t*)(TIMER1_BASE + CRTL_OFFSET) = 0;
+        *(volatile uint32_t*)(TIMER2_BASE + CRTL_OFFSET) = 0;
+        *(volatile uint32_t*)(TIMER3_BASE + CRTL_OFFSET) = 0;
+
+        // disable all interrupts
+        *(volatile uint32_t*)(VIC1_BASE + VIC_INT_ENABLE_OFFSET) = 0;
+        *(volatile uint32_t*)(VIC2_BASE + VIC_INT_ENABLE_OFFSET) = 0;
+    }
+
     size_t num_event_blocked_tasks() const { return event_queue.num_present(); }
 };  // class Kernel
 
@@ -704,6 +715,7 @@ int kmain() {
         }
     }
 
+    kern.shutdown();
     kprintf("Goodbye from choochoos kernel!");
 
     return 0;
