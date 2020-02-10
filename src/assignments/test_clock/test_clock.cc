@@ -17,7 +17,6 @@ void Task() {
 }
 
 void FirstUserTask() {
-    Create(0, NameServer::Task);
     int clockserver = Create(INT_MAX, Clock::Server);
 
     int delays[] = {0, 20, 10, 10};

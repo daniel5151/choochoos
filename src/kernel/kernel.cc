@@ -10,6 +10,7 @@
 #include "kernel/kernel.h"
 
 #include "user/syscalls.h"
+#include "user/tasks/nameserver.h"
 
 // defined in the linker script
 extern "C" {
@@ -296,6 +297,15 @@ class Kernel {
             kpanic("out of space in ready queue (tid=%u)", (size_t)tid);
         }
 
+        // GCC complains that writing *anything* to `stack` is an out-of-bounds
+        // error,  because `&__USER_STACKS_START__` is simply a `char*` with no
+        // bounds information (and hence, `start_of_stack` also has no bounds
+        // information). We know that `start_of_stack` is actually then high
+        // address of a block of memory implicitly allocated for the user task
+        // stack (with more than enough space for a FreshStack struct), but GCC
+        // doesn't, so we must squelch -Warray-bounds.
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Warray-bounds"
         // set up memory for the initial user stack
         char* start_of_stack =
             &__USER_STACKS_START__ + (USER_STACK_SIZE * ((size_t)tid + 1));
@@ -306,15 +316,6 @@ class Kernel {
                 start_of_stack, &__USER_STACKS_END__);
         }
 
-        // GCC complains that writing *anything* to `stack` is an out-of-bounds
-        // error,  because `&__USER_STACKS_START__` is simply a `char*` with no
-        // bounds information (and hence, `start_of_stack` also has no bounds
-        // information). We know that `start_of_stack` is actually then high
-        // address of a block of memory implicitly allocated for the user task
-        // stack (with more than enough space for a FreshStack struct), but GCC
-        // doesn't, so we must squelch -Warray-bounds.
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Warray-bounds"
         FreshStack* stack =
             (FreshStack*)(void*)(start_of_stack - sizeof(FreshStack));
 
@@ -641,6 +642,7 @@ class Kernel {
         // Spawn the idle task with a direct call to _create_task, which allows
         // negative priority and a forced Tid.
         _create_task(-1, (void*)IdleTask, Tid(MAX_SCHEDULED_TASKS - 1));
+        _create_task(0, (void*)NameServer::Task, Tid(NameServer::TID));
         Create(4, (void*)FirstUserTask);
     }
 

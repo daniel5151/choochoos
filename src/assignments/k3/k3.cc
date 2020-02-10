@@ -35,7 +35,6 @@ void DelayerTask() {
 static Config configs[4] = {{3, 10, 20}, {4, 23, 9}, {5, 33, 6}, {6, 71, 3}};
 
 void FirstUserTask() {
-    Create(1, NameServer::Task);
     int clockserver = Create(INT_MAX, Clock::Server);
 
     for (auto& cfg : configs) {
@@ -54,5 +53,4 @@ void FirstUserTask() {
         Reply(tid, nullptr, 0);
     }
     Clock::Shutdown(clockserver);
-    NameServer::Shutdown();
 }

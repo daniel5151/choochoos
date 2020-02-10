@@ -62,8 +62,6 @@ void Reciever() {
 }
 
 void FirstUserTask() {
-    assert(Create(0, NameServer::Task) == NameServer::TID);
-
     // init timer 3
     *TIMER3_LDR = 0xffffffff;
     *TIMER3_CTRL = ENABLE_MASK | CLKSEL_MASK;  // free running + 508 kHz
@@ -82,7 +80,7 @@ void FirstUserTask() {
     for (char send_priority : {'R', 'S'}) {
         for (size_t msg_size : {4, 64, 256}) {
             bwprintf(COM2, "%s %s %c %d ", opt_lvl, cache_state, send_priority,
-                   msg_size);
+                     msg_size);
 
             int sender_tid = Create(2, Sender);
             int reciever_tid;

@@ -1,12 +1,12 @@
 Hello from the choochoos kernel!
+[tid 5] Echo received 12 bytes
+[tid 5] Echo sent 8 bytes
 [tid 4] Echo received 12 bytes
+[tid 5] Echo received 12 bytes
+[tid 5] Echo sent 7 bytes
 [tid 4] Echo sent 8 bytes
-[tid 3] Echo received 12 bytes
 [tid 4] Echo received 12 bytes
 [tid 4] Echo sent 7 bytes
-[tid 3] Echo sent 8 bytes
-[tid 3] Echo received 12 bytes
-[tid 3] Echo sent 7 bytes
 FirstUserTask recieved reply 'pong(ping1)'
 FirstUserTask recieved reply 'pong(ping2)'
 FirstUserTask recieved reply 'pong(ping2)'

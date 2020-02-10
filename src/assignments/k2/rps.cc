@@ -445,7 +445,4 @@ void setup_and_run() {
 
 }  // namespace rps
 
-void FirstUserTask() {
-    assert(Create(0, NameServer::Task) == NameServer::TID);
-    rps::setup_and_run();
-}
+void FirstUserTask() { rps::setup_and_run(); }
