@@ -61,8 +61,8 @@ _irq_handler:
 
     // store user mode spsr and return address (compensating with -4)
     mrs     r0,spsr
-    sub     r1,lr,#4
-    stmfd   r4!,{r0, r1}
+    sub     lr,lr,#4
+    stmfd   r4!,{r0, lr}
 
     // Switch to kernel mode (IRQs disabled)
     // This banks in the irq's SP and LR.
