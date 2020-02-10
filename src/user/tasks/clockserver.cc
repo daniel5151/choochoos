@@ -13,13 +13,10 @@
 
 namespace Clock {
 
-class DelayedTask {
-   public:
+struct DelayedTask {
     int tid;
     // make the task ready once *timer3_value_reg < tick_threshold
     int tick_threshold;
-    DelayedTask(int tid, int tick_threshold)
-        : tid(tid), tick_threshold(tick_threshold) {}
 };
 
 static PriorityQueue<DelayedTask, 32> pq;
@@ -67,7 +64,8 @@ static void enqueue_task(int tid, int tick_threshold) {
     // Delayed tasks with a smaller tick_threshold should be woken
     // up first, so they should have a higher priority.
     int priority = -tick_threshold;
-    auto err = pq.push(DelayedTask(tid, tick_threshold), priority);
+    auto err =
+        pq.push({.tid = tid, .tick_threshold = tick_threshold}, priority);
     if (err == PriorityQueueErr::FULL) panic("timer buffer full");
     assert(pq.peek()->tick_threshold <= tick_threshold);
 }
