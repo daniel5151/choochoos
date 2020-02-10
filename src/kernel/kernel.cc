@@ -47,17 +47,8 @@ class Tid {
 };
 
 struct TaskState {
-    enum uint8_t {
-        UNUSED,
-        READY,
-        SEND_WAIT,
-        RECV_WAIT,
-        REPLY_WAIT,
-        EVENT_WAIT
-    } tag;
+    enum uint8_t { READY, SEND_WAIT, RECV_WAIT, REPLY_WAIT, EVENT_WAIT } tag;
     union {
-        struct {
-        } unused;
         struct {
         } ready;
         struct {
@@ -114,7 +105,6 @@ class TaskDescriptor {
 
     void reset(std::optional<TaskDescriptor> (&tasks)[MAX_SCHEDULED_TASKS],
                PriorityQueue<Tid, MAX_SCHEDULED_TASKS>& ready_queue) {
-        state = {.tag = TaskState::UNUSED, .unused = {}};
         sp = nullptr;
         parent_tid = std::nullopt;
 
@@ -375,8 +365,6 @@ class Kernel {
         TaskDescriptor& sender = tasks[sender_tid].value();
         TaskDescriptor& receiver = tasks[receiver_tid].value();
         switch (receiver.state.tag) {
-            case TaskState::UNUSED:
-                return -1;  // no running task with tid
             case TaskState::SEND_WAIT:
             case TaskState::REPLY_WAIT:
             case TaskState::READY: {
@@ -463,8 +451,6 @@ class Kernel {
                 // Return the length of the reply to the original receiver.
                 return (int)n;
             }
-            case TaskState::UNUSED:
-                return -1;
             default:
                 return -2;
         }
@@ -611,7 +597,6 @@ class Kernel {
             case TaskState::RECV_WAIT:
             case TaskState::REPLY_WAIT:
             case TaskState::EVENT_WAIT:
-            case TaskState::UNUSED:
                 break;
         }
     }
