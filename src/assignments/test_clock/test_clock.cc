@@ -1,13 +1,12 @@
 #include "user/debug.h"
 #include "user/syscalls.h"
 #include "user/tasks/clockserver.h"
-#include "user/tasks/nameserver.h"
 
 #include <climits>
 
 void Task() {
     int my_tid = MyTid();
-    int clockserver = NameServer::WhoIs(Clock::SERVER_ID);
+    int clockserver = WhoIs(Clock::SERVER_ID);
     Clock::Delay(clockserver, 50);
     bwprintf(COM2, "tid=%d %d" ENDL, my_tid, Clock::Time(clockserver));
     Clock::DelayUntil(clockserver, 150);

@@ -1,4 +1,4 @@
-#include "user/tasks/nameserver.h"
+#include "kernel/tasks/nameserver.h"
 
 #include <cstdio>
 #include <cstring>
@@ -200,3 +200,8 @@ void Shutdown() {
 }
 
 }  // namespace NameServer
+
+extern "C" int WhoIs(const char* name) { return NameServer::WhoIs(name); }
+extern "C" int RegisterAs(const char* name) {
+    return NameServer::RegisterAs(name);
+}

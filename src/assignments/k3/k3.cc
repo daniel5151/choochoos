@@ -4,7 +4,6 @@
 #include "user/debug.h"
 #include "user/syscalls.h"
 #include "user/tasks/clockserver.h"
-#include "user/tasks/nameserver.h"
 
 struct Config {
     // smaller priority is higher
@@ -15,7 +14,7 @@ struct Config {
 
 void DelayerTask() {
     Config cfg;
-    int clockserver = NameServer::WhoIs(Clock::SERVER_ID);
+    int clockserver = WhoIs(Clock::SERVER_ID);
     assert(clockserver >= 0);
     int mytid = MyTid();
     int myparent = MyParentTid();

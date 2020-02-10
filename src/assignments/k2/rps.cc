@@ -7,7 +7,6 @@
 
 #include "user/debug.h"
 #include "user/syscalls.h"
-#include "user/tasks/nameserver.h"
 
 enum class RPS { NONE = 0, ROCK = 1, PAPER = 2, SCISSORS = 3 };
 enum class Result { DRAW, I_WON, I_LOST };
@@ -150,8 +149,8 @@ class Game {
 #define NUM_GAMES 32
 
 void Server() {
-    NameServer::RegisterAs(RPS_SERVER);
-    assert(NameServer::WhoIs(RPS_SERVER) == MyTid());
+    RegisterAs(RPS_SERVER);
+    assert(WhoIs(RPS_SERVER) == MyTid());
     Queue<int, 1> queue;
     Game games[NUM_GAMES];
 
@@ -318,7 +317,7 @@ void Client() {
     snprintf(prefix, 32, "[Client tid=%d id=%u] ", my_tid, id);
 
     bwprintf(COM2, "%squerying nameserver for '%s'" ENDL, prefix, RPS_SERVER);
-    int server = NameServer::WhoIs(RPS_SERVER);
+    int server = WhoIs(RPS_SERVER);
     assert(server >= 0);
     bwprintf(COM2, "%sreceived reply from nameserver: %s=%d" ENDL, prefix,
              RPS_SERVER, server);

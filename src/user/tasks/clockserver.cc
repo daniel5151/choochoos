@@ -6,7 +6,6 @@
 #include "user/debug.h"
 #include "user/syscalls.h"
 #include "user/tasks/clockserver.h"
-#include "user/tasks/nameserver.h"
 
 #define USER_TICKS_PER_SEC 100    // 10ms
 #define TIMER_TICKS_PER_SEC 2000  // 2 kHz
@@ -72,7 +71,7 @@ static void enqueue_task(int tid, int tick_threshold) {
 
 void Server() {
     debug("clockserver started");
-    int nsres = NameServer::RegisterAs(SERVER_ID);
+    int nsres = RegisterAs(SERVER_ID);
     assert(nsres >= 0);
     int notifier_tid = Create(INT_MAX, Notifier);
     assert(notifier_tid >= 0);

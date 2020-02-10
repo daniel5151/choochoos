@@ -22,6 +22,10 @@ int Reply(int tid, const char* reply, int rplen);
 
 int AwaitEvent(int eventid);
 
+int WhoIs(const char* name);
+
+int RegisterAs(const char* name);
+
 #ifdef __cplusplus
 }
 #endif

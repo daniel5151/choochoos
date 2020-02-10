@@ -9,8 +9,10 @@
 #include "kernel/asm.h"
 #include "kernel/kernel.h"
 
+#include "kernel/tasks/idle.h"
+#include "kernel/tasks/nameserver.h"
+
 #include "user/syscalls.h"
-#include "user/tasks/nameserver.h"
 
 // defined in the linker script
 extern "C" {
@@ -243,11 +245,6 @@ static size_t current_interrupt() {
 extern void FirstUserTask();
 
 const Tid IDLE_TASK_TID = Tid(MAX_SCHEDULED_TASKS - 1);
-void IdleTask() {
-    for (;;) {
-        // TODO: mine dogecoin
-    }
-}
 
 class Kernel {
     /// Helper POD struct to init new user task stacks
@@ -639,9 +636,9 @@ class Kernel {
         }
 #pragma GCC diagnostic pop
 
-        // Spawn the idle task with a direct call to _create_task, which allows
-        // negative priority and a forced Tid.
-        _create_task(-1, (void*)IdleTask, Tid(MAX_SCHEDULED_TASKS - 1));
+        // Spawn the idle task and name server with a direct call to
+        // _create_task, which allows negative priority and a forced Tid.
+        _create_task(-1, (void*)Idle::Task, IDLE_TASK_TID);
         _create_task(0, (void*)NameServer::Task, Tid(NameServer::TID));
         Create(4, (void*)FirstUserTask);
     }
