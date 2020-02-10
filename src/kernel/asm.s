@@ -12,12 +12,9 @@ _swi_handler:
     // This banks in the kernel's SP and LR.
     msr     cpsr_c, #0xd3
 
-    // store user mode spsr
+    // store user mode spsr and user mode return address
     mrs     r0,spsr
-    stmfd   r4!,{r0}
-
-    // store user mode return address (which is in lr_svc)
-    stmfd   r4!,{lr}
+    stmfd   r4!,{r0, lr}
 
     // r0 = handle_syscall 1st param = syscall number
     ldr     r0,[lr, #-4]      // Load the last-executed SWI instr into r0...
@@ -36,8 +33,8 @@ _swi_handler:
     // |   [ r0                   ]   |
     // |   ...                        |
     // |   [ r12                  ]   |
-    // |   [ spsr                 ]   |
     // |   [ ret addr             ]   |
+    // |   [ spsr                 ]   |
     // |         <--- sp --->         |
     // | ....... unused stack ....... |
     // +----------- lo mem -----------+
@@ -62,37 +59,17 @@ _irq_handler:
     // This banks in the irq's SP and LR.
     msr     cpsr_c, #0xd2
 
-    // store user mode spsr
+    // store user mode spsr and return address (compensating with -4)
     mrs     r0,spsr
-    stmfd   r4!,{r0}
-
-    // store user mode return address (compensating with -4)
-    sub     r0,lr,#4
-    stmfd   r4!,{r0}
+    sub     r1,lr,#4
+    stmfd   r4!,{r0, r1}
 
     // Switch to kernel mode (IRQs disabled)
     // This banks in the irq's SP and LR.
     msr     cpsr_c, #0xd3
 
-    // r1 = handle_interrupt 1nd param = user's stack pointer (with saved state)
-    mov     r0,r4
+    // call syscall handler
     bl      handle_interrupt
-    // handle_interrupt writes the syscall return value directly into the user's
-    // stack (i.e: overwriting the value of the saved r0 register)
-
-    // At this point, the user's stack looks like this:
-    //
-    // +----------- hi mem -----------+
-    // | ... rest of user's stack ... |
-    // |   [ lr                   ]   |
-    // |   [ r0                   ]   |
-    // |   ...                        |
-    // |   [ r12                  ]   |
-    // |   [ spsr                 ]   |
-    // |   [ ret addr             ]   |
-    // |         <--- sp --->         |
-    // | ....... unused stack ....... |
-    // +----------- lo mem -----------+
 
     // Return the final user SP via r0
     mov     r0, r4
@@ -108,14 +85,14 @@ _activate_task:
     stmfd   sp!,{r4-r12,lr}
 
     // pop ret addr and spsr from user stack
-    // r1 = ret addr, r2 = spsr
+    // r1 = spsr, r2 = ret addr
     ldmfd   r0!,{r1,r2}
 
     // set the spsr to the user's saved spsr
-    msr     spsr,r2
+    msr     spsr,r1
 
     // push user ret val to top of kernel stack
-    stmfd   sp!,{r1}
+    stmfd   sp!,{r2}
 
     // Switch to system mode (IRQs disabled)
     msr     cpsr_c, #0xdf

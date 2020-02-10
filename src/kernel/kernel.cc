@@ -27,8 +27,8 @@ extern char __USER_STACKS_START__, __USER_STACKS_END__;
 /// Helper POD struct which can should be casted from a void* that points to
 /// a user's stack.
 struct SwiUserStack {
-    void* start_addr;
     uint32_t spsr;
+    void* start_addr;
     uint32_t regs[13];
     void* lr;
     // C++ doesn't support flexible array members, so instead, we use an
@@ -261,8 +261,8 @@ void IdleTask() {
 class Kernel {
     /// Helper POD struct to init new user task stacks
     struct FreshStack {
-        void* start_addr;
         uint32_t spsr;
+        void* start_addr;
         uint32_t regs[13];
         void* lr;
     };
