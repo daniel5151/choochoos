@@ -21,7 +21,7 @@ extern char __USER_STACKS_START__, __USER_STACKS_END__;
 #define INVALID_PRIORITY -1
 #define OUT_OF_TASK_DESCRIPTORS -2
 
-class Kernel {
+class Kernel final {
     // ------------------ data members -------------------------- //
     std::optional<TaskDescriptor> tasks[MAX_SCHEDULED_TASKS];
     OptArray<Tid, 64> event_queue;

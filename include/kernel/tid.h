@@ -3,7 +3,7 @@
 #include <cstddef>
 
 namespace kernel {
-class Tid {
+class Tid final {
     size_t id;
 
    public:

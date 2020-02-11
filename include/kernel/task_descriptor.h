@@ -39,13 +39,12 @@ struct TaskDescriptor {
     TaskState state;
     std::optional<Tid> parent_tid;
     void* sp;
+
+    static TaskDescriptor create(Tid tid,
+                                 size_t priority,
+                                 std::optional<Tid> parent_tid,
+                                 void* stack_ptr);
+    static void write_syscall_return_value(TaskDescriptor& task, int32_t value);
 };
-
-TaskDescriptor new_task(Tid tid,
-                        size_t priority,
-                        std::optional<Tid> parent_tid,
-                        void* stack_ptr);
-
-void write_syscall_return_value(TaskDescriptor& task, int32_t value);
 
 }  // namespace kernel
