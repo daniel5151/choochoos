@@ -21,51 +21,53 @@ extern char __USER_STACKS_START__, __USER_STACKS_END__;
 #define INVALID_PRIORITY -1
 #define OUT_OF_TASK_DESCRIPTORS -2
 
-class Kernel final {
-    // ------------------ data members -------------------------- //
-    std::optional<TaskDescriptor> tasks[MAX_SCHEDULED_TASKS];
-    OptArray<Tid, 64> event_queue;
-    PriorityQueue<Tid, MAX_SCHEDULED_TASKS> ready_queue;
-    Tid current_task;
+extern std::optional<TaskDescriptor> tasks[MAX_SCHEDULED_TASKS];
+extern OptArray<Tid, 64> event_queue;
+extern PriorityQueue<Tid, MAX_SCHEDULED_TASKS> ready_queue;
+extern Tid current_task;
 
-    // ------------------ private helpers ----------------------- //
-    std::optional<Tid> next_tid();
-    void reset_task(TaskDescriptor& task);
-    void add_to_send_queue(TaskDescriptor& receiver,
-                           TaskDescriptor& sender,
-                           const char* msg,
-                           size_t msglen,
-                           char* reply,
-                           size_t rplen);
-    Tid pop_from_send_queue(TaskDescriptor& receiver,
-                            int* sender_tid,
-                            char* recv_buf,
-                            size_t len);
-    int _create_task(int priority,
-                     void* function,
-                     std::optional<Tid> force_tid);
+namespace helpers {
 
-    // ------------------ syscall handlers ---------------------- //
-    int MyTid();
-    int MyParentTid();
-    int Create(int priority, void* function);
-    void Exit();
-    void Yield();
-    int Send(
-        int receiver_tid, const char* msg, int msglen, char* reply, int rplen);
-    int Receive(int* tid, char* msg, int msglen);
-    int Reply(int tid, const char* reply, int rplen);
-    int AwaitEvent(int eventid);
+std::optional<Tid> next_tid();
+void reset_task(TaskDescriptor& task);
+void add_to_send_queue(TaskDescriptor& receiver,
+                       TaskDescriptor& sender,
+                       const char* msg,
+                       size_t msglen,
+                       char* reply,
+                       size_t rplen);
+Tid pop_from_send_queue(TaskDescriptor& receiver,
+                        int* sender_tid,
+                        char* recv_buf,
+                        size_t len);
+int create_task(int priority, void* function, std::optional<Tid> force_tid);
 
-   public:
-    Kernel();
-    void handle_syscall(uint32_t no, void* user_sp);
-    void handle_interrupt();
-    std::optional<Tid> schedule();
-    void activate(Tid tid);
-    void initialize();
-    void shutdown();
+}  // namespace helpers
 
-    size_t num_event_blocked_tasks() const;
-};  // class Kernel
+namespace handlers {
+
+int MyTid();
+int MyParentTid();
+int Create(int priority, void* function);
+void Exit();
+void Yield();
+int Send(int receiver_tid, const char* msg, int msglen, char* reply, int rplen);
+int Receive(int* tid, char* msg, int msglen);
+int Reply(int tid, const char* reply, int rplen);
+int AwaitEvent(int eventid);
+
+}  // namespace handlers
+
+namespace driver {
+
+void handle_syscall(uint32_t no, void* user_sp);
+void handle_interrupt();
+std::optional<Tid> schedule();
+void activate(Tid tid);
+void initialize();
+void shutdown();
+size_t num_event_blocked_tasks();
+
+}  // namespace driver
+
 }  // namespace kernel

@@ -1,5 +1,5 @@
 #include "kernel/kernel.h"
 
-namespace kernel {
-void Kernel::Yield() { kdebug("Called Yield"); }
-}  // namespace kernel
+namespace kernel::handlers {
+void Yield() { kdebug("Called Yield"); }
+}  // namespace kernel::handlers

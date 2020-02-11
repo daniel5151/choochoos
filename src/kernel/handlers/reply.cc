@@ -2,9 +2,9 @@
 
 #include "kernel/kernel.h"
 
-namespace kernel {
+namespace kernel::handlers {
 
-int Kernel::Reply(int tid, const char* reply, int rplen) {
+int Reply(int tid, const char* reply, int rplen) {
     kdebug("Called Reply(tid=%d reply=%p rplen=%d)", tid, reply, rplen);
     if (tid < 0 || tid >= MAX_SCHEDULED_TASKS) return -1;
     if (!tasks[tid].has_value()) return -1;
@@ -33,4 +33,4 @@ int Kernel::Reply(int tid, const char* reply, int rplen) {
     }
 }
 
-}  // namespace kernel
+}  // namespace kernel::handlers

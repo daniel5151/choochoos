@@ -10,7 +10,7 @@ folders=(k1 k2 test_msgpass test_clock k3)
 for folder in "${folders[@]}"; do
   echo "building ${folder}..."
 
-  make $@ TARGET="${folder}" TESTS=1 >/dev/null
+  make -j $@ TARGET="${folder}" TESTS=1 >/dev/null
 
   exe="${folder}.elf"
 

@@ -1,16 +1,20 @@
 #include "kernel/kernel.h"
 
-namespace kernel {
+namespace kernel::handlers {
 
-void Kernel::Exit() {
+void Exit() {
     kdebug("Called Exit");
     Tid tid = current_task;
     kassert(tasks[tid].has_value());
-    reset_task(tasks[tid].value());
+    helpers::reset_task(tasks[tid].value());
     tasks[tid] = std::nullopt;
 }
 
-void Kernel::reset_task(TaskDescriptor& task) {
+}  // namespace kernel::handlers
+
+namespace kernel::helpers {
+
+void reset_task(TaskDescriptor& task) {
     task.sp = nullptr;
     task.parent_tid = std::nullopt;
 
@@ -44,4 +48,4 @@ void Kernel::reset_task(TaskDescriptor& task) {
     }
 }
 
-}  // namespace kernel
+}  // namespace kernel::helpers

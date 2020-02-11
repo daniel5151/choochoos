@@ -2,9 +2,9 @@
 
 #include "kernel/kernel.h"
 
-namespace kernel {
+namespace kernel::handlers {
 
-int Kernel::Receive(int* tid, char* msg, int msglen) {
+int Receive(int* tid, char* msg, int msglen) {
     kdebug("Called Receive(tid=%p msg=%p msglen=%d)", (void*)tid, msg, msglen);
 
     TaskDescriptor& task = tasks[current_task].value();
@@ -18,8 +18,8 @@ int Kernel::Receive(int* tid, char* msg, int msglen) {
                 return -3;
             }
 
-            return pop_from_send_queue(task, tid, msg,
-                                       (size_t)std::max(msglen, 0));
+            return helpers::pop_from_send_queue(task, tid, msg,
+                                                (size_t)std::max(msglen, 0));
         }
         default:
             kdebug("Receive() called from task in non-ready state %d",
@@ -28,10 +28,14 @@ int Kernel::Receive(int* tid, char* msg, int msglen) {
     }
 }
 
-Tid Kernel::pop_from_send_queue(TaskDescriptor& receiver,
-                                int* sender_tid,
-                                char* recv_buf,
-                                size_t len) {
+}  // namespace kernel::handlers
+
+namespace kernel::helpers {
+
+Tid pop_from_send_queue(TaskDescriptor& receiver,
+                        int* sender_tid,
+                        char* recv_buf,
+                        size_t len) {
     kassert(receiver.state.tag == TaskState::READY);
     kassert(receiver.send_queue_head.has_value());
 
@@ -61,4 +65,4 @@ Tid Kernel::pop_from_send_queue(TaskDescriptor& receiver,
     return n;
 }
 
-}  // namespace kernel
+}  // namespace kernel::helpers

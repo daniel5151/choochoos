@@ -35,7 +35,7 @@ void kprintf(const char* fmt, ...) __attribute__((format(printf, 1, 2)));
 // (or perhaps a new function, like last_active_tid()) on that instance.
 #define kdebug(fmt, ...)                                               \
     kprintf(VT_YELLOW "[kdebug:%s:%d tid=%d] " VT_NOFMT fmt, __FILE__, \
-            __LINE__, MyTid(), ##__VA_ARGS__)
+            __LINE__, ::kernel::handlers::MyTid(), ##__VA_ARGS__)
 #endif
 
 #ifdef __cplusplus

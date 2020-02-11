@@ -1,10 +1,24 @@
 #include "kernel/kernel.h"
 
-namespace kernel {
-
 namespace user {
 #include "user/syscalls.h"
 }
+
+namespace kernel::handlers {
+
+// Create calls out to create_task, but ensures that priority is
+// non-negative. This lets us enforce that all user tasks have higher
+// priority than the kernel's idle task.
+int Create(int priority, void* function) {
+    kdebug("Called Create(priority=%d, function=%p)", priority, function);
+    if (priority < 0) return INVALID_PRIORITY;
+    return helpers::create_task(priority, function,
+                                /* force_tid */ std::nullopt);
+}
+
+}  // namespace kernel::handlers
+
+namespace kernel::helpers {
 
 /// Helper POD struct to init new user task stacks
 struct FreshStack {
@@ -14,9 +28,7 @@ struct FreshStack {
     void* lr;
 };
 
-int Kernel::_create_task(int priority,
-                         void* function,
-                         std::optional<Tid> force_tid) {
+int create_task(int priority, void* function, std::optional<Tid> force_tid) {
     std::optional<Tid> fresh_tid = next_tid();
     if (!fresh_tid.has_value()) return OUT_OF_TASK_DESCRIPTORS;
     Tid tid = fresh_tid.value();
@@ -68,13 +80,4 @@ int Kernel::_create_task(int priority,
     return tid;
 }
 
-// Create calls out to _create_task, but ensures that priority is
-// non-negative. This lets us enforce that all user tasks have higher
-// priority than the kernel's idle task.
-int Kernel::Create(int priority, void* function) {
-    kdebug("Called Create(priority=%d, function=%p)", priority, function);
-    if (priority < 0) return INVALID_PRIORITY;
-    return _create_task(priority, function, /* force_tid */ std::nullopt);
-}
-
-}  // namespace kernel
+}  // namespace kernel::helpers

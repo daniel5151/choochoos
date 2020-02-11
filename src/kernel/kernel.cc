@@ -14,8 +14,6 @@
 // CONTRACT: userland must supply a FirstUserTask function
 extern void FirstUserTask();
 
-namespace kernel {
-
 static std::optional<size_t> current_interrupt() {
     uint32_t vic1_bits =
         *((volatile uint32_t*)VIC1_BASE + VIC_IRQ_STATUS_OFFSET);
@@ -38,28 +36,38 @@ static std::optional<size_t> current_interrupt() {
     return std::nullopt;
 }
 
-static const Tid IDLE_TASK_TID = Tid(MAX_SCHEDULED_TASKS - 1);
+namespace kernel {
 
-std::optional<Tid> Kernel::next_tid() {
+std::optional<TaskDescriptor> tasks[MAX_SCHEDULED_TASKS];
+OptArray<Tid, 64> event_queue;
+PriorityQueue<Tid, MAX_SCHEDULED_TASKS> ready_queue;
+Tid current_task = -1;
+
+}  // namespace kernel
+
+namespace kernel::helpers {
+
+std::optional<Tid> next_tid() {
     for (size_t tid = 0; tid < MAX_SCHEDULED_TASKS; tid++) {
         if (!tasks[tid].has_value()) return Tid(tid);
     }
     return std::nullopt;
 }
 
-Kernel::Kernel()
-    : tasks{std::nullopt},
-      event_queue{},
-      ready_queue{},
-      current_task{UINT32_MAX} {}
+}  // namespace kernel::helpers
 
-void Kernel::handle_syscall(uint32_t no, void* user_sp) {
+namespace kernel::driver {
+
+static const Tid IDLE_TASK_TID = Tid(MAX_SCHEDULED_TASKS - 1);
+
+void handle_syscall(uint32_t no, void* user_sp) {
     kassert(tasks[current_task].has_value());
 
     tasks[current_task].value().sp = user_sp;
 
     UserStack* user_stack = (UserStack*)user_sp;
     std::optional<int> ret = std::nullopt;
+    using namespace handlers;
     switch (no) {
         case 0:
             Yield();
@@ -101,7 +109,7 @@ void Kernel::handle_syscall(uint32_t no, void* user_sp) {
     }
 }
 
-void Kernel::handle_interrupt() {
+void handle_interrupt() {
     auto no_opt = current_interrupt();
     if (!no_opt.has_value())
         kpanic("current_interrupt(): no interrupts are set");
@@ -149,9 +157,9 @@ void Kernel::handle_interrupt() {
     }
 }
 
-std::optional<Tid> Kernel::schedule() { return ready_queue.pop(); }
+std::optional<Tid> schedule() { return ready_queue.pop(); }
 
-void Kernel::activate(Tid tid) {
+void activate(Tid tid) {
     kdebug("activating tid %u", (size_t)tid);
     current_task = tid;
     if (!tasks[tid].has_value()) return;
@@ -173,9 +181,9 @@ void Kernel::activate(Tid tid) {
     }
 }  // namespace kernel
 
-void Kernel::initialize() {
-    *((uint32_t*)0x028) = (uint32_t)((void*)_swi_handler);
-    *((uint32_t*)0x038) = (uint32_t)((void*)_irq_handler);
+void initialize() {
+    *((volatile uint32_t*)0x028) = (uint32_t)((void*)_swi_handler);
+    *((volatile uint32_t*)0x038) = (uint32_t)((void*)_irq_handler);
 
     // unlock system controller sw lock
     *(volatile uint32_t*)(SYSCON_SWLOCK) = 0xaa;
@@ -218,11 +226,11 @@ void Kernel::initialize() {
 
     // Spawn the name server with a direct call to _create_task, which
     // allows negative priorities and a forced tid.
-    _create_task(0, (void*)NameServer::Task, Tid(NameServer::TID));
-    Create(0, (void*)FirstUserTask);
+    helpers::create_task(0, (void*)NameServer::Task, Tid(NameServer::TID));
+    handlers::Create(0, (void*)FirstUserTask);
 }
 
-void Kernel::shutdown() {
+void shutdown() {
     // clear the timers
     *(volatile uint32_t*)(TIMER1_BASE + CRTL_OFFSET) = 0;
     *(volatile uint32_t*)(TIMER2_BASE + CRTL_OFFSET) = 0;
@@ -233,18 +241,14 @@ void Kernel::shutdown() {
     *(volatile uint32_t*)(VIC2_BASE + VIC_INT_ENABLE_OFFSET) = 0;
 }
 
-size_t Kernel::num_event_blocked_tasks() const {
-    return event_queue.num_present();
-}
-}  // namespace kernel
-
-static kernel::Kernel kern;
+size_t num_event_blocked_tasks() { return event_queue.num_present(); }
+}  // namespace kernel::driver
 
 extern "C" void handle_syscall(uint32_t no, void* user_sp) {
-    kern.handle_syscall(no, user_sp);
+    kernel::driver::handle_syscall(no, user_sp);
 }
 
-extern "C" void handle_interrupt() { kern.handle_interrupt(); }
+extern "C" void handle_interrupt() { kernel::driver::handle_interrupt(); }
 
 const volatile uint32_t* TIMER3_VAL =
     (volatile uint32_t*)(TIMER3_BASE + VAL_OFFSET);
@@ -252,18 +256,18 @@ const volatile uint32_t* TIMER3_VAL =
 int kmain() {
     kprintf("Hello from the choochoos kernel!");
 
-    kern.initialize();
+    kernel::driver::initialize();
 
     uint32_t idle_time = 0;
     uint32_t idle_timer;
 
     while (true) {
-        std::optional<kernel::Tid> next_task = kern.schedule();
+        std::optional<kernel::Tid> next_task = kernel::driver::schedule();
         if (next_task.has_value()) {
             const kernel::Tid tid = next_task.value();
-            kern.activate(tid);
+            kernel::driver::activate(tid);
         } else {
-            if (kern.num_event_blocked_tasks() == 0) break;
+            if (kernel::driver::num_event_blocked_tasks() == 0) break;
 
             // idle task time!
 
@@ -285,7 +289,7 @@ int kmain() {
             *(volatile uint32_t*)(SYSCON_HALT);
             idle_time += idle_timer - *TIMER3_VAL;
 
-            kern.handle_interrupt();
+            kernel::driver::handle_interrupt();
 
 #ifndef NO_IDLE_MEASUREMENTS
             bwprintf(COM2,
@@ -295,7 +299,7 @@ int kmain() {
         }
     }
 
-    kern.shutdown();
+    kernel::driver::shutdown();
     kprintf("Goodbye from choochoos kernel!");
 
     return 0;

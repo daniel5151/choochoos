@@ -1,8 +1,8 @@
 #include "kernel/kernel.h"
 
-namespace kernel {
+namespace kernel::handlers {
 
-int Kernel::AwaitEvent(int eventid) {
+int AwaitEvent(int eventid) {
     switch (eventid) {
         case 4:
         case 5:
@@ -26,4 +26,4 @@ int Kernel::AwaitEvent(int eventid) {
     return -3;
 }
 
-}  // namespace kernel
+}  // namespace kernel::handlers
