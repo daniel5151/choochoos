@@ -29,7 +29,7 @@ void Kernel::reset_task(TaskDescriptor& task) {
         std::optional<Tid> next_tid = task.state.send_wait.next;
 
         kdebug("tid=%u cannot complete SRR, receiver (%u) shut down",
-               (size_t)this->tid, (size_t)tid);
+               (size_t)task.tid, (size_t)tid);
 
         // SRR could not be completed, return -2 to the sender
         TaskDescriptor::write_syscall_return_value(task, -2);
