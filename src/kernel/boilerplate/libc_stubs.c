@@ -1,4 +1,4 @@
-#include "kernel/kernel.h"
+#include "kernel/helpers.h"
 
 #define STUB(fn) \
     void fn() { kpanic("newlib tried to call " #fn); }

@@ -1,43 +1,71 @@
 #pragma once
 
-#ifdef __cplusplus
+#include "common/opt_array.h"
+#include "common/priority_queue.h"
+
+#include "kernel/helpers.h"
+#include "kernel/task_descriptor.h"
+
+namespace kernel {
+
+// defined in the linker script
 extern "C" {
-#endif
-
-/// Immediately terminate the kernel, and exit to redboot
-void kexit(int status) __attribute__((noreturn));
-
-/// Print out an error message, and call kexit(1)
-void kpanic(const char* fmt, ...) __attribute__((format(printf, 1, 2)))
-__attribute__((noreturn));
-
-/// Print to the kernel's log
-void kprintf(const char* fmt, ...) __attribute__((format(printf, 1, 2)));
-
-#ifdef NDEBUG
-#define kassert(expr) ((void)0)
-#else
-#define kassert(expr)                                                 \
-    do {                                                              \
-        if (!(expr)) {                                                \
-            kpanic("Assertion failed: (%s) [%s:%d]", #expr, __FILE__, \
-                   __LINE__);                                         \
-        }                                                             \
-    } while (false)
-#endif
-
-#if defined(RELEASE_MODE) || !defined(KDEBUG)
-#define kdebug(...)
-#else
-#include "common/vt_escapes.h"
-// TODO this will blow up spectacularly if MyTid() isn't in scope. Ideally,
-// we'd have a singleton Kernel instance in scope, and we'd always call MyTid()
-// (or perhaps a new function, like last_active_tid()) on that instance.
-#define kdebug(fmt, ...)                                               \
-    kprintf(VT_YELLOW "[kdebug:%s:%d tid=%d] " VT_NOFMT fmt, __FILE__, \
-            __LINE__, MyTid(), ##__VA_ARGS__)
-#endif
-
-#ifdef __cplusplus
+// Designate region of memory to use for user stacks
+extern char __USER_STACKS_START__, __USER_STACKS_END__;
 }
-#endif
+
+#define USER_STACK_SIZE 0x40000
+
+#define MAX_SCHEDULED_TASKS 48
+
+#define INVALID_PRIORITY -1
+#define OUT_OF_TASK_DESCRIPTORS -2
+
+class Kernel {
+    // ------------------ data members -------------------------- //
+    std::optional<TaskDescriptor> tasks[MAX_SCHEDULED_TASKS];
+    OptArray<Tid, 64> event_queue;
+    PriorityQueue<Tid, MAX_SCHEDULED_TASKS> ready_queue;
+    Tid current_task;
+
+    // ------------------ private helpers ----------------------- //
+    std::optional<Tid> next_tid();
+    void reset_task(TaskDescriptor& task);
+    void add_to_send_queue(TaskDescriptor& receiver,
+                           TaskDescriptor& sender,
+                           const char* msg,
+                           size_t msglen,
+                           char* reply,
+                           size_t rplen);
+    Tid pop_from_send_queue(TaskDescriptor& receiver,
+                            int* sender_tid,
+                            char* recv_buf,
+                            size_t len);
+    int _create_task(int priority,
+                     void* function,
+                     std::optional<Tid> force_tid);
+
+    // ------------------ syscall handlers ---------------------- //
+    int MyTid();
+    int MyParentTid();
+    int Create(int priority, void* function);
+    void Exit();
+    void Yield();
+    int Send(
+        int receiver_tid, const char* msg, int msglen, char* reply, int rplen);
+    int Receive(int* tid, char* msg, int msglen);
+    int Reply(int tid, const char* reply, int rplen);
+    int AwaitEvent(int eventid);
+
+   public:
+    Kernel();
+    void handle_syscall(uint32_t no, void* user_sp);
+    void handle_interrupt();
+    std::optional<Tid> schedule();
+    void activate(Tid tid);
+    void initialize();
+    void shutdown();
+
+    size_t num_event_blocked_tasks() const;
+};  // class Kernel
+}  // namespace kernel
