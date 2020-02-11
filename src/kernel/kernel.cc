@@ -73,7 +73,7 @@ void initialize() {
     bwsetfifo(COM1, false);
     bwsetfifo(COM2, false);
 
-#ifdef ENABLE_CACHES
+#ifndef NENABLE_CACHES
     _enable_caches();
 #endif
 

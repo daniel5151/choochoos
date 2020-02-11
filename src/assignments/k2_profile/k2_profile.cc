@@ -71,10 +71,10 @@ void FirstUserTask() {
 #else
     const char* opt_lvl = "opt";
 #endif
-#ifdef ENABLE_CACHES
-    const char* cache_state = "cache";
-#else
+#ifdef NENABLE_CACHES
     const char* cache_state = "nocache";
+#else
+    const char* cache_state = "cache";
 #endif
 
     for (char send_priority : {'R', 'S'}) {
