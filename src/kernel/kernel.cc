@@ -1,3 +1,5 @@
+#include "kernel/kernel.h"
+
 #include <cstring>
 #include <optional>
 
@@ -7,11 +9,7 @@
 #include "common/ts7200.h"
 #include "common/vt_escapes.h"
 #include "kernel/asm.h"
-#include "kernel/kernel.h"
-
-#include "kernel/tasks/idle.h"
 #include "kernel/tasks/nameserver.h"
-
 #include "user/syscalls.h"
 
 // defined in the linker script
@@ -523,7 +521,6 @@ class Kernel {
 
         kdebug("handle_interrupt: no=%lu", no);
 
-        kassert(tasks[current_task].has_value());
         kassert(no < 64);
 
         int ret;
@@ -591,6 +588,13 @@ class Kernel {
         *((uint32_t*)0x028) = (uint32_t)((void*)_swi_handler);
         *((uint32_t*)0x038) = (uint32_t)((void*)_irq_handler);
 
+        // unlock system controller sw lock
+        *(volatile uint32_t*)(SYSCON_SWLOCK) = 0xaa;
+        // enable halt/standby magic addresses
+        uint32_t device_cfg = *(volatile uint32_t*)(SYSCON_DEVICECFG);
+        *(volatile uint32_t*)(SYSCON_DEVICECFG) = device_cfg | 1;
+        // system controller re-locks itself
+
         // enable protection (prevents user tasks from poking VIC registers)
         *(volatile uint32_t*)(VIC1_BASE + VIC_INT_PROTECTION_OFFSET) = 1;
         // all IRQs
@@ -624,9 +628,8 @@ class Kernel {
         }
 #pragma GCC diagnostic pop
 
-        // Spawn the idle task and name server with a direct call to
-        // _create_task, which allows negative priority and a forced Tid.
-        _create_task(-1, (void*)Idle::Task, IDLE_TASK_TID);
+        // Spawn the name server with a direct call to _create_task, which
+        // allows negative priorities and a forced tid.
         _create_task(0, (void*)NameServer::Task, Tid(NameServer::TID));
         Create(0, (void*)FirstUserTask);
     }
@@ -653,13 +656,13 @@ extern "C" void handle_syscall(uint32_t no, void* user_sp) {
 
 extern "C" void handle_interrupt() { kern.handle_interrupt(); }
 
+const volatile uint32_t* TIMER3_VAL =
+    (volatile uint32_t*)(TIMER3_BASE + VAL_OFFSET);
+
 int kmain() {
     kprintf("Hello from the choochoos kernel!");
 
     kern.initialize();
-
-    const volatile uint32_t* TIMER3_VAL =
-        (volatile uint32_t*)(TIMER3_BASE + VAL_OFFSET);
 
     uint32_t idle_time = 0;
     uint32_t idle_timer;
@@ -668,37 +671,39 @@ int kmain() {
         std::optional<Tid> next_task = kern.schedule();
         if (next_task.has_value()) {
             const Tid tid = next_task.value();
+            kern.activate(tid);
+        } else {
+            if (kern.num_event_blocked_tasks() == 0)
+                break;
 
-            if (tid == IDLE_TASK_TID) {
-                // The idle task must be the lowest priority task. Therefore,
-                // if the idle task gets scheduled, there is only more work to
-                // do if some tasks are blocked on events (waiting for
-                // interrupts). If no such tasks exist, we can exit from the
-                // main loop and return to RedBoot.
-                if (kern.num_event_blocked_tasks() == 0) {
-                    break;
-                }
+            // idle task time!
 
-                // Otherwise, we can record idle time until the idle task is
-                // preempted by an interrupt.
-                idle_timer = *TIMER3_VAL;
+            // This is pretty neat.
+            //
+            // We request the system controller to put us into a halt state, and
+            // to wake up up when an IRQ happens. All good right? But hey, we're
+            // in the kernel, and aren't currently accepting IRQs, so this
+            // shouldn't work, right?
+            //
+            // Wrong!
+            //
+            // The system controller will freeze the PC at this line, and once
+            // an IRQ fires, it simply resumes the PC, _without_ jumping to the
+            // IRQ handler! Instead, we manually invoke the kernel's interrupt
+            // handler, which will unblock any blocked tasks.
+            idle_timer = *TIMER3_VAL;
+            *(volatile uint32_t*)(SYSCON_HALT);
+            idle_time += idle_timer - *TIMER3_VAL;
 
-                kern.activate(tid);
+            kern.handle_interrupt();
 
-                idle_time += idle_timer - *TIMER3_VAL;
 
 #ifndef NO_IDLE_MEASUREMENTS
-                bwprintf(
-                    COM2,
-                    VT_SAVE VT_ROWCOL(1, 60) "[Idle Time %lu%%]" VT_RESTORE,
-                    100 * idle_time / (UINT32_MAX - *TIMER3_VAL));
+            bwprintf(
+                COM2,
+                VT_SAVE VT_ROWCOL(1, 60) "[Idle Time %lu%%]" VT_RESTORE,
+                100 * idle_time / (UINT32_MAX - *TIMER3_VAL));
 #endif
-            } else {
-                // no idle timing
-                kern.activate(tid);
-            }
-        } else {
-            kpanic("kernel should never be out of tasks to run!");
         }
     }
 
