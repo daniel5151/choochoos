@@ -16,8 +16,7 @@ void OtherTask() {
     // Exit();
 }
 
-// FirstUserTask has a priority of 4
-void FirstUserTask() {
+void TrueFirstUserTask() {
     int tid;
 
     tid = Create(3, OtherTask);
@@ -33,6 +32,12 @@ void FirstUserTask() {
     bwprintf(COM2, "Created: %d\r\n", tid);
 
     bwputstr(COM2, "FirstUserTask: exiting\r\n");
+}
 
+// FirstUserTask has a priority of 0, and our kernel doesn't support negative
+// priorities. Thus, we need to have the FirstUserTask spawn a new "true"
+// FirstUserTask with a higher priority.
+void FirstUserTask() {
+    Create(4, TrueFirstUserTask);
     // Exit();
 }

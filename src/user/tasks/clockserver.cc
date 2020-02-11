@@ -71,10 +71,10 @@ static void enqueue_task(int tid, int tick_threshold) {
 
 void Server() {
     debug("clockserver started");
-    int nsres = RegisterAs(SERVER_ID);
-    assert(nsres >= 0);
     int notifier_tid = Create(INT_MAX, Notifier);
     assert(notifier_tid >= 0);
+    int nsres = RegisterAs(SERVER_ID);
+    assert(nsres >= 0);
 
     int current_time = 0;
 

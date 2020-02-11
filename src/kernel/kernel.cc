@@ -628,7 +628,7 @@ class Kernel {
         // _create_task, which allows negative priority and a forced Tid.
         _create_task(-1, (void*)Idle::Task, IDLE_TASK_TID);
         _create_task(0, (void*)NameServer::Task, Tid(NameServer::TID));
-        Create(4, (void*)FirstUserTask);
+        Create(0, (void*)FirstUserTask);
     }
 
     void shutdown() {
