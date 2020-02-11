@@ -16,7 +16,7 @@ extern void FirstUserTask();
 
 namespace kernel {
 
-static size_t current_interrupt() {
+static std::optional<size_t> current_interrupt() {
     uint32_t vic1_bits =
         *((volatile uint32_t*)VIC1_BASE + VIC_IRQ_STATUS_OFFSET);
 
@@ -35,7 +35,7 @@ static size_t current_interrupt() {
         }
     }
 
-    kpanic("current_interrupt(): no interrupts are set");
+    return std::nullopt;
 }
 
 static const Tid IDLE_TASK_TID = Tid(MAX_SCHEDULED_TASKS - 1);
@@ -102,7 +102,10 @@ void Kernel::handle_syscall(uint32_t no, void* user_sp) {
 }
 
 void Kernel::handle_interrupt() {
-    uint32_t no = current_interrupt();
+    auto no_opt = current_interrupt();
+    if (!no_opt.has_value())
+        kpanic("current_interrupt(): no interrupts are set");
+    uint32_t no = no_opt.value();
 
     kdebug("handle_interrupt: no=%lu", no);
 
