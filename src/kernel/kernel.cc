@@ -678,8 +678,6 @@ int kmain() {
 
             // idle task time!
 
-            idle_timer = *TIMER3_VAL;
-
             // This is pretty neat.
             //
             // We request the system controller to put us into a halt state, and
@@ -693,10 +691,12 @@ int kmain() {
             // an IRQ fires, it simply resumes the PC, _without_ jumping to the
             // IRQ handler! Instead, we manually invoke the kernel's interrupt
             // handler, which will unblock any blocked tasks.
+            idle_timer = *TIMER3_VAL;
             *(volatile uint32_t*)(SYSCON_HALT);
+            idle_time += idle_timer - *TIMER3_VAL;
+
             kern.handle_interrupt();
 
-            idle_time += idle_timer - *TIMER3_VAL;
 
 #ifndef NO_IDLE_MEASUREMENTS
             bwprintf(
