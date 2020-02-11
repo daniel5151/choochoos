@@ -28,18 +28,6 @@ extern Tid current_task;
 
 namespace helpers {
 
-std::optional<Tid> next_tid();
-void reset_task(TaskDescriptor& task);
-void add_to_send_queue(TaskDescriptor& receiver,
-                       TaskDescriptor& sender,
-                       const char* msg,
-                       size_t msglen,
-                       char* reply,
-                       size_t rplen);
-Tid pop_from_send_queue(TaskDescriptor& receiver,
-                        int* sender_tid,
-                        char* recv_buf,
-                        size_t len);
 int create_task(int priority, void* function, std::optional<Tid> force_tid);
 
 }  // namespace helpers
@@ -69,5 +57,7 @@ void shutdown();
 size_t num_event_blocked_tasks();
 
 }  // namespace driver
+
+int run();
 
 }  // namespace kernel

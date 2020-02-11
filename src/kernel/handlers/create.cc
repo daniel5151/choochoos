@@ -28,6 +28,13 @@ struct FreshStack {
     void* lr;
 };
 
+static std::optional<Tid> next_tid() {
+    for (size_t tid = 0; tid < MAX_SCHEDULED_TASKS; tid++) {
+        if (!tasks[tid].has_value()) return Tid(tid);
+    }
+    return std::nullopt;
+}
+
 int create_task(int priority, void* function, std::optional<Tid> force_tid) {
     std::optional<Tid> fresh_tid = next_tid();
     if (!fresh_tid.has_value()) return OUT_OF_TASK_DESCRIPTORS;

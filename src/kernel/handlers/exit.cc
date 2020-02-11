@@ -2,19 +2,7 @@
 
 namespace kernel::handlers {
 
-void Exit() {
-    kdebug("Called Exit");
-    Tid tid = current_task;
-    kassert(tasks[tid].has_value());
-    helpers::reset_task(tasks[tid].value());
-    tasks[tid] = std::nullopt;
-}
-
-}  // namespace kernel::handlers
-
-namespace kernel::helpers {
-
-void reset_task(TaskDescriptor& task) {
+static void reset_task(TaskDescriptor& task) {
     task.sp = nullptr;
     task.parent_tid = std::nullopt;
 
@@ -48,4 +36,12 @@ void reset_task(TaskDescriptor& task) {
     }
 }
 
-}  // namespace kernel::helpers
+void Exit() {
+    kdebug("Called Exit");
+    Tid tid = current_task;
+    kassert(tasks[tid].has_value());
+    reset_task(tasks[tid].value());
+    tasks[tid] = std::nullopt;
+}
+
+}  // namespace kernel::handlers

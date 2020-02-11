@@ -4,6 +4,41 @@
 
 namespace kernel::handlers {
 
+static void add_to_send_queue(TaskDescriptor& receiver,
+                              TaskDescriptor& sender,
+                              const char* msg,
+                              size_t msglen,
+                              char* reply,
+                              size_t rplen) {
+    kassert(receiver.state.tag != TaskState::RECV_WAIT);
+    kassert(sender.state.tag == TaskState::READY);
+
+    sender.state = {.tag = TaskState::SEND_WAIT,
+                    .send_wait = {.msg = msg,
+                                  .msglen = msglen,
+                                  .reply = reply,
+                                  .rplen = rplen,
+                                  .next = std::nullopt}};
+    if (!receiver.send_queue_head.has_value()) {
+        kassert(!receiver.send_queue_tail.has_value());
+
+        receiver.send_queue_head = sender.tid;
+        receiver.send_queue_tail = sender.tid;
+    } else {
+        kassert(receiver.send_queue_head.has_value());
+        kassert(receiver.send_queue_tail.has_value());
+
+        kassert(tasks[receiver.send_queue_tail.value()].has_value());
+
+        TaskDescriptor& old_tail =
+            tasks[receiver.send_queue_tail.value()].value();
+        kassert(old_tail.state.tag == TaskState::SEND_WAIT);
+        kassert(!old_tail.state.send_wait.next.has_value());
+        old_tail.state.send_wait.next = sender.tid;
+        receiver.send_queue_tail = sender.tid;
+    }
+}
+
 int Send(
     int receiver_tid, const char* msg, int msglen, char* reply, int rplen) {
     kdebug("Called Send(tid=%d msg=%p msglen=%d reply=%p rplen=%d)",
@@ -19,9 +54,9 @@ int Send(
         case TaskState::SEND_WAIT:
         case TaskState::REPLY_WAIT:
         case TaskState::READY: {
-            helpers::add_to_send_queue(receiver, sender, msg,
-                                       (size_t)std::max(msglen, 0), reply,
-                                       (size_t)std::max(rplen, 0));
+            add_to_send_queue(receiver, sender, msg,
+                              (size_t)std::max(msglen, 0), reply,
+                              (size_t)std::max(rplen, 0));
 
             // the sender should never see this - it should be overwritten
             // by Reply()
@@ -54,42 +89,3 @@ int Send(
 }
 
 }  // namespace kernel::handlers
-
-namespace kernel::helpers {
-
-void add_to_send_queue(TaskDescriptor& receiver,
-                       TaskDescriptor& sender,
-                       const char* msg,
-                       size_t msglen,
-                       char* reply,
-                       size_t rplen) {
-    kassert(receiver.state.tag != TaskState::RECV_WAIT);
-    kassert(sender.state.tag == TaskState::READY);
-
-    sender.state = {.tag = TaskState::SEND_WAIT,
-                    .send_wait = {.msg = msg,
-                                  .msglen = msglen,
-                                  .reply = reply,
-                                  .rplen = rplen,
-                                  .next = std::nullopt}};
-    if (!receiver.send_queue_head.has_value()) {
-        kassert(!receiver.send_queue_tail.has_value());
-
-        receiver.send_queue_head = sender.tid;
-        receiver.send_queue_tail = sender.tid;
-    } else {
-        kassert(receiver.send_queue_head.has_value());
-        kassert(receiver.send_queue_tail.has_value());
-
-        kassert(tasks[receiver.send_queue_tail.value()].has_value());
-
-        TaskDescriptor& old_tail =
-            tasks[receiver.send_queue_tail.value()].value();
-        kassert(old_tail.state.tag == TaskState::SEND_WAIT);
-        kassert(!old_tail.state.send_wait.next.has_value());
-        old_tail.state.send_wait.next = sender.tid;
-        receiver.send_queue_tail = sender.tid;
-    }
-}
-
-}  // namespace kernel::helpers

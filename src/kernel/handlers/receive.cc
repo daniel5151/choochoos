@@ -4,38 +4,11 @@
 
 namespace kernel::handlers {
 
-int Receive(int* tid, char* msg, int msglen) {
-    kdebug("Called Receive(tid=%p msg=%p msglen=%d)", (void*)tid, msg, msglen);
-
-    TaskDescriptor& task = tasks[current_task].value();
-
-    switch (task.state.tag) {
-        case TaskState::READY: {
-            if (!task.send_queue_head.has_value()) {
-                task.state = {.tag = TaskState::RECV_WAIT,
-                              .recv_wait = {tid, msg, (size_t)msglen}};
-                // this will be overwritten when a sender shows up
-                return -3;
-            }
-
-            return helpers::pop_from_send_queue(task, tid, msg,
-                                                (size_t)std::max(msglen, 0));
-        }
-        default:
-            kdebug("Receive() called from task in non-ready state %d",
-                   task.state.tag);
-            return -1;
-    }
-}
-
-}  // namespace kernel::handlers
-
-namespace kernel::helpers {
-
-Tid pop_from_send_queue(TaskDescriptor& receiver,
-                        int* sender_tid,
-                        char* recv_buf,
-                        size_t len) {
+static Tid pop_from_send_queue(TaskDescriptor& receiver,
+                               int* sender_tid,
+                               char* recv_buf,
+                               size_t len) {
+    using namespace kernel;
     kassert(receiver.state.tag == TaskState::READY);
     kassert(receiver.send_queue_head.has_value());
 
@@ -65,4 +38,28 @@ Tid pop_from_send_queue(TaskDescriptor& receiver,
     return n;
 }
 
-}  // namespace kernel::helpers
+int Receive(int* tid, char* msg, int msglen) {
+    kdebug("Called Receive(tid=%p msg=%p msglen=%d)", (void*)tid, msg, msglen);
+
+    TaskDescriptor& task = tasks[current_task].value();
+
+    switch (task.state.tag) {
+        case TaskState::READY: {
+            if (!task.send_queue_head.has_value()) {
+                task.state = {.tag = TaskState::RECV_WAIT,
+                              .recv_wait = {tid, msg, (size_t)msglen}};
+                // this will be overwritten when a sender shows up
+                return -3;
+            }
+
+            return pop_from_send_queue(task, tid, msg,
+                                       (size_t)std::max(msglen, 0));
+        }
+        default:
+            kdebug("Receive() called from task in non-ready state %d",
+                   task.state.tag);
+            return -1;
+    }
+}
+
+}  // namespace kernel::handlers
