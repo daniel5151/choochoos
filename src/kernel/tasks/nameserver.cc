@@ -1,4 +1,4 @@
-#include "user/tasks/nameserver.h"
+#include "kernel/tasks/nameserver.h"
 
 #include <cstdio>
 #include <cstring>
@@ -73,6 +73,7 @@ struct Response {
 };
 
 void Task() {
+    assert(MyTid() == TID);
     Request msg{};
     int tid;
 
@@ -192,9 +193,15 @@ int WhoIs(const char* name) {
 void Shutdown() {
     NameServer::Request req{.kind = MessageKind::Shutdown, .shutdown = {}};
     NameServer::Response res;
-    const int res_len = Send(NameServer::TID, (char*)&req, sizeof(req), (char*)&res, sizeof(res));
+    const int res_len = Send(NameServer::TID, (char*)&req, sizeof(req),
+                             (char*)&res, sizeof(res));
     assert(res_len == sizeof(res));
     assert(res.kind == MessageKind::Shutdown);
 }
 
 }  // namespace NameServer
+
+extern "C" int WhoIs(const char* name) { return NameServer::WhoIs(name); }
+extern "C" int RegisterAs(const char* name) {
+    return NameServer::RegisterAs(name);
+}

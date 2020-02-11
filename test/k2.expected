@@ -9,57 +9,57 @@ player 2 num games (default 3): 5
 player 3 priority  (default 1): 3
 player 3 num games (default 3): 3
 [Client tid=3 id=?] waiting for player config
-[Client tid=4 id=?] waiting for player config
-[Client tid=5 id=?] waiting for player config
-[Client tid=5 id=?] received player config (num_games=3, id=3)
-[Client tid=5 id=3] querying nameserver for 'RPSServer'
-[Client tid=4 id=?] received player config (num_games=5, id=2)
-[Client tid=4 id=2] querying nameserver for 'RPSServer'
+[RPSServer] accepting signups...
 [Client tid=3 id=?] received player config (num_games=3, id=1)
 [Client tid=3 id=1] querying nameserver for 'RPSServer'
-[RPSServer] accepting signups...
-[Client tid=5 id=3] received reply from nameserver: RPSServer=2
-[Client tid=5 id=3] I want to play 3 games. Sending signup...
-[Client tid=4 id=2] received reply from nameserver: RPSServer=2
-[Client tid=4 id=2] I want to play 5 games. Sending signup...
-[RPSServer] matching tids 4 and 5
-[Client tid=4 id=2] received signup ack
-[Client tid=4 id=2] I want to play 5 more games. Sending scissors...
+[Client tid=4 id=?] waiting for player config
 [Client tid=3 id=1] received reply from nameserver: RPSServer=2
 [Client tid=3 id=1] I want to play 3 games. Sending signup...
-[Client tid=5 id=3] received signup ack
-[Client tid=5 id=3] I want to play 3 more games. Sending paper...
+[Client tid=4 id=?] received player config (num_games=5, id=2)
+[Client tid=4 id=2] querying nameserver for 'RPSServer'
+[Client tid=5 id=?] waiting for player config
+[Client tid=4 id=2] received reply from nameserver: RPSServer=2
+[Client tid=4 id=2] I want to play 5 games. Sending signup...
+[Client tid=5 id=?] received player config (num_games=3, id=3)
+[Client tid=5 id=3] querying nameserver for 'RPSServer'
+[RPSServer] matching tids 4 and 3
+[Client tid=4 id=2] received signup ack
+[Client tid=4 id=2] I want to play 5 more games. Sending scissors...
+[Client tid=5 id=3] received reply from nameserver: RPSServer=2
+[Client tid=5 id=3] I want to play 3 games. Sending signup...
+[Client tid=3 id=1] received signup ack
+[Client tid=3 id=1] I want to play 3 more games. Sending paper...
 [Client tid=4 id=2] I won!
 [Client tid=4 id=2] I want to play 4 more games. Sending paper...
-[Client tid=5 id=3] I lost :(
-[Client tid=5 id=3] I want to play 2 more games. Sending rock...
-~~~~~~~~~ press any key to continue ~~~~~~~~~
-[Client tid=4 id=2] I won!
-[Client tid=4 id=2] I want to play 3 more games. Sending rock...
-[Client tid=5 id=3] I lost :(
-[Client tid=5 id=3] I want to play 1 more game. Sending rock...
-~~~~~~~~~ press any key to continue ~~~~~~~~~
-[Client tid=4 id=2] it's a draw
-[Client tid=4 id=2] I want to play 2 more games. Sending rock...
-[Client tid=5 id=3] it's a draw
-[Client tid=5 id=3] sending quit
-~~~~~~~~~ press any key to continue ~~~~~~~~~
-[RPSServer] tid 5 quit, but tid 3 is waiting. Matching tids 4 and 3
-[Client tid=3 id=1] received signup ack
-[Client tid=3 id=1] I want to play 3 more games. Sending scissors...
-[Client tid=5 id=3] exiting
-[Client tid=4 id=2] I won!
-[Client tid=4 id=2] I want to play 1 more game. Sending scissors...
 [Client tid=3 id=1] I lost :(
 [Client tid=3 id=1] I want to play 2 more games. Sending rock...
 ~~~~~~~~~ press any key to continue ~~~~~~~~~
+[Client tid=4 id=2] I won!
+[Client tid=4 id=2] I want to play 3 more games. Sending rock...
+[Client tid=3 id=1] I lost :(
+[Client tid=3 id=1] I want to play 1 more game. Sending rock...
+~~~~~~~~~ press any key to continue ~~~~~~~~~
+[Client tid=4 id=2] it's a draw
+[Client tid=4 id=2] I want to play 2 more games. Sending rock...
+[Client tid=3 id=1] it's a draw
+[Client tid=3 id=1] sending quit
+~~~~~~~~~ press any key to continue ~~~~~~~~~
+[RPSServer] tid 3 quit, but tid 5 is waiting. Matching tids 4 and 5
+[Client tid=5 id=3] received signup ack
+[Client tid=5 id=3] I want to play 3 more games. Sending scissors...
+[Client tid=3 id=1] exiting
+[Client tid=4 id=2] I won!
+[Client tid=4 id=2] I want to play 1 more game. Sending scissors...
+[Client tid=5 id=3] I lost :(
+[Client tid=5 id=3] I want to play 2 more games. Sending rock...
+~~~~~~~~~ press any key to continue ~~~~~~~~~
 [Client tid=4 id=2] I lost :(
 [Client tid=4 id=2] sending quit
-[Client tid=3 id=1] I won!
-[Client tid=3 id=1] I want to play 1 more game. Sending paper...
+[Client tid=5 id=3] I won!
+[Client tid=5 id=3] I want to play 1 more game. Sending paper...
 ~~~~~~~~~ press any key to continue ~~~~~~~~~
 [RPSServer] tid 4 quit, but no players are waiting.
 [Client tid=4 id=2] exiting
-[Client tid=3 id=1] other player quit! I guess I'll go home :(
-[Client tid=3 id=1] exiting
+[Client tid=5 id=3] other player quit! I guess I'll go home :(
+[Client tid=5 id=3] exiting
 Goodbye from choochoos kernel!

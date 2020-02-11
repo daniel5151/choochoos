@@ -9,6 +9,9 @@
 #include "kernel/asm.h"
 #include "kernel/kernel.h"
 
+#include "kernel/tasks/idle.h"
+#include "kernel/tasks/nameserver.h"
+
 #include "user/syscalls.h"
 
 // defined in the linker script
@@ -47,17 +50,8 @@ class Tid {
 };
 
 struct TaskState {
-    enum uint8_t {
-        UNUSED,
-        READY,
-        SEND_WAIT,
-        RECV_WAIT,
-        REPLY_WAIT,
-        EVENT_WAIT
-    } tag;
+    enum uint8_t { READY, SEND_WAIT, RECV_WAIT, REPLY_WAIT, EVENT_WAIT } tag;
     union {
-        struct {
-        } unused;
         struct {
         } ready;
         struct {
@@ -81,150 +75,33 @@ struct TaskState {
     };
 };
 
-class TaskDescriptor {
+struct TaskDescriptor {
     Tid tid;
     std::optional<Tid> send_queue_head;
     std::optional<Tid> send_queue_tail;
-
-    // hack since Kdebug relies on a local MyTid() (TODO plsfix)
-    int MyTid() const { return tid.raw_tid(); }
-
-   public:
     size_t priority;
     TaskState state;
     std::optional<Tid> parent_tid;
-
     void* sp;
-
-    TaskDescriptor() = delete;
-
-    TaskDescriptor(Tid tid,
-                   size_t priority,
-                   std::optional<Tid> parent_tid,
-                   void* stack_ptr)
-        : tid{tid},
-          send_queue_head{std::nullopt},
-          send_queue_tail{std::nullopt},
-          priority{priority},
-          state{.tag = TaskState::READY, .ready = {}},
-          parent_tid{parent_tid},
-          sp{stack_ptr} {}
-
-    bool send_queue_is_empty() const { return !send_queue_head.has_value(); }
-
-    void reset(std::optional<TaskDescriptor> (&tasks)[MAX_SCHEDULED_TASKS],
-               PriorityQueue<Tid, MAX_SCHEDULED_TASKS>& ready_queue) {
-        state = {.tag = TaskState::UNUSED, .unused = {}};
-        sp = nullptr;
-        parent_tid = std::nullopt;
-
-        if (!send_queue_head.has_value()) return;
-
-        Tid tid = send_queue_head.value();
-
-        send_queue_head = std::nullopt;
-        send_queue_tail = std::nullopt;
-
-        while (true) {
-            kassert(tasks[tid].has_value());
-
-            auto& task = tasks[tid].value();
-            kassert(task.state.tag == TaskState::SEND_WAIT);
-            std::optional<Tid> next_tid = task.state.send_wait.next;
-
-            kdebug("tid=%u cannot complete SRR, receiver (%u) shut down",
-                   (size_t)this->tid, (size_t)tid);
-
-            // SRR could not be completed, return -2 to the sender
-            task.write_syscall_return_value(-2);
-            task.state = {.tag = TaskState::READY, .ready = {}};
-            if (ready_queue.push(tid, task.priority) != PriorityQueueErr::OK) {
-                kpanic("ready queue full");
-            }
-
-            if (!next_tid.has_value()) break;
-
-            tid = next_tid.value();
-        }
-    }
-
-    void add_to_send_queue(
-        TaskDescriptor& task,
-        const char* msg,
-        size_t msglen,
-        char* reply,
-        size_t rplen,
-        std::optional<TaskDescriptor> (&tasks)[MAX_SCHEDULED_TASKS]) {
-        kassert(this->state.tag != TaskState::RECV_WAIT);
-        kassert(task.state.tag == TaskState::READY);
-
-        task.state = {.tag = TaskState::SEND_WAIT,
-                      .send_wait = {.msg = msg,
-                                    .msglen = msglen,
-                                    .reply = reply,
-                                    .rplen = rplen,
-                                    .next = std::nullopt}};
-        if (send_queue_is_empty()) {
-            kassert(!send_queue_head.has_value());
-            kassert(!send_queue_tail.has_value());
-
-            send_queue_head = task.tid;
-            send_queue_tail = task.tid;
-        } else {
-            kassert(send_queue_head.has_value());
-            kassert(send_queue_tail.has_value());
-
-            kassert(tasks[send_queue_tail.value()].has_value());
-
-            TaskDescriptor& old_tail = tasks[send_queue_tail.value()].value();
-            kassert(old_tail.state.tag == TaskState::SEND_WAIT);
-            kassert(!old_tail.state.send_wait.next.has_value());
-            old_tail.state.send_wait.next = task.tid;
-            send_queue_tail = task.tid;
-        }
-    }
-
-    Tid pop_from_send_queue(
-        int* sender_tid,
-        char* recv_buf,
-        size_t len,
-        std::optional<TaskDescriptor> (&tasks)[MAX_SCHEDULED_TASKS]) {
-        kassert(!send_queue_is_empty());
-        kassert(state.tag == TaskState::READY);
-        kassert(send_queue_head.has_value());
-
-        kassert(tasks[send_queue_head.value()].has_value());
-
-        TaskDescriptor& task = tasks[send_queue_head.value()].value();
-        kassert(task.state.tag == TaskState::SEND_WAIT);
-
-        size_t n = std::min(task.state.send_wait.msglen, len);
-        memcpy(recv_buf, task.state.send_wait.msg, n);
-        *sender_tid = send_queue_head.value();
-
-        char* reply = task.state.send_wait.reply;
-        size_t rplen = task.state.send_wait.rplen;
-        std::optional<Tid> next = task.state.send_wait.next;
-        task.state = {.tag = TaskState::REPLY_WAIT,
-                      .reply_wait = {reply, rplen}};
-
-        this->state = {.tag = TaskState::READY, .ready = {}};
-
-        send_queue_head = next;
-        if (!send_queue_head.has_value()) {
-            send_queue_tail = std::nullopt;
-        } else {
-            kassert(send_queue_tail.has_value());
-        }
-
-        return n;
-    }
-
-    void write_syscall_return_value(int32_t value) {
-        SwiUserStack* stack = (SwiUserStack*)sp;
-        *((int32_t*)&stack->regs[0]) = value;
-    }
 };
+
+static TaskDescriptor new_task(Tid tid,
+                               size_t priority,
+                               std::optional<Tid> parent_tid,
+                               void* stack_ptr) {
+    return {.tid = tid,
+            .send_queue_head = std::nullopt,
+            .send_queue_tail = std::nullopt,
+            .priority = priority,
+            .state = {.tag = TaskState::READY, .ready = {}},
+            .parent_tid = parent_tid,
+            .sp = stack_ptr};
+}
+
+static void write_syscall_return_value(TaskDescriptor& task, int32_t value) {
+    SwiUserStack* stack = (SwiUserStack*)task.sp;
+    *((int32_t*)&stack->regs[0]) = value;
+}
 
 static size_t current_interrupt() {
     uint32_t vic1_bits =
@@ -252,11 +129,6 @@ static size_t current_interrupt() {
 extern void FirstUserTask();
 
 const Tid IDLE_TASK_TID = Tid(MAX_SCHEDULED_TASKS - 1);
-void IdleTask() {
-    for (;;) {
-        // TODO: mine dogecoin
-    }
-}
 
 class Kernel {
     /// Helper POD struct to init new user task stacks
@@ -278,6 +150,110 @@ class Kernel {
             if (!tasks[tid].has_value()) return Tid(tid);
         }
         return std::nullopt;
+    }
+
+    void reset_task(TaskDescriptor& task) {
+        task.sp = nullptr;
+        task.parent_tid = std::nullopt;
+
+        if (!task.send_queue_head.has_value()) return;
+
+        Tid tid = task.send_queue_head.value();
+
+        task.send_queue_head = std::nullopt;
+        task.send_queue_tail = std::nullopt;
+
+        while (true) {
+            kassert(tasks[tid].has_value());
+
+            auto& task = tasks[tid].value();
+            kassert(task.state.tag == TaskState::SEND_WAIT);
+            std::optional<Tid> next_tid = task.state.send_wait.next;
+
+            kdebug("tid=%u cannot complete SRR, receiver (%u) shut down",
+                   (size_t)this->tid, (size_t)tid);
+
+            // SRR could not be completed, return -2 to the sender
+            write_syscall_return_value(task, -2);
+            task.state = {.tag = TaskState::READY, .ready = {}};
+            if (ready_queue.push(tid, task.priority) != PriorityQueueErr::OK) {
+                kpanic("ready queue full");
+            }
+
+            if (!next_tid.has_value()) break;
+
+            tid = next_tid.value();
+        }
+    }
+
+    void add_to_send_queue(TaskDescriptor& receiver,
+                           TaskDescriptor& sender,
+                           const char* msg,
+                           size_t msglen,
+                           char* reply,
+                           size_t rplen) {
+        kassert(receiver.state.tag != TaskState::RECV_WAIT);
+        kassert(sender.state.tag == TaskState::READY);
+
+        sender.state = {.tag = TaskState::SEND_WAIT,
+                        .send_wait = {.msg = msg,
+                                      .msglen = msglen,
+                                      .reply = reply,
+                                      .rplen = rplen,
+                                      .next = std::nullopt}};
+        if (!receiver.send_queue_head.has_value()) {
+            kassert(!receiver.send_queue_tail.has_value());
+
+            receiver.send_queue_head = sender.tid;
+            receiver.send_queue_tail = sender.tid;
+        } else {
+            kassert(receiver.send_queue_head.has_value());
+            kassert(receiver.send_queue_tail.has_value());
+
+            kassert(tasks[receiver.send_queue_tail.value()].has_value());
+
+            TaskDescriptor& old_tail =
+                tasks[receiver.send_queue_tail.value()].value();
+            kassert(old_tail.state.tag == TaskState::SEND_WAIT);
+            kassert(!old_tail.state.send_wait.next.has_value());
+            old_tail.state.send_wait.next = sender.tid;
+            receiver.send_queue_tail = sender.tid;
+        }
+    }
+
+    Tid pop_from_send_queue(TaskDescriptor& receiver,
+                            int* sender_tid,
+                            char* recv_buf,
+                            size_t len) {
+        kassert(receiver.state.tag == TaskState::READY);
+        kassert(receiver.send_queue_head.has_value());
+
+        kassert(tasks[receiver.send_queue_head.value()].has_value());
+
+        TaskDescriptor& sender =
+            tasks[receiver.send_queue_head.value()].value();
+        kassert(sender.state.tag == TaskState::SEND_WAIT);
+
+        size_t n = std::min(sender.state.send_wait.msglen, len);
+        memcpy(recv_buf, sender.state.send_wait.msg, n);
+        *sender_tid = receiver.send_queue_head.value();
+
+        char* reply = sender.state.send_wait.reply;
+        size_t rplen = sender.state.send_wait.rplen;
+        std::optional<Tid> next = sender.state.send_wait.next;
+        sender.state = {.tag = TaskState::REPLY_WAIT,
+                        .reply_wait = {reply, rplen}};
+
+        receiver.state = {.tag = TaskState::READY, .ready = {}};
+
+        receiver.send_queue_head = next;
+        if (!receiver.send_queue_head.has_value()) {
+            receiver.send_queue_tail = std::nullopt;
+        } else {
+            kassert(receiver.send_queue_tail.has_value());
+        }
+
+        return n;
     }
 
     // ------------------ syscall handlers ---------------------- //
@@ -306,6 +282,15 @@ class Kernel {
             kpanic("out of space in ready queue (tid=%u)", (size_t)tid);
         }
 
+        // GCC complains that writing *anything* to `stack` is an out-of-bounds
+        // error,  because `&__USER_STACKS_START__` is simply a `char*` with no
+        // bounds information (and hence, `start_of_stack` also has no bounds
+        // information). We know that `start_of_stack` is actually then high
+        // address of a block of memory implicitly allocated for the user task
+        // stack (with more than enough space for a FreshStack struct), but GCC
+        // doesn't, so we must squelch -Warray-bounds.
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Warray-bounds"
         // set up memory for the initial user stack
         char* start_of_stack =
             &__USER_STACKS_START__ + (USER_STACK_SIZE * ((size_t)tid + 1));
@@ -316,15 +301,6 @@ class Kernel {
                 start_of_stack, &__USER_STACKS_END__);
         }
 
-        // GCC complains that writing *anything* to `stack` is an out-of-bounds
-        // error,  because `&__USER_STACKS_START__` is simply a `char*` with no
-        // bounds information (and hence, `start_of_stack` also has no bounds
-        // information). We know that `start_of_stack` is actually then high
-        // address of a block of memory implicitly allocated for the user task
-        // stack (with more than enough space for a FreshStack struct), but GCC
-        // doesn't, so we must squelch -Warray-bounds.
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Warray-bounds"
         FreshStack* stack =
             (FreshStack*)(void*)(start_of_stack - sizeof(FreshStack));
 
@@ -339,8 +315,7 @@ class Kernel {
         kdebug("Created: tid=%u priority=%d function=%p", (size_t)tid, priority,
                function);
 
-        tasks[tid] =
-            TaskDescriptor(tid, (size_t)priority, current_task, (void*)stack);
+        tasks[tid] = new_task(tid, priority, current_task, (void*)stack);
         return tid;
     }
 
@@ -357,7 +332,7 @@ class Kernel {
         kdebug("Called Exit");
         Tid tid = current_task;
         kassert(tasks[tid].has_value());
-        tasks[tid]->reset(tasks, ready_queue);
+        reset_task(tasks[tid].value());
         tasks[tid] = std::nullopt;
     }
 
@@ -375,14 +350,12 @@ class Kernel {
         TaskDescriptor& sender = tasks[sender_tid].value();
         TaskDescriptor& receiver = tasks[receiver_tid].value();
         switch (receiver.state.tag) {
-            case TaskState::UNUSED:
-                return -1;  // no running task with tid
             case TaskState::SEND_WAIT:
             case TaskState::REPLY_WAIT:
             case TaskState::READY: {
-                receiver.add_to_send_queue(sender, msg,
-                                           (size_t)std::max(msglen, 0), reply,
-                                           (size_t)std::max(rplen, 0), tasks);
+                add_to_send_queue(receiver, sender, msg,
+                                  (size_t)std::max(msglen, 0), reply,
+                                  (size_t)std::max(rplen, 0));
 
                 // the sender should never see this - it should be overwritten
                 // by Reply()
@@ -399,7 +372,7 @@ class Kernel {
 
                 // set the return value that the receiver gets from Receive() to
                 // n.
-                receiver.write_syscall_return_value((int32_t)n);
+                write_syscall_return_value(receiver, (int32_t)n);
 
                 sender.state = {.tag = TaskState::REPLY_WAIT,
                                 .reply_wait = {reply, (size_t)rplen}};
@@ -422,15 +395,15 @@ class Kernel {
 
         switch (task.state.tag) {
             case TaskState::READY: {
-                if (task.send_queue_is_empty()) {
+                if (!task.send_queue_head.has_value()) {
                     task.state = {.tag = TaskState::RECV_WAIT,
                                   .recv_wait = {tid, msg, (size_t)msglen}};
                     // this will be overwritten when a sender shows up
                     return -3;
                 }
 
-                return task.pop_from_send_queue(
-                    tid, msg, (size_t)std::max(msglen, 0), tasks);
+                return pop_from_send_queue(task, tid, msg,
+                                           (size_t)std::max(msglen, 0));
             }
             default:
                 kdebug("Receive() called from task in non-ready state %d",
@@ -458,13 +431,11 @@ class Kernel {
                 // in the TaskDescriptor points at the top of the stack. Since
                 // the top of the stack represents the syscall return word, we
                 // can write directly to the stack pointer.
-                receiver.write_syscall_return_value((int32_t)n);
+                write_syscall_return_value(receiver, (int32_t)n);
 
                 // Return the length of the reply to the original receiver.
                 return (int)n;
             }
-            case TaskState::UNUSED:
-                return -1;
             default:
                 return -2;
         }
@@ -542,7 +513,8 @@ class Kernel {
                 kpanic("invalid syscall %lu", no);
         }
         if (ret.has_value()) {
-            tasks[current_task].value().write_syscall_return_value(ret.value());
+            write_syscall_return_value(tasks[current_task].value(),
+                                       ret.value());
         }
     }
 
@@ -583,7 +555,7 @@ class Kernel {
         TaskDescriptor& blocked_task = tasks[blocked_tid].value();
         kassert(blocked_task.state.tag = TaskState::EVENT_WAIT);
         blocked_task.state = {.tag = TaskState::READY, .ready = {}};
-        blocked_task.write_syscall_return_value(ret);
+        write_syscall_return_value(blocked_task, ret);
 
         if (ready_queue.push(blocked_tid, blocked_task.priority) ==
             PriorityQueueErr::FULL) {
@@ -611,7 +583,6 @@ class Kernel {
             case TaskState::RECV_WAIT:
             case TaskState::REPLY_WAIT:
             case TaskState::EVENT_WAIT:
-            case TaskState::UNUSED:
                 break;
         }
     }
@@ -653,10 +624,22 @@ class Kernel {
         }
 #pragma GCC diagnostic pop
 
-        // Spawn the idle task with a direct call to _create_task, which allows
-        // negative priority and a forced Tid.
-        _create_task(-1, (void*)IdleTask, Tid(MAX_SCHEDULED_TASKS - 1));
-        Create(4, (void*)FirstUserTask);
+        // Spawn the idle task and name server with a direct call to
+        // _create_task, which allows negative priority and a forced Tid.
+        _create_task(-1, (void*)Idle::Task, IDLE_TASK_TID);
+        _create_task(0, (void*)NameServer::Task, Tid(NameServer::TID));
+        Create(0, (void*)FirstUserTask);
+    }
+
+    void shutdown() {
+        // clear the timers
+        *(volatile uint32_t*)(TIMER1_BASE + CRTL_OFFSET) = 0;
+        *(volatile uint32_t*)(TIMER2_BASE + CRTL_OFFSET) = 0;
+        *(volatile uint32_t*)(TIMER3_BASE + CRTL_OFFSET) = 0;
+
+        // disable all interrupts
+        *(volatile uint32_t*)(VIC1_BASE + VIC_INT_ENABLE_OFFSET) = 0;
+        *(volatile uint32_t*)(VIC2_BASE + VIC_INT_ENABLE_OFFSET) = 0;
     }
 
     size_t num_event_blocked_tasks() const { return event_queue.num_present(); }
@@ -719,6 +702,7 @@ int kmain() {
         }
     }
 
+    kern.shutdown();
     kprintf("Goodbye from choochoos kernel!");
 
     return 0;

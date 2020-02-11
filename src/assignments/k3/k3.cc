@@ -4,7 +4,6 @@
 #include "user/debug.h"
 #include "user/syscalls.h"
 #include "user/tasks/clockserver.h"
-#include "user/tasks/nameserver.h"
 
 struct Config {
     // smaller priority is higher
@@ -15,7 +14,7 @@ struct Config {
 
 void DelayerTask() {
     Config cfg;
-    int clockserver = NameServer::WhoIs(Clock::SERVER_ID);
+    int clockserver = WhoIs(Clock::SERVER_ID);
     assert(clockserver >= 0);
     int mytid = MyTid();
     int myparent = MyParentTid();
@@ -35,7 +34,6 @@ void DelayerTask() {
 static Config configs[4] = {{3, 10, 20}, {4, 23, 9}, {5, 33, 6}, {6, 71, 3}};
 
 void FirstUserTask() {
-    Create(1, NameServer::Task);
     int clockserver = Create(INT_MAX, Clock::Server);
 
     for (auto& cfg : configs) {
@@ -54,5 +52,4 @@ void FirstUserTask() {
         Reply(tid, nullptr, 0);
     }
     Clock::Shutdown(clockserver);
-    NameServer::Shutdown();
 }

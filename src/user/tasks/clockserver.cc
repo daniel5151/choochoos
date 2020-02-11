@@ -6,20 +6,16 @@
 #include "user/debug.h"
 #include "user/syscalls.h"
 #include "user/tasks/clockserver.h"
-#include "user/tasks/nameserver.h"
 
 #define USER_TICKS_PER_SEC 100    // 10ms
 #define TIMER_TICKS_PER_SEC 2000  // 2 kHz
 
 namespace Clock {
 
-class DelayedTask {
-   public:
+struct DelayedTask {
     int tid;
     // make the task ready once *timer3_value_reg < tick_threshold
     int tick_threshold;
-    DelayedTask(int tid, int tick_threshold)
-        : tid(tid), tick_threshold(tick_threshold) {}
 };
 
 static PriorityQueue<DelayedTask, 32> pq;
@@ -67,17 +63,18 @@ static void enqueue_task(int tid, int tick_threshold) {
     // Delayed tasks with a smaller tick_threshold should be woken
     // up first, so they should have a higher priority.
     int priority = -tick_threshold;
-    auto err = pq.push(DelayedTask(tid, tick_threshold), priority);
+    auto err =
+        pq.push({.tid = tid, .tick_threshold = tick_threshold}, priority);
     if (err == PriorityQueueErr::FULL) panic("timer buffer full");
     assert(pq.peek()->tick_threshold <= tick_threshold);
 }
 
 void Server() {
     debug("clockserver started");
-    int nsres = NameServer::RegisterAs(SERVER_ID);
-    assert(nsres >= 0);
     int notifier_tid = Create(INT_MAX, Notifier);
     assert(notifier_tid >= 0);
+    int nsres = RegisterAs(SERVER_ID);
+    assert(nsres >= 0);
 
     int current_time = 0;
 
