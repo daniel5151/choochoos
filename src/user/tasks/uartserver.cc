@@ -1,4 +1,3 @@
-#include "common/printf.h"
 #include "common/queue.h"
 #include "common/ts7200.h"
 
@@ -7,6 +6,7 @@
 
 #include <climits>
 #include <cstdarg>
+#include <cstring>
 
 namespace Uart {
 const char* SERVER_ID = "UartServer";
@@ -28,7 +28,7 @@ Iobuf& outbuf(int channel) {
 }
 
 struct Request {
-    enum { Notify, Shutdown, Putc, Getc } tag;
+    enum { Notify, Shutdown, Putc, Putstr, Getc } tag;
     union {
         struct {
             int eventid;
@@ -42,16 +42,27 @@ struct Request {
         } putc;
         struct {
             int channel;
+            size_t len;
+            // must be the last element in this struct, may not be completely
+            // copied.
+            char buf[IOBUF_SIZE];
+        } putstr;
+        struct {
+            int channel;
         } getc;
     };
 };
 
 struct Response {
-    enum { Putc, Getc } tag;
+    enum { Putc, Putstr, Getc } tag;
     union {
         struct {
             bool success;
         } putc;
+        struct {
+            bool success;
+            int bytes_written;
+        } putstr;
         struct {
             char c;
         } getc;
@@ -75,6 +86,28 @@ static void Notifier(int eventid) {
 // void COM1Notifier() { Notifier(??); }
 void COM2Notifier() { Notifier(54); }
 
+static volatile int* flags_for(int channel) {
+    switch (channel) {
+        case COM1:
+            return (volatile int*)(UART1_BASE + UART_FLAG_OFFSET);
+        case COM2:
+            return (volatile int*)(UART2_BASE + UART_FLAG_OFFSET);
+        default:
+            panic("bad channel %d", channel);
+    }
+}
+
+static volatile int* data_for(int channel) {
+    switch (channel) {
+        case COM1:
+            return (volatile int*)(UART1_BASE + UART_DATA_OFFSET);
+        case COM2:
+            return (volatile int*)(UART2_BASE + UART_DATA_OFFSET);
+        default:
+            panic("bad channel %d", channel);
+    }
+}
+
 void Server() {
     // TODO spawn the COM1 notifier too.
     //    Create(INT_MAX, COM1Notifier);
@@ -88,29 +121,18 @@ void Server() {
 
     while (true) {
         int n = Receive(&tid, (char*)&req, sizeof(req));
-        if (n != sizeof(req)) panic("Uart::Server: bad request length %d", n);
+        if (n <= (int)sizeof(req.tag))
+            panic("Uart::Server: bad request length %d", n);
         switch (req.tag) {
             case Request::Notify: {
                 break;
             }
             case Request::Putc: {
                 int channel = req.putc.channel;
-                // TODO extract this pls:
-                volatile int *flags, *data;
-                switch (channel) {
-                    case COM1:
-                        flags = (volatile int*)(UART1_BASE + UART_FLAG_OFFSET);
-                        data = (volatile int*)(UART1_BASE + UART_DATA_OFFSET);
-                        break;
-                    case COM2:
-                        flags = (volatile int*)(UART2_BASE + UART_FLAG_OFFSET);
-                        data = (volatile int*)(UART2_BASE + UART_DATA_OFFSET);
-                        break;
-                    default:
-                        panic("bad channel %d", channel);
-                }
-
                 Iobuf& buf = outbuf(req.putc.channel);
+
+                volatile int* flags = flags_for(channel);
+                volatile int* data = data_for(channel);
 
                 while (!buf.is_empty() && !(*flags & TXFF_MASK)) {
                     char c = buf.pop_front().value();
@@ -133,6 +155,42 @@ void Server() {
                 }
                 // TODO we should enable TX interrupts on that uart here.
                 res.putc.success = true;
+                Reply(tid, (char*)&res, sizeof(res));
+                break;
+            }
+            case Request::Putstr: {
+                const int len = (int)req.putstr.len;
+                int n = len;
+                int channel = req.putstr.channel;
+                char* msg = req.putstr.buf;
+
+                Iobuf& buf = outbuf(req.putc.channel);
+                volatile int* flags = flags_for(channel);
+                volatile int* data = data_for(channel);
+
+                while (n > 0 && !(*flags & TXFF_MASK)) {
+                    *data = *msg;
+                    msg++;
+                    n--;
+                }
+
+                while (n > 0) {
+                    if (buf.push_back(*msg) != QueueErr::OK) {
+                        res = {.tag = Response::Putstr,
+                               .putstr = {.success = false,
+                                          .bytes_written = (int)(len - n)}};
+                        Reply(tid, (char*)&res, sizeof(res));
+                        break;
+                    }
+                    msg++;
+                };
+
+                if (!buf.is_empty()) {
+                    // TODO enable UART interrupts
+                }
+
+                res = {.tag = Response::Putstr,
+                       .putstr = {.success = true, .bytes_written = len}};
                 Reply(tid, (char*)&res, sizeof(res));
                 break;
             }
@@ -170,28 +228,39 @@ int Putc(int tid, int channel, char c) {
     return -1;
 }
 
-struct _putc_arg {
-    int tid;
-    int channel;
-};
+int Putstr(int tid, int channel, const char* msg) {
+    size_t len = strlen(msg);
+    assert(len < IOBUF_SIZE);
+    Response res;
 
-static void _putc(char c, void* arg_vp) {
-    _putc_arg* arg = (_putc_arg*)arg_vp;
-    int n = Putc(arg->tid, arg->channel, c);
-    if (n < 0) {
-        panic("could not write character '0x%x' to channel %d", (unsigned int)c,
-              arg->channel);
+    // req can contain a buffer up to length IOBUF_SIZE, but we only copy
+    // strlen(msg) bytes into the request.
+    Request req = {.tag = Request::Putstr,
+                   .putstr = {.channel = channel, .len = len, .buf = {}}};
+    memcpy(req.putstr.buf, msg, len);
+
+    // Moreover, since req.putstr.buf is the last field in the struct, we can
+    // truncate the struct that we send to the server (instead of sending the
+    // full size buffer regarless of len).
+    int size = (int)(((char*)&req.putstr.buf - (char*)&req) + len);
+
+    Send(tid, (char*)&req, size, (char*)&res, sizeof(res));
+
+    assert(res.tag == Response::Putstr);
+    if (res.putstr.success) {
+        return res.putstr.bytes_written;
     }
+    return -1;
 }
 
 int Printf(int tid, int channel, const char* format, ...) {
-    _putc_arg args{.tid = tid, .channel = channel};
+    char buf[IOBUF_SIZE];
     va_list va;
     va_start(va, format);
-    int n = vfctprintf(&_putc, &args, format, va);
+    vsnprintf(buf, sizeof(buf), format, va);
     va_end(va);
 
-    return n;
+    return Putstr(tid, channel, buf);
 }
 
 }  // namespace Uart

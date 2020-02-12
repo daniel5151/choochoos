@@ -26,7 +26,7 @@ void FirstUserTask() {
     int clock = Create(INT_MAX, Clock::Server);
     int uart = Create(INT_MAX, Uart::Server);
 
-    Create(10, TimerTask);
+    Create(0, TimerTask);
 
     Uart::Printf(uart, COM2, VT_CLEAR);
     while (true) {
