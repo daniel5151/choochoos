@@ -17,6 +17,8 @@ extern "C" {
 #define ON 1
 #define OFF 0
 
+#define ENDL "\r\n"
+
 int bwsetfifo(int channel, int state);
 int bwsetspeed(int channel, int speed);
 

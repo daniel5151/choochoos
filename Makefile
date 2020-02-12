@@ -32,7 +32,12 @@ WARNING_FLAGS =                \
 	 $(DISABLED_WARNINGS)
 
 COMMON_INCLUDES = -I. -I./include
-COMMON_FLAGS = -fPIC -mcpu=arm920t -msoft-float -MP -MMD -MT $@ $(WARNING_FLAGS) $(COMMON_INCLUDES)
+COMMON_FLAGS =      \
+	-fPIC           \
+	-mcpu=arm920t   \
+	-msoft-float    \
+	-MP -MMD -MT $@ \
+	$(WARNING_FLAGS) $(COMMON_INCLUDES)
 
 ifdef NENABLE_CACHES
     COMMON_FLAGS += -DNENABLE_CACHES

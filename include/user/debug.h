@@ -6,8 +6,6 @@
 #include "common/vt_escapes.h"
 #include "user/syscalls.h"
 
-#define ENDL "\r\n"
-
 #undef assert
 
 #ifdef NDEBUG
