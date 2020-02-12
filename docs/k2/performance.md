@@ -4,13 +4,13 @@
 
 The implementation for this test suite can be found under the `src/assignments/k2_profile/` folder.
 
-While it would have been possible to construct the test executable such that it would run tests with/without caches in a single binary, we opted to make enabling the caches a compile-time flag. Enabling the caches from user-mode would have been quite the hassle, as caches can only be enabled while in a privileged execution mode. Instead, we opted to use makefile variables and pre-processor directives to enable/disable caches and/or optimizations at compile time.
+While it would have been possible to construct the test executable such that it would run tests with/without caches in a single binary, we opted to enable caches by default, a disable them with a compile-time flag. Enabling the caches from user-mode would have been quite the hassle, as caches can only be enabled while in a privileged execution mode. Instead, we opted to use makefile variables and pre-processor directives to enable/disable caches and/or optimizations at compile time.
 
 The final results were collected via 4 different executables:
-- opt nocache - `make TARGET=k2_profile`
+- opt nocache - `make TARGET=k2_profile NENABLE_CACHES=1`
+- noopt nocache - `make TARGET=k2_profile NO_OPTIMIZATION=1 NENABLE_CACHES=1`
+- opt cache - `make TARGET=k2_profile`
 - noopt nocache - `make TARGET=k2_profile NO_OPTIMIZATION=1`
-- opt cache - `make TARGET=k2_profile ENABLE_CACHES=1`
-- noopt nocache - `make TARGET=k2_profile NO_OPTIMIZATION=1 ENABLE_CACHES=1`
 
 The actual structure of the performance measurement tasks is fairly straightforward, whereby the first user task loops through the various parameter combinations, spawns the sender / receiver tasks, provides them with parameters, and waits for them to finish a round of message-passing. The FirstUserTask sets up the 508Khz Timer 3 to measure the time between passing the spawned tasks's their parameters, to the time when both tasks complete their benchmarking iterations.
 

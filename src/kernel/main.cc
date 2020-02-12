@@ -12,11 +12,5 @@ int main(int argc, char* argv[]) {
     (void)argc;
     (void)argv;
 
-    bwsetfifo(COM2, false);
-
-#ifdef ENABLE_CACHES
-    _enable_caches();
-#endif
-
-    return kmain();
+    return kernel::run();
 }

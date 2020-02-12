@@ -34,8 +34,8 @@ WARNING_FLAGS =                \
 COMMON_INCLUDES = -I. -I./include
 COMMON_FLAGS = -fPIC -mcpu=arm920t -msoft-float -MP -MMD -MT $@ $(WARNING_FLAGS) $(COMMON_INCLUDES)
 
-ifdef ENABLE_CACHES
-    COMMON_FLAGS += -DENABLE_CACHES
+ifdef NENABLE_CACHES
+    COMMON_FLAGS += -DNENABLE_CACHES
 endif
 
 ifdef DEBUG
