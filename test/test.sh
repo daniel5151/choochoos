@@ -5,7 +5,7 @@ set -e
 echo "running unit tests..."
 make unit_tests
 
-folders=(k1 k2 test_msgpass test_clock k3)
+folders=(k1 k2 test_msgpass ns_test test_clock k3)
 
 for folder in "${folders[@]}"; do
   echo "building ${folder}..."

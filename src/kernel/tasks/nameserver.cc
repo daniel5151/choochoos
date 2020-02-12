@@ -14,7 +14,7 @@ class StringArena {
     size_t index;
 
    public:
-    StringArena() : buf(), index(0) {}
+    StringArena() : buf{0}, index{0} {}
 
     // copies the provided string into the arena. returns idx
     size_t add(const char* s, const size_t n) {
@@ -23,7 +23,7 @@ class StringArena {
         }
         memcpy(&this->buf[this->index], s, n);
         size_t idx = this->index;
-        this->index += n;
+        this->index += n + 1;
         return idx;
     }
 
