@@ -11,7 +11,7 @@
 #define TIMER_TICKS_PER_SEC 2000  // 2 kHz
 
 namespace Clock {
-
+const char* SERVER_ID = "ClockServer";
 struct DelayedTask {
     int tid;
     // make the task ready once *timer3_value_reg < tick_threshold
