@@ -6,7 +6,7 @@ namespace kernel::handlers {
 
 int Send(int receiver_tid, const char* msg, int mlen, char* reply, int rlen) {
     kdebug("Called Send(tid=%d msg=%p msglen=%d reply=%p rplen=%d)",
-           receiver_tid, msg, msglen, reply, rplen);
+           receiver_tid, msg, mlen, reply, rlen);
     if (receiver_tid < 0 || receiver_tid >= MAX_SCHEDULED_TASKS)
         return -1;  // invalid tid
     if (!tasks[receiver_tid].has_value()) return -1;
@@ -67,7 +67,7 @@ int Send(int receiver_tid, const char* msg, int mlen, char* reply, int rlen) {
             TaskDescriptor::write_syscall_return_value(receiver, (int32_t)n);
 
             sender.state = {.tag = TaskState::REPLY_WAIT,
-                            .reply_wait = {reply, rplen}};
+                            .reply_wait = {.reply = reply, .rplen = rplen}};
             // the sender should never see this - it should be overwritten
             // by Reply()
             return -3;

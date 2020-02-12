@@ -1,6 +1,7 @@
 #pragma once
 
 namespace Uart {
+extern const char* SERVER_ID;
 void Server();
 int Getc(int tid, int channel);
 int Putc(int tid, int channel, char c);

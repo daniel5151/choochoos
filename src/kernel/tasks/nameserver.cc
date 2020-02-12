@@ -142,11 +142,14 @@ void Task() {
                     names[names_head].idx = idx;
                     names[names_head].tid = tid;
                     names_head += 1;
+                    debug("NameServer registered %d for %s",
+                          msg.register_as.tid, msg.register_as.name);
+                } else {
+                    debug("NameServer already registered %s",
+                          msg.register_as.name);
                 }
 
                 Response res = {.kind = msg.kind, .register_as = {true}};
-                debug("NameServer registered %d for %s", msg.register_as.tid,
-                      msg.register_as.name);
                 Reply(tid, (char*)&res, sizeof(Response));
 
             } break;

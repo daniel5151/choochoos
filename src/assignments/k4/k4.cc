@@ -6,10 +6,35 @@
 
 #include <climits>
 
+// TODO fix the nameserver so we can avoid this shared memory
+int clock;
+int uart;
+
+void TimerTask() {
+    // int clock = WhoIs(Clock::SERVER_ID);
+    // int uart = WhoIs(Clock::SERVER_ID);
+
+    assert(clock >= 0);
+    assert(uart >= 0);
+
+    while (true) {
+        Clock::Delay(clock, 10);
+        int ticks = Clock::Time(clock);
+        Uart::Printf(uart, COM2,
+                     VT_SAVE VT_ROWCOL(2, 60) "%d:%02d:%d" VT_RESTORE,
+                     ticks / (100 * 60), (ticks / 100) % 60, (ticks / 10) % 10);
+    }
+}
+
 void FirstUserTask() {
-    int clock = Create(INT_MAX, Clock::Server);
-    int uart = Create(INT_MAX, Uart::Server);
-    Uart::Printf(uart, COM2, "k4" ENDL);
-    Uart::Shutdown(uart);
-    Clock::Shutdown(clock);
+    clock = Create(INT_MAX, Clock::Server);
+    uart = Create(INT_MAX, Uart::Server);
+
+    Create(10, TimerTask);
+
+    Uart::Printf(uart, COM2, VT_CLEAR);
+    while (true) {
+        Uart::Printf(uart, COM2, "k4" ENDL);
+        Clock::Delay(clock, 150);
+    }
 }

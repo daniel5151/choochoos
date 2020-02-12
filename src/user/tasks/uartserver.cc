@@ -5,10 +5,11 @@
 #include "user/debug.h"
 #include "user/tasks/uartserver.h"
 
+#include <climits>
 #include <cstdarg>
 
 namespace Uart {
-
+const char* SERVER_ID = "UartServer";
 #define IOBUF_SIZE 4096
 
 typedef Queue<char, IOBUF_SIZE> Iobuf;
@@ -75,8 +76,10 @@ void COM1Notifier() { Notifier(COM1); }
 void COM2Notifier() { Notifier(COM2); }
 
 void Server() {
-    Create(0, COM1Notifier);
-    Create(0, COM2Notifier);
+    Create(INT_MAX, COM1Notifier);
+    Create(INT_MAX, COM2Notifier);
+
+    RegisterAs(SERVER_ID);
 
     int tid;
     Request req;
