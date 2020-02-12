@@ -7,8 +7,9 @@
 #include <climits>
 
 void FirstUserTask() {
-    int clockserver = Create(INT_MAX, Clock::Server);
-
-    bwprintf(COM2, "k4" ENDL);
-    Clock::Shutdown(clockserver);
+    int clock = Create(INT_MAX, Clock::Server);
+    int uart = Create(INT_MAX, Uart::Server);
+    Uart::Printf(uart, COM2, "k4" ENDL);
+    Uart::Shutdown(uart);
+    Clock::Shutdown(clock);
 }
