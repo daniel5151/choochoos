@@ -1,3 +1,4 @@
+#include "common/bwio.h"
 #include "common/ts7200.h"
 #include "kernel/kernel.h"
 
@@ -51,9 +52,29 @@ void handle_interrupt() {
             *(volatile uint32_t*)(TIMER3_BASE + CLR_OFFSET) = 1;
             ret = 0;
             break;
+        case 54: {
+            volatile uint32_t* const UART2_CTLR =
+                (volatile uint32_t*)(UART2_BASE + UART_CTLR_OFFSET);
+            volatile uint32_t* const UART2_INTR =
+                (volatile uint32_t*)(UART2_BASE + UART_INTR_OFFSET);
+
+            ret = *UART2_INTR;
+
+            UARTIntIDIntClr u2_int_id = {.raw = (uint32_t)ret};
+            UARTCtrl u2_ctlr = {.raw = *UART2_CTLR};
+
+            kassert(!u2_int_id._.modem);  // we don't use the modem
+            if (u2_int_id._.rx) u2_ctlr._.enable_int_rx = false;
+            if (u2_int_id._.tx) u2_ctlr._.enable_int_tx = false;
+            if (u2_int_id._.rx_timeout) u2_ctlr._.enable_int_rx_timeout = false;
+
+            *UART2_CTLR = u2_ctlr.raw;
+        } break;
         default:
             kpanic("unexpected interrupt number (%lu)", no);
     }
+
+    kdebug("irq volatile data: 0x%08lx", (uint32_t)ret);
 
     // if nobody is waiting for the interrupt, drop it
     std::optional<Tid> blocked_tid_opt = event_queue.take(no);

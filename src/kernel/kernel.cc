@@ -53,20 +53,20 @@ void initialize() {
 
     // enable protection (prevents user tasks from poking VIC registers)
     *(volatile uint32_t*)(VIC1_BASE + VIC_INT_PROTECTION_OFFSET) = 1;
-    // all IRQs
+    *(volatile uint32_t*)(VIC2_BASE + VIC_INT_PROTECTION_OFFSET) = 1;
+    // all interrupts are handled as IRQs
     *(volatile uint32_t*)(VIC1_BASE + VIC_INT_SELECT_OFFSET) = 0;
+    *(volatile uint32_t*)(VIC2_BASE + VIC_INT_SELECT_OFFSET) = 0;
     // enable timer2 interrupts
     *(volatile uint32_t*)(VIC1_BASE + VIC_INT_ENABLE_OFFSET) = (1 << 5);
+    // enable uart2 combined interrupt
+    *(volatile uint32_t*)(VIC2_BASE + VIC_INT_ENABLE_OFFSET) = (1 << (54 - 32));
 
     // initialize timer 3 to count down from UINT32_MAX at 508KHz
     *(volatile uint32_t*)(TIMER3_BASE + CRTL_OFFSET) = 0;
     *(volatile uint32_t*)(TIMER3_BASE + LDR_OFFSET) = UINT32_MAX;
     *(volatile uint32_t*)(TIMER3_BASE + CRTL_OFFSET) =
         ENABLE_MASK | CLKSEL_MASK;
-
-    // set up UARTs
-    bwsetfifo(COM1, false);
-    bwsetfifo(COM2, false);
 
 #ifndef NENABLE_CACHES
     _enable_caches();
