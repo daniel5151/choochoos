@@ -1,12 +1,12 @@
-#include "common/queue.h"
-#include "common/ts7200.h"
-
-#include "user/debug.h"
 #include "user/tasks/uartserver.h"
 
 #include <climits>
 #include <cstdarg>
 #include <cstring>
+
+#include "common/queue.h"
+#include "common/ts7200.h"
+#include "user/debug.h"
 
 namespace Uart {
 const char* SERVER_ID = "UartServer";
@@ -28,7 +28,7 @@ Iobuf& outbuf(int channel) {
 }
 
 struct Request {
-    enum { Notify, Shutdown, Putc, Putstr, Getc } tag;
+    enum { Notify, Shutdown, Putstr, Getc } tag;
     union {
         struct {
             int eventid;
@@ -36,10 +36,6 @@ struct Request {
         } notify;
         struct {
         } shutdown;
-        struct {
-            int channel;
-            char c;
-        } putc;
         struct {
             int channel;
             size_t len;
@@ -54,11 +50,8 @@ struct Request {
 };
 
 struct Response {
-    enum { Putc, Putstr, Getc } tag;
+    enum { Putstr, Getc } tag;
     union {
-        struct {
-            bool success;
-        } putc;
         struct {
             bool success;
             int bytes_written;
@@ -127,48 +120,17 @@ void Server() {
             case Request::Notify: {
                 break;
             }
-            case Request::Putc: {
-                int channel = req.putc.channel;
-                Iobuf& buf = outbuf(req.putc.channel);
-
-                volatile int* flags = flags_for(channel);
-                volatile int* data = data_for(channel);
-
-                while (!buf.is_empty() && !(*flags & TXFF_MASK)) {
-                    char c = buf.pop_front().value();
-                    *data = c;
-                }
-
-                res = {.tag = Response::Putc, .putc = {.success = false}};
-
-                if (!(*flags & TXFF_MASK)) {
-                    *data = req.putc.c;
-                    res.putc.success = true;
-                    Reply(tid, (char*)&res, sizeof(res));
-                    break;
-                }
-
-                auto err = buf.push_back(req.putc.c);
-                if (err == QueueErr::FULL) {
-                    Reply(tid, (char*)&res, sizeof(res));
-                    break;
-                }
-                // TODO we should enable TX interrupts on that uart here.
-                res.putc.success = true;
-                Reply(tid, (char*)&res, sizeof(res));
-                break;
-            }
             case Request::Putstr: {
                 const int len = (int)req.putstr.len;
                 int n = len;
                 int channel = req.putstr.channel;
                 char* msg = req.putstr.buf;
 
-                Iobuf& buf = outbuf(req.putc.channel);
+                Iobuf& buf = outbuf(req.putstr.channel);
                 volatile int* flags = flags_for(channel);
                 volatile int* data = data_for(channel);
 
-                while (n > 0 && !(*flags & TXFF_MASK)) {
+                while (buf.is_empty() && n > 0 && !(*flags & TXFF_MASK)) {
                     *data = *msg;
                     msg++;
                     n--;
@@ -216,33 +178,21 @@ int Getc(int tid, int channel) {
     panic("todo");
 }
 
-int Putc(int tid, int channel, char c) {
-    Request req = {.tag = Request::Putc, .putc = {.channel = channel, .c = c}};
-    Response res;
-    int n = Send(tid, (char*)&req, sizeof(req), (char*)&res, sizeof(res));
-    assert(n == sizeof(res));
-    assert(res.tag == Response::Putc);
-    if (res.putc.success) {
-        return 1;
-    }
-    return -1;
-}
-
 int Putstr(int tid, int channel, const char* msg) {
     size_t len = strlen(msg);
     assert(len < IOBUF_SIZE);
     Response res;
 
-    // req can contain a buffer up to length IOBUF_SIZE, but we only copy
+    // `req` can contain a buffer up to length IOBUF_SIZE, but we only copy
     // strlen(msg) bytes into the request.
     Request req = {.tag = Request::Putstr,
                    .putstr = {.channel = channel, .len = len, .buf = {}}};
     memcpy(req.putstr.buf, msg, len);
 
     // Moreover, since req.putstr.buf is the last field in the struct, we can
-    // truncate the struct that we send to the server (instead of sending the
-    // full size buffer regarless of len).
-    int size = (int)(((char*)&req.putstr.buf - (char*)&req) + len);
+    // truncate the struct that we send to the server, sending only the first
+    // len bytes of the buffer.
+    int size = (int)offsetof(Request, putstr.buf) + (int)len;
 
     Send(tid, (char*)&req, size, (char*)&res, sizeof(res));
 
@@ -253,14 +203,45 @@ int Putstr(int tid, int channel, const char* msg) {
     return -1;
 }
 
+int Putc(int tid, int channel, char c) {
+    Request req = {.tag = Request::Putstr,
+                   .putstr = {.channel = channel, .len = 1, .buf = {}}};
+    req.putstr.buf[0] = c;
+    Response res;
+    int size = offsetof(Request, putstr.buf) + 1;
+    int n = Send(tid, (char*)&req, size, (char*)&res, sizeof(res));
+    assert(n == sizeof(res));
+    assert(res.tag == Response::Putstr);
+    if (res.putstr.success) {
+        return 1;
+    }
+    return -1;
+}
+
 int Printf(int tid, int channel, const char* format, ...) {
-    char buf[IOBUF_SIZE];
+    Request req = {.tag = Request::Putstr,
+                   .putstr = {.channel = channel, .len = 0, .buf = {}}};
+
     va_list va;
     va_start(va, format);
-    vsnprintf(buf, sizeof(buf), format, va);
+    int len = vsnprintf(req.putstr.buf, sizeof(req.putstr.buf), format, va);
     va_end(va);
 
-    return Putstr(tid, channel, buf);
+    assert(len >= 0);
+    Response res;
+
+    req.putstr.len = (size_t)len;
+
+    // size is caluclated the same as in Putstr
+    int size = (int)offsetof(Request, putstr.buf) + len;
+
+    Send(tid, (char*)&req, size, (char*)&res, sizeof(res));
+
+    assert(res.tag == Response::Putstr);
+    if (res.putstr.success) {
+        return res.putstr.bytes_written;
+    }
+    return -1;
 }
 
 }  // namespace Uart

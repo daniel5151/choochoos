@@ -1,10 +1,10 @@
+#include <climits>
+
 #include "common/ts7200.h"
 #include "user/debug.h"
 #include "user/syscalls.h"
 #include "user/tasks/clockserver.h"
 #include "user/tasks/uartserver.h"
-
-#include <climits>
 
 void TimerTask() {
     int clock = WhoIs(Clock::SERVER_ID);
@@ -28,9 +28,11 @@ void FirstUserTask() {
 
     Create(0, TimerTask);
 
-    Uart::Printf(uart, COM2, VT_CLEAR);
-    while (true) {
-        Uart::Printf(uart, COM2, "k4" ENDL);
-        Clock::Delay(clock, 150);
+    Uart::Putstr(uart, COM2, VT_CLEAR);
+    Uart::Putc(uart, COM2, 'x');
+
+    for (int i = 1;; i++) {
+        Uart::Printf(uart, COM2, "%d: k4" ENDL, i);
+        Clock::Delay(clock, 25);
     }
 }
