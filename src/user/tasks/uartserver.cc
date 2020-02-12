@@ -49,6 +49,15 @@ struct Request {
     };
 };
 
+// Request.putstr.buf is very large, and it would be wasteful to copy the whole
+// buf every time we want to write a string. Instead, tasks that send a Putstr
+// request can truncate the request, only sending the tag, headers and first
+// `len` bytes of `buf`. This only works because `buf` is the last member of
+// Request.
+static inline size_t putstr_request_size(const Request& req) {
+    return offsetof(Request, putstr.buf) + req.putstr.len;
+}
+
 struct Response {
     enum { Putstr, Getc } tag;
     union {
@@ -182,24 +191,15 @@ int Putstr(int tid, int channel, const char* msg) {
     size_t len = strlen(msg);
     assert(len < IOBUF_SIZE);
     Response res;
-
     // `req` can contain a buffer up to length IOBUF_SIZE, but we only copy
     // strlen(msg) bytes into the request.
     Request req = {.tag = Request::Putstr,
                    .putstr = {.channel = channel, .len = len, .buf = {}}};
     memcpy(req.putstr.buf, msg, len);
-
-    // Moreover, since req.putstr.buf is the last field in the struct, we can
-    // truncate the struct that we send to the server, sending only the first
-    // len bytes of the buffer.
-    int size = (int)offsetof(Request, putstr.buf) + (int)len;
-
+    int size = (int)putstr_request_size(req);
     Send(tid, (char*)&req, size, (char*)&res, sizeof(res));
-
     assert(res.tag == Response::Putstr);
-    if (res.putstr.success) {
-        return res.putstr.bytes_written;
-    }
+    if (res.putstr.success) return res.putstr.bytes_written;
     return -1;
 }
 
@@ -208,13 +208,11 @@ int Putc(int tid, int channel, char c) {
                    .putstr = {.channel = channel, .len = 1, .buf = {}}};
     req.putstr.buf[0] = c;
     Response res;
-    int size = offsetof(Request, putstr.buf) + 1;
+    int size = (int)putstr_request_size(req);
     int n = Send(tid, (char*)&req, size, (char*)&res, sizeof(res));
     assert(n == sizeof(res));
     assert(res.tag == Response::Putstr);
-    if (res.putstr.success) {
-        return 1;
-    }
+    if (res.putstr.success) return 1;
     return -1;
 }
 
@@ -229,18 +227,11 @@ int Printf(int tid, int channel, const char* format, ...) {
 
     assert(len >= 0);
     Response res;
-
     req.putstr.len = (size_t)len;
-
-    // size is caluclated the same as in Putstr
-    int size = (int)offsetof(Request, putstr.buf) + len;
-
+    int size = (int)putstr_request_size(req);
     Send(tid, (char*)&req, size, (char*)&res, sizeof(res));
-
     assert(res.tag == Response::Putstr);
-    if (res.putstr.success) {
-        return res.putstr.bytes_written;
-    }
+    if (res.putstr.success) return res.putstr.bytes_written;
     return -1;
 }
 
