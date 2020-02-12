@@ -6,13 +6,9 @@
 
 #include <climits>
 
-// TODO fix the nameserver so we can avoid this shared memory
-int clock;
-int uart;
-
 void TimerTask() {
-    // int clock = WhoIs(Clock::SERVER_ID);
-    // int uart = WhoIs(Clock::SERVER_ID);
+    int clock = WhoIs(Clock::SERVER_ID);
+    int uart = WhoIs(Uart::SERVER_ID);
 
     assert(clock >= 0);
     assert(uart >= 0);
@@ -27,8 +23,8 @@ void TimerTask() {
 }
 
 void FirstUserTask() {
-    clock = Create(INT_MAX, Clock::Server);
-    uart = Create(INT_MAX, Uart::Server);
+    int clock = Create(INT_MAX, Clock::Server);
+    int uart = Create(INT_MAX, Uart::Server);
 
     Create(10, TimerTask);
 

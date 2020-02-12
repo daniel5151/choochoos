@@ -72,11 +72,12 @@ static void Notifier(int eventid) {
     }
 }
 
-void COM1Notifier() { Notifier(COM1); }
-void COM2Notifier() { Notifier(COM2); }
+// void COM1Notifier() { Notifier(??); }
+void COM2Notifier() { Notifier(54); }
 
 void Server() {
-    Create(INT_MAX, COM1Notifier);
+    // TODO spawn the COM1 notifier too.
+    //    Create(INT_MAX, COM1Notifier);
     Create(INT_MAX, COM2Notifier);
 
     RegisterAs(SERVER_ID);
