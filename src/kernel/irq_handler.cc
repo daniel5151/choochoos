@@ -33,7 +33,6 @@ void handle_interrupt() {
 
     kdebug("handle_interrupt: no=%lu", no);
 
-    kassert(tasks[current_task].has_value());
     kassert(no < 64);
 
     int ret;
