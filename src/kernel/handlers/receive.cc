@@ -54,7 +54,7 @@ int Receive(int* sender_tid, char* msg, int msglen) {
         }
         default:
             kdebug("Receive() called from task in non-ready state %d",
-                   task.state.tag);
+                   receiver.state.tag);
             return -1;
     }
 }

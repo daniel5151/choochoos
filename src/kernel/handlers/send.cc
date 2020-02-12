@@ -6,7 +6,7 @@ namespace kernel::handlers {
 
 int Send(int receiver_tid, const char* msg, int mlen, char* reply, int rlen) {
     kdebug("Called Send(tid=%d msg=%p msglen=%d reply=%p rplen=%d)",
-           receiver_tid, msg, msglen, reply, rplen);
+           receiver_tid, msg, mlen, reply, rlen);
     if (receiver_tid < 0 || receiver_tid >= MAX_SCHEDULED_TASKS)
         return -1;  // invalid tid
     if (!tasks[receiver_tid].has_value()) return -1;
