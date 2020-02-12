@@ -1,3 +1,5 @@
+#include "kernel/kernel.h"
+
 #include <cstring>  // memcpy
 #include <optional>
 
@@ -5,8 +7,6 @@
 #include "common/ts7200.h"
 #include "common/vt_escapes.h"
 #include "kernel/asm.h"
-
-#include "kernel/kernel.h"
 #include "kernel/tasks/nameserver.h"
 
 // CONTRACT: userland must supply a FirstUserTask function
@@ -64,11 +64,6 @@ void initialize() {
     *(volatile uint32_t*)(TIMER3_BASE + CRTL_OFFSET) =
         ENABLE_MASK | CLKSEL_MASK;
 
-    // initialize timer2 to fire interrupts every 10 ms
-    *(volatile uint32_t*)(TIMER2_BASE + CRTL_OFFSET) = 0;
-    *(volatile uint32_t*)(TIMER2_BASE + LDR_OFFSET) = 20;
-    *(volatile uint32_t*)(TIMER2_BASE + CRTL_OFFSET) = ENABLE_MASK | MODE_MASK;
-
     // set up UARTs
     bwsetfifo(COM1, false);
     bwsetfifo(COM2, false);
@@ -111,9 +106,6 @@ void shutdown() {
 size_t num_event_blocked_tasks() { return event_queue.num_present(); }
 }  // namespace kernel::driver
 
-static const volatile uint32_t* TIMER3_VAL =
-    (volatile uint32_t*)(TIMER3_BASE + VAL_OFFSET);
-
 namespace kernel {
 
 std::optional<TaskDescriptor> tasks[MAX_SCHEDULED_TASKS];
@@ -125,6 +117,12 @@ int run() {
     kprintf("Hello from the choochoos kernel!");
 
     driver::initialize();
+
+    // initialize timer3 to count down from UINT32_MAX at 508KHz
+    *(volatile uint32_t*)(TIMER3_BASE + CRTL_OFFSET) = 0;
+    *(volatile uint32_t*)(TIMER3_BASE + LDR_OFFSET) = UINT32_MAX;
+    *(volatile uint32_t*)(TIMER3_BASE + CRTL_OFFSET) =
+        ENABLE_MASK | CLKSEL_MASK;
 
     uint32_t idle_time = 0;
     uint32_t idle_timer;
@@ -153,6 +151,10 @@ int run() {
             // jumping to the IRQ handler! Instead, we manually invoke the
             // kernel's interrupt handler, which will unblock any blocked
             // tasks.
+
+            static const volatile uint32_t* TIMER3_VAL =
+                (volatile uint32_t*)(TIMER3_BASE + VAL_OFFSET);
+
             idle_timer = *TIMER3_VAL;
             *(volatile uint32_t*)(SYSCON_HALT);
             idle_time += idle_timer - *TIMER3_VAL;
@@ -171,5 +173,5 @@ int run() {
     kprintf("Goodbye from choochoos kernel!");
 
     return 0;
-}  // void run
+}
 }  // namespace kernel

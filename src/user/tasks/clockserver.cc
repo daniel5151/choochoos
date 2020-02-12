@@ -70,6 +70,11 @@ static void enqueue_task(int tid, int tick_threshold) {
 }
 
 void Server() {
+    // initialize timer2 to fire interrupts every 10 ms
+    *(volatile uint32_t*)(TIMER2_BASE + CRTL_OFFSET) = 0;
+    *(volatile uint32_t*)(TIMER2_BASE + LDR_OFFSET) = 20;
+    *(volatile uint32_t*)(TIMER2_BASE + CRTL_OFFSET) = ENABLE_MASK | MODE_MASK;
+
     debug("clockserver started");
     int notifier_tid = Create(INT_MAX, Notifier);
     assert(notifier_tid >= 0);
