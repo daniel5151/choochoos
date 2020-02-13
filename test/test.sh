@@ -2,9 +2,10 @@
 
 set -e
 
+go build -o slow.exe test/slow.go
+
 echo "running unit tests..."
 make unit_tests
-
 folders=(k1 k2 test_msgpass ns_test test_clock k3)
 
 for folder in "${folders[@]}"; do
@@ -18,7 +19,7 @@ for folder in "${folders[@]}"; do
 
   input="test/${folder}.input"
   if [[ -f $input ]]; then
-       tr '\n' '\r' < "$input" | ts7200 "$exe" > "test/${folder}.actual";
+      tr '\n' '\r' < "$input" | ./slow.exe | ts7200 "$exe" > "test/${folder}.actual";
     else
       ts7200 "$exe" > "test/${folder}.actual";
     fi
