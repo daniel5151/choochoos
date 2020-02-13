@@ -2,7 +2,9 @@
 
 set -e
 
-go build -o slow.exe test/slow.go
+if [ ! -f slow.exe ]; then
+    go build -o slow.exe test/slow.go
+fi
 
 echo "running unit tests..."
 make unit_tests
