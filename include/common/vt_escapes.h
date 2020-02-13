@@ -1,3 +1,4 @@
+// clang-format off
 #pragma once
 
 #define VT_ESC     "\033["
@@ -13,6 +14,9 @@
 #define VT_TOPLEFT VT_ESC "H"
 #define VT_ROWCOL(row, col) VT_ESC #row ";" #col "H"
 #define VT_ROWCOL_FMT VT_ESC "%d;%dH"
+
+#define VT_SCROLL_FULL VT_ESC "[%d;%dr"
+#define VT_SET_SCROLL(startrow, endrow) VT_ESC #startrow ";" #endrow "r"
 
 #define VT_UP(n)    VT_ESC #n "A"
 #define VT_DOWN(n)  VT_ESC #n "B"

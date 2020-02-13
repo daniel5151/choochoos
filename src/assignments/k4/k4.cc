@@ -28,7 +28,7 @@ void FirstUserTask() {
 
     Create(0, TimerTask);
 
-    Uart::Putstr(uart, COM2, VT_CLEAR);
+    Uart::Putstr(uart, COM2, VT_CLEAR VT_SET_SCROLL(4, 20) VT_ROWCOL(20, 1));
     Uart::Putc(uart, COM2, 'x');
 
     for (int i = 1;; i++) {

@@ -171,6 +171,7 @@ int run() {
 
     driver::shutdown();
     kprintf("Goodbye from choochoos kernel!");
+    bwflush(COM2);
 
     return 0;
 }

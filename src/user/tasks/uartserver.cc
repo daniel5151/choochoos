@@ -31,8 +31,9 @@ struct Request {
     enum { Notify, Shutdown, Putstr, Getc } tag;
     union {
         struct {
+            int channel;
             int eventid;
-            int data;
+            UARTIntIDIntClr data;
         } notify;
         struct {
         } shutdown;
@@ -71,13 +72,17 @@ struct Response {
     };
 };
 
-static void Notifier(int eventid) {
+static void Notifier(int channel, int eventid) {
     int myparent = MyParentTid();
-    Request req = {.tag = Request::Notify,
-                   .notify = {.eventid = eventid, .data = 0}};
+    Request req = {
+        .tag = Request::Notify,
+        .notify = {.channel = channel, .eventid = eventid, .data = {0}}};
     bool shutdown = false;
     while (!shutdown) {
-        req.notify.data = AwaitEvent(eventid);
+        req.notify.data.raw = (uint32_t)AwaitEvent(eventid);
+
+        // TODO sizeof(req) will be really big because of the Putstr buf
+        //  we should have a generic sizeof function that switches on the tag.
         int n = Send(myparent, (char*)&req, sizeof(req), (char*)&shutdown,
                      sizeof(shutdown));
         if (n != sizeof(shutdown))
@@ -86,25 +91,36 @@ static void Notifier(int eventid) {
 }
 
 // void COM1Notifier() { Notifier(??); }
-void COM2Notifier() { Notifier(54); }
+void COM2Notifier() { Notifier(COM2, 54); }
 
-static volatile int* flags_for(int channel) {
+static volatile uint32_t* flags_for(int channel) {
     switch (channel) {
         case COM1:
-            return (volatile int*)(UART1_BASE + UART_FLAG_OFFSET);
+            return (volatile uint32_t*)(UART1_BASE + UART_FLAG_OFFSET);
         case COM2:
-            return (volatile int*)(UART2_BASE + UART_FLAG_OFFSET);
+            return (volatile uint32_t*)(UART2_BASE + UART_FLAG_OFFSET);
         default:
             panic("bad channel %d", channel);
     }
 }
 
-static volatile int* data_for(int channel) {
+static volatile uint32_t* data_for(int channel) {
     switch (channel) {
         case COM1:
-            return (volatile int*)(UART1_BASE + UART_DATA_OFFSET);
+            return (volatile uint32_t*)(UART1_BASE + UART_DATA_OFFSET);
         case COM2:
-            return (volatile int*)(UART2_BASE + UART_DATA_OFFSET);
+            return (volatile uint32_t*)(UART2_BASE + UART_DATA_OFFSET);
+        default:
+            panic("bad channel %d", channel);
+    }
+}
+
+static volatile uint32_t* ctlr_for(int channel) {
+    switch (channel) {
+        case COM1:
+            return (volatile uint32_t*)(UART1_BASE + UART_CTLR_OFFSET);
+        case COM2:
+            return (volatile uint32_t*)(UART2_BASE + UART_CTLR_OFFSET);
         default:
             panic("bad channel %d", channel);
     }
@@ -127,6 +143,20 @@ void Server() {
             panic("Uart::Server: bad request length %d", n);
         switch (req.tag) {
             case Request::Notify: {
+                int channel = req.notify.channel;
+                Iobuf& buf = outbuf(channel);
+                volatile uint32_t* flags = flags_for(channel);
+                volatile uint32_t* data = data_for(channel);
+
+                if (req.notify.data._.tx) {
+                    while (!buf.is_empty() && !(*flags & TXFF_MASK)) {
+                        char c = buf.pop_front().value();
+                        *data = (uint32_t)c;
+                    }
+                }
+
+                bool shutdown = false;
+                Reply(tid, (char*)&shutdown, sizeof(shutdown));
                 break;
             }
             case Request::Putstr: {
@@ -135,13 +165,13 @@ void Server() {
                 int channel = req.putstr.channel;
                 char* msg = req.putstr.buf;
 
-                Iobuf& buf = outbuf(req.putstr.channel);
-                volatile int* flags = flags_for(channel);
-                volatile int* data = data_for(channel);
+                Iobuf& buf = outbuf(channel);
+                volatile uint32_t* flags = flags_for(channel);
+                volatile uint32_t* data = data_for(channel);
 
                 if (buf.is_empty()) {
                     for (; n > 0 && !(*flags & TXFF_MASK); n--) {
-                        *data = *msg;
+                        *data = (uint32_t)*msg;
                         msg++;
                     }
                 }
@@ -158,8 +188,11 @@ void Server() {
                 };
 
                 if (!buf.is_empty()) {
-                    // TODO enable UART interrupts
-                    debug("buf len=%lu", buf.size());
+                    // enable tx interrupts on the uart
+                    volatile uint32_t* ctlr = ctlr_for(channel);
+                    UARTCtrl uart_ctlr = {.raw = *ctlr};
+                    uart_ctlr._.enable_int_tx = 1;
+                    *ctlr = uart_ctlr.raw;
                 }
 
                 res = {.tag = Response::Putstr,
