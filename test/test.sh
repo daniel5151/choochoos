@@ -2,8 +2,8 @@
 
 set -e
 
-if [ ! -f slow.exe ]; then
-    go build -o slow.exe test/slow.go
+if [ ! -f test/slow.exe ]; then
+    go build -o test/slow.exe test/slow.go
 fi
 
 echo "running unit tests..."
@@ -21,7 +21,7 @@ for folder in "${folders[@]}"; do
 
   input="test/${folder}.input"
   if [[ -f $input ]]; then
-      tr '\n' '\r' < "$input" | ./slow.exe | ts7200 "$exe" > "test/${folder}.actual";
+      tr '\n' '\r' < "$input" | ./test/slow.exe | ts7200 "$exe" > "test/${folder}.actual";
     else
       ts7200 "$exe" > "test/${folder}.actual";
     fi
