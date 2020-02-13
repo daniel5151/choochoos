@@ -139,13 +139,14 @@ void Server() {
                 volatile int* flags = flags_for(channel);
                 volatile int* data = data_for(channel);
 
-                while (buf.is_empty() && n > 0 && !(*flags & TXFF_MASK)) {
-                    *data = *msg;
-                    msg++;
-                    n--;
+                if (buf.is_empty()) {
+                    for (; n > 0 && !(*flags & TXFF_MASK); n--) {
+                        *data = *msg;
+                        msg++;
+                    }
                 }
 
-                while (n > 0) {
+                for (; n > 0; n--) {
                     if (buf.push_back(*msg) != QueueErr::OK) {
                         res = {.tag = Response::Putstr,
                                .putstr = {.success = false,
@@ -158,6 +159,7 @@ void Server() {
 
                 if (!buf.is_empty()) {
                     // TODO enable UART interrupts
+                    debug("buf len=%lu", buf.size());
                 }
 
                 res = {.tag = Response::Putstr,
