@@ -1,4 +1,5 @@
 #include <string.h>
+#include "user/debug.h"
 
 typedef void (*ctr_fn)();
 
@@ -10,6 +11,12 @@ static void* redboot_return_addr;
 
 // TODO: _exit should perform cleanup (i.e: call global destructors)
 void _exit(int status) {
+    int cpsr;
+    __asm__ volatile("mrs %0, cpsr" : "=r"(cpsr));
+    if ((cpsr & 0x1f) == 0x10) {
+        // user mode
+        panic("newlib tried to call %s", "_exit");
+    }
     __asm__ volatile("mov r0, %0" ::"r"(status));
     __asm__ volatile("mov pc, %0" ::"r"(redboot_return_addr));
 }

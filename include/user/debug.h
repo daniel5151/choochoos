@@ -1,5 +1,6 @@
 #pragma once
 
+#include <stdbool.h>
 #include <stdio.h>
 
 #include "common/bwio.h"
@@ -14,7 +15,8 @@
 #define assert(expr)                                                          \
     do {                                                                      \
         if (!(expr)) {                                                        \
-            bwprintf(COM2, VT_RED                                             \
+            bwprintf(COM2,                                                    \
+                     VT_RED                                                   \
                      "[assert:%s:%d tid=%d] Assertion failed: (%s), exiting " \
                      "task\r\n" VT_NOFMT,                                     \
                      __FILE__, __LINE__, MyTid(), #expr);                     \
