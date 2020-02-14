@@ -28,8 +28,7 @@ static std::optional<size_t> current_interrupt() {
 
 void handle_interrupt() {
     auto no_opt = current_interrupt();
-    if (!no_opt.has_value())
-        kpanic("current_interrupt(): no interrupts are set");
+    if (!no_opt.has_value()) return;
     uint32_t no = no_opt.value();
 
     kdebug("handle_interrupt: no=%lu", no);
@@ -55,13 +54,16 @@ void handle_interrupt() {
         case 54: {
             volatile uint32_t* const UART2_CTLR =
                 (volatile uint32_t*)(UART2_BASE + UART_CTLR_OFFSET);
-            volatile uint32_t* const UART2_INTR =
+            const volatile uint32_t* const UART2_INTR =
                 (volatile uint32_t*)(UART2_BASE + UART_INTR_OFFSET);
 
             ret = *UART2_INTR;
 
             UARTIntIDIntClr u2_int_id = {.raw = (uint32_t)ret};
             UARTCtrl u2_ctlr = {.raw = *UART2_CTLR};
+
+            kdebug("irq 54: u2_int_id=0x%08lx u2_ctlr=0x%08lx", u2_int_id.raw,
+                   u2_ctlr.raw);
 
             kassert(!u2_int_id._.modem);  // we don't use the modem
             if (u2_int_id._.rx) u2_ctlr._.enable_int_rx = false;
@@ -78,7 +80,10 @@ void handle_interrupt() {
 
     // if nobody is waiting for the interrupt, drop it
     std::optional<Tid> blocked_tid_opt = event_queue.take(no);
-    if (!blocked_tid_opt.has_value()) return;
+    if (!blocked_tid_opt.has_value()) {
+        kdebug("no tasks are waiting for interrupt no %lu", no);
+        return;
+    }
 
     Tid blocked_tid = blocked_tid_opt.value();
     kassert(tasks[blocked_tid].has_value());

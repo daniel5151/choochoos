@@ -3,6 +3,7 @@
 #include <climits>
 #include <cstdarg>
 #include <cstring>
+#include <optional>
 
 #include "common/queue.h"
 #include "common/ts7200.h"
@@ -67,6 +68,7 @@ struct Response {
             int bytes_written;
         } putstr;
         struct {
+            bool success;
             char c;
         } getc;
     };
@@ -83,6 +85,9 @@ static void Notifier(int channel, int eventid) {
 
         // TODO sizeof(req) will be really big because of the Putstr buf
         //  we should have a generic sizeof function that switches on the tag.
+        debug("Uart Notify channel=%d data=0x%lx" ENDL, channel,
+              req.notify.data.raw);
+        bwflush(COM2);
         int n = Send(myparent, (char*)&req, sizeof(req), (char*)&shutdown,
                      sizeof(shutdown));
         if (n != sizeof(shutdown))
@@ -126,7 +131,29 @@ static volatile uint32_t* ctlr_for(int channel) {
     }
 }
 
+static void enable_tx_interrupts(int channel) {
+    volatile uint32_t* ctlr = ctlr_for(channel);
+    UARTCtrl uart_ctlr = {.raw = *ctlr};
+    debug("enable_tx_interrupts channel=%d old_ctlr=0x%08lx", channel,
+          uart_ctlr.raw);
+    uart_ctlr._.enable_int_tx = 1;
+    debug("enable_tx_interrupts channel=%d new_ctlr=0x%08lx", channel,
+          uart_ctlr.raw);
+    *ctlr = uart_ctlr.raw;
+}
+
+static void enable_rx_interrupts(int channel) {
+    volatile uint32_t* ctlr = ctlr_for(channel);
+    UARTCtrl uart_ctlr = {.raw = *ctlr};
+    uart_ctlr._.enable_int_rx = 1;
+    uart_ctlr._.enable_int_rx_timeout = 1;
+    *ctlr = uart_ctlr.raw;
+}
+
 void Server() {
+    bwsetfifo(COM1, false);
+    bwsetfifo(COM2, true);
+
     // TODO spawn the COM1 notifier too.
     //    Create(INT_MAX, COM1Notifier);
     Create(INT_MAX, COM2Notifier);
@@ -137,6 +164,9 @@ void Server() {
     Request req;
     Response res;
 
+    // one for each channel
+    std::optional<int> blocked_tids[2] = {std::nullopt};
+
     while (true) {
         int n = Receive(&tid, (char*)&req, sizeof(req));
         if (n <= (int)sizeof(req.tag))
@@ -144,15 +174,41 @@ void Server() {
         switch (req.tag) {
             case Request::Notify: {
                 int channel = req.notify.channel;
+                // printf("Uart Notify channel=%d data=0x%lx" ENDL, channel,
+                //     req.notify.data.raw);
                 Iobuf& buf = outbuf(channel);
                 volatile uint32_t* flags = flags_for(channel);
                 volatile uint32_t* data = data_for(channel);
+
+                // TODO sometimes we see 0x00000000 for the interrupt data
+                // this is weird, and may be related do our flakiness. panics
+                // also don't show up, so maybe retry after merging prilik's
+                // panic changes?
+                if ((req.notify.data.raw & 0xf) == 0) {
+                    auto ctlr = ctlr_for(channel);
+                    *ctlr = 0;
+                    panic("Notifier: empty data");
+                }
 
                 if (req.notify.data._.tx) {
                     while (!buf.is_empty() && !(*flags & TXFF_MASK)) {
                         char c = buf.pop_front().value();
                         *data = (uint32_t)c;
                     }
+
+                    if (!buf.is_empty()) {
+                        enable_tx_interrupts(channel);
+                    }
+                } else if (blocked_tids[channel].has_value() &&
+                           (req.notify.data._.rx ||
+                            req.notify.data._.rx_timeout) &&
+                           !(*flags & RXFE_MASK)) {
+                    char c = (char)*data;
+                    res = {.tag = Response::Getc,
+                           .getc = {.success = true, .c = c}};
+                    Reply(blocked_tids[channel].value(), (char*)&res,
+                          sizeof(res));
+                    blocked_tids[channel] = std::nullopt;
                 }
 
                 bool shutdown = false;
@@ -161,7 +217,7 @@ void Server() {
             }
             case Request::Putstr: {
                 const int len = (int)req.putstr.len;
-                int n = len;
+                int i = 0;
                 int channel = req.putstr.channel;
                 char* msg = req.putstr.buf;
 
@@ -170,29 +226,23 @@ void Server() {
                 volatile uint32_t* data = data_for(channel);
 
                 if (buf.is_empty()) {
-                    for (; n > 0 && !(*flags & TXFF_MASK); n--) {
-                        *data = (uint32_t)*msg;
-                        msg++;
+                    for (; i < len && !(*flags & TXFF_MASK); i++) {
+                        *data = (uint32_t)msg[i];
                     }
                 }
 
-                for (; n > 0; n--) {
-                    if (buf.push_back(*msg) != QueueErr::OK) {
-                        res = {.tag = Response::Putstr,
-                               .putstr = {.success = false,
-                                          .bytes_written = (int)(len - n)}};
-                        Reply(tid, (char*)&res, sizeof(res));
-                        break;
+                for (; i < len; i++) {
+                    auto err = buf.push_back(msg[i]);
+                    if (err == QueueErr::FULL) {
+                        panic(
+                            "Uart::Server: output buffer full for channel %d "
+                            "(trying to accept %d-byte write from tid %d)",
+                            channel, len, tid);
                     }
-                    msg++;
                 };
 
                 if (!buf.is_empty()) {
-                    // enable tx interrupts on the uart
-                    volatile uint32_t* ctlr = ctlr_for(channel);
-                    UARTCtrl uart_ctlr = {.raw = *ctlr};
-                    uart_ctlr._.enable_int_tx = 1;
-                    *ctlr = uart_ctlr.raw;
+                    enable_tx_interrupts(channel);
                 }
 
                 res = {.tag = Response::Putstr,
@@ -201,14 +251,39 @@ void Server() {
                 break;
             }
             case Request::Getc: {
-                panic("todo");
+                int channel = req.getc.channel;
+                volatile uint32_t* flags = flags_for(channel);
+                volatile uint32_t* data = data_for(channel);
+                if (!(*flags & RXFE_MASK)) {
+                    char c = (char)*data;
+                    res = {.tag = Response::Getc,
+                           .getc = {.success = true, .c = c}};
+                    Reply(tid, (char*)&res, sizeof(res));
+                    break;
+                }
+
+                if (blocked_tids[channel].has_value()) {
+                    debug(
+                        "multiple tids trying to read from channel %d (%d and "
+                        "%d)",
+                        channel, blocked_tids[channel].value(), tid);
+                    res = {.tag = Response::Getc,
+                           .getc = {.success = false, .c = (char)0}};
+                    Reply(tid, (char*)&res, sizeof(res));
+                    break;
+                }
+
+                // record the tid, don't reply yet
+                blocked_tids[channel] = tid;
+                enable_rx_interrupts(channel);
+                break;
             }
             case Request::Shutdown: {
                 panic("todo");
             }
         }
     }
-}
+}  // namespace Uart
 
 void Shutdown(int tid) {
     Request req = {.tag = Request::Shutdown, .shutdown = {}};
@@ -216,39 +291,43 @@ void Shutdown(int tid) {
 }
 
 int Getc(int tid, int channel) {
-    (void)tid;
-    (void)channel;
+    Request req = {.tag = Request::Getc, .getc = {channel}};
+    Response res;
+    int n = Send(tid, (char*)&req, sizeof(req), (char*)&res, sizeof(res));
+    assert(n == sizeof(res));
+    assert(res.tag == Response::Getc);
+    if (res.getc.success) {
+        return (int)res.getc.c;
+    }
+    return -1;
+}
 
-    panic("todo");
+static int send_putstr(int tid, const Request& req) {
+    Response res;
+    int size = (int)putstr_request_size(req);
+    int n = Send(tid, (char*)&req, size, (char*)&res, sizeof(res));
+    assert(n == sizeof(res));
+    assert(res.tag == Response::Putstr);
+    if (res.putstr.success) return res.putstr.bytes_written;
+    return -1;
 }
 
 int Putstr(int tid, int channel, const char* msg) {
     size_t len = strlen(msg);
     assert(len < IOBUF_SIZE);
-    Response res;
     // `req` can contain a buffer up to length IOBUF_SIZE, but we only copy
     // strlen(msg) bytes into the request.
     Request req = {.tag = Request::Putstr,
                    .putstr = {.channel = channel, .len = len, .buf = {}}};
     memcpy(req.putstr.buf, msg, len);
-    int size = (int)putstr_request_size(req);
-    Send(tid, (char*)&req, size, (char*)&res, sizeof(res));
-    assert(res.tag == Response::Putstr);
-    if (res.putstr.success) return res.putstr.bytes_written;
-    return -1;
+    return send_putstr(tid, req);
 }
 
 int Putc(int tid, int channel, char c) {
     Request req = {.tag = Request::Putstr,
                    .putstr = {.channel = channel, .len = 1, .buf = {}}};
     req.putstr.buf[0] = c;
-    Response res;
-    int size = (int)putstr_request_size(req);
-    int n = Send(tid, (char*)&req, size, (char*)&res, sizeof(res));
-    assert(n == sizeof(res));
-    assert(res.tag == Response::Putstr);
-    if (res.putstr.success) return 1;
-    return -1;
+    return send_putstr(tid, req);
 }
 
 int Printf(int tid, int channel, const char* format, ...) {
@@ -258,16 +337,37 @@ int Printf(int tid, int channel, const char* format, ...) {
     va_list va;
     va_start(va, format);
     int len = vsnprintf(req.putstr.buf, sizeof(req.putstr.buf), format, va);
+    assert(len >= 0);
     va_end(va);
 
-    assert(len >= 0);
-    Response res;
     req.putstr.len = (size_t)len;
-    int size = (int)putstr_request_size(req);
-    Send(tid, (char*)&req, size, (char*)&res, sizeof(res));
-    assert(res.tag == Response::Putstr);
-    if (res.putstr.success) return res.putstr.bytes_written;
-    return -1;
+
+    return send_putstr(tid, req);
+}
+
+void Getline(int tid, int channel, char* line, size_t len) {
+    size_t i = 0;
+    while (true) {
+        char c = (char)Getc(tid, channel);
+        if (c == '\r') break;
+        if (c == '\b') {
+            if (i == 0) continue;
+            i--;
+            Putstr(tid, channel, "\b \b");
+            continue;
+        }
+        if (i == len - 1) {
+            // out of space - output a "ding" sound and ask for another
+            // character
+            Putc(tid, channel, '\a');
+            continue;
+        }
+        if (!isprint(c)) continue;
+        line[i++] = c;
+        Putc(tid, channel, c);
+    }
+    Putstr(tid, channel, "\r\n");
+    line[i] = '\0';
 }
 
 }  // namespace Uart
