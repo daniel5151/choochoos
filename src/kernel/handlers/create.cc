@@ -1,9 +1,5 @@
 #include "kernel/kernel.h"
 
-namespace user {
-#include "user/syscalls.h"
-}
-
 namespace kernel::handlers {
 
 // Create calls out to create_task, but ensures that priority is

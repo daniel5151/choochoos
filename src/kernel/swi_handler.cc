@@ -43,6 +43,9 @@ void handle_syscall(uint32_t no, void* user_sp) {
         case 8:
             ret = AwaitEvent(user_stack->regs[0]);
             break;
+        case 9:
+            handlers::Perf((user::perf_t*)user_stack->regs[0]);
+            break;
         default:
             kpanic("invalid syscall %lu", no);
     }

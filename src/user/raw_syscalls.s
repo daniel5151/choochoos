@@ -1,3 +1,12 @@
+// Bonus Syscalls
+
+.global __Perf
+__Perf:
+    swi #9
+    bx lr
+
+// Core Syscalls
+
 .global __AwaitEvent
 __AwaitEvent:
     swi #8

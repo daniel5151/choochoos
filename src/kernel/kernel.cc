@@ -112,6 +112,7 @@ std::optional<TaskDescriptor> tasks[MAX_SCHEDULED_TASKS];
 OptArray<TidOrVolatileData, 64> event_queue;
 PriorityQueue<Tid, MAX_SCHEDULED_TASKS> ready_queue;
 Tid current_task = -1;
+uint32_t idle_time_pct = 0;
 
 int run() {
     driver::initialize();
@@ -161,11 +162,7 @@ int run() {
 
             driver::handle_interrupt();
 
-#ifndef NO_IDLE_MEASUREMENTS
-            bwprintf(COM2,
-                     VT_SAVE VT_ROWCOL(1, 60) "[Idle Time %lu%%]" VT_RESTORE,
-                     100 * idle_time / (UINT32_MAX - *TIMER3_VAL));
-#endif
+            idle_time_pct = 100 * idle_time / (UINT32_MAX - *TIMER3_VAL);
         }
     }
 
