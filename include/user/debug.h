@@ -38,14 +38,15 @@
 #define debug(fmt, ...)
 #else
 #define debug(fmt, ...)                                                 \
-    bwprintf(COM1, VT_CYAN "[debug:%s:%d tid=%d] " VT_NOFMT fmt "\r\n", \
+    bwprintf(COM2, VT_CYAN "[debug:%s:%d tid=%d] " VT_NOFMT fmt "\r\n", \
              __FILE__, __LINE__, MyTid(), ##__VA_ARGS__);
 #endif
 
 // Omit __FILE__ and __LINE__ from release builds for easier regression testing
 #ifdef RELEASE_MODE
-#define log(fmt, ...) \
-    bwprintf(COM2, VT_GREEN "[tid=%d] " VT_NOFMT fmt "\r\n", -1, ##__VA_ARGS__);
+#define log(fmt, ...)                                                 \
+    bwprintf(COM2, VT_GREEN "[tid=%d] " VT_NOFMT fmt "\r\n", MyTid(), \
+             ##__VA_ARGS__);
 #else
 #define log(fmt, ...)                                                  \
     bwprintf(COM2, VT_GREEN "[log:%s:%d tid=%d] " VT_NOFMT fmt "\r\n", \
