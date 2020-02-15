@@ -111,12 +111,12 @@ static volatile uint32_t* flags_for(int channel) {
     }
 }
 
-static volatile uint32_t* data_for(int channel) {
+static volatile char* data_for(int channel) {
     switch (channel) {
         case COM1:
-            return (volatile uint32_t*)(UART1_BASE + UART_DATA_OFFSET);
+            return (volatile char*)(UART1_BASE + UART_DATA_OFFSET);
         case COM2:
-            return (volatile uint32_t*)(UART2_BASE + UART_DATA_OFFSET);
+            return (volatile char*)(UART2_BASE + UART_DATA_OFFSET);
         default:
             panic("bad channel %d", channel);
     }
@@ -161,7 +161,7 @@ void Server() {
     debug("Uart::Server: started");
     // TODO spawn the COM1 notifier too.
     //    Create(INT_MAX, COM1Notifier);
-    Create(INT_MAX, COM2Notifier);
+    // Create(INT_MAX, COM2Notifier);
 
     RegisterAs(SERVER_ID);
 
@@ -178,10 +178,11 @@ void Server() {
             panic("Uart::Server: bad request length %d", n);
         switch (req.tag) {
             case Request::Notify: {
+                break;
                 int channel = req.notify.channel;
                 Iobuf& buf = outbuf(channel);
                 volatile uint32_t* flags = flags_for(channel);
-                volatile uint32_t* data = data_for(channel);
+                volatile char* data = data_for(channel);
 
                 debug("Server: received notify: channel=%d data=0x%lx", channel,
                       req.notify.data.raw);
@@ -228,35 +229,51 @@ void Server() {
                 int channel = req.putstr.channel;
                 char* msg = req.putstr.buf;
 
-                Iobuf& buf = outbuf(channel);
+                // Iobuf& buf = outbuf(channel);
                 volatile uint32_t* flags = flags_for(channel);
-                volatile uint32_t* data = data_for(channel);
+                volatile char* data = data_for(channel);
 
-                if (buf.is_empty()) {
+                // if (buf.is_empty() && !tx_interrupts_enabled[channel]) {
+                //    for (; i < len && !(*flags & TXFF_MASK); i++) {
+                //        *data = (uint32_t)msg[i];
+                //    }
+                //}
+
+                // int written = i;
+                //(void)written;
+                // debug("Putstr: wrote %d bytes directly to fifo (len=%d)",
+                //      written, len);
+
+                // for (; i < len; i++) {
+                //    auto err = buf.push_back(msg[i]);
+                //    if (err == QueueErr::FULL) {
+                //        panic(
+                //            "Uart::Server: output buffer full for channel %d "
+                //            "(trying to accept %d-byte write from tid %d)",
+                //            channel, len, tid);
+                //    }
+                //};
+                // debug("Putstr: buffered %d bytes (msglen=%d buflen=%u)",
+                //      len - written, len, buf.size());
+
+                // if (!buf.is_empty()) {
+                //    tx_interrupts_enabled[channel] = true;
+                //    enable_tx_interrupts(channel);
+                //}
+
+                while (i < len) {
                     for (; i < len && !(*flags & TXFF_MASK); i++) {
-                        *data = (uint32_t)msg[i];
+                        *data = msg[i];
                     }
-                }
 
-                int written = i;
-                (void)written;
-                debug("Putstr: wrote %d bytes directly to fifo (len=%d)",
-                      written, len);
-
-                for (; i < len; i++) {
-                    auto err = buf.push_back(msg[i]);
-                    if (err == QueueErr::FULL) {
-                        panic(
-                            "Uart::Server: output buffer full for channel %d "
-                            "(trying to accept %d-byte write from tid %d)",
-                            channel, len, tid);
+                    if (i < len) {
+                        while (true) {
+                            enable_tx_interrupts(channel);
+                            UARTIntIDIntClr int_id = {
+                                .raw = (uint32_t)AwaitEvent(54)};
+                            if (int_id._.tx) break;
+                        }
                     }
-                };
-                debug("Putstr: buffered %d bytes (msglen=%d buflen=%u)",
-                      len - written, len, buf.size());
-
-                if (!buf.is_empty()) {
-                    enable_tx_interrupts(channel);
                 }
 
                 res = {.tag = Response::Putstr,
@@ -265,9 +282,10 @@ void Server() {
                 break;
             }
             case Request::Getc: {
+                break;
                 int channel = req.getc.channel;
                 volatile uint32_t* flags = flags_for(channel);
-                volatile uint32_t* data = data_for(channel);
+                volatile char* data = data_for(channel);
                 if (!(*flags & RXFE_MASK)) {
                     char c = (char)*data;
                     res = {.tag = Response::Getc,

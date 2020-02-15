@@ -62,18 +62,28 @@ void PrintTask() {
 }
 
 void FirstUserTask() {
-    // int clock = Create(1000, Clock::Server);
+    int clock = Create(1000, Clock::Server);
     int uart = Create(1000, Uart::Server);
 
-    // assert(clock >= 0);
+    assert(clock >= 0);
     assert(uart >= 0);
 
-    Create(10, InputTask);
-    Create(0, PrintTask);
-    Create(1, PrintTask);
-    Uart::Putstr(uart, COM2, "0123456789012345678901234567890123456789" ENDL);
-    Create(0, PrintTask);
+    // Create(10, InputTask);
+    // Create(0, PrintTask);
+    // Create(1, PrintTask);
+    // Uart::Putstr(uart, COM2, "0123456789012345678901234567890123456789"
+    // ENDL); Create(0, PrintTask);
 
     // Create(0, TimerTask);
     // Create(0, LoggerTask);
+    Uart::Putstr(
+        uart, COM2,
+        "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do "
+        "eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim "
+        "ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut "
+        "aliquip ex ea commodo consequat. Duis aute irure dolor in "
+        "reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla "
+        "pariatur. Excepteur sint occaecat cupidatat non proident, sunt in "
+        "culpa qui officia deserunt mollit anim id est laborum." ENDL);
+    Clock::Shutdown(clock);
 }

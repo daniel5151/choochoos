@@ -33,6 +33,7 @@ int AwaitEvent(int eventid) {
                     ret = data.raw();
                 }},
             tid_or_volatile_data.value());
+        kassert(tasks[current_task].value().state.tag == TaskState::READY);
         return ret;
     }
 

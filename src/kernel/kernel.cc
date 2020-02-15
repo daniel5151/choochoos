@@ -114,9 +114,9 @@ PriorityQueue<Tid, MAX_SCHEDULED_TASKS> ready_queue;
 Tid current_task = -1;
 
 int run() {
-    kprintf("Hello from the choochoos kernel!");
-
     driver::initialize();
+
+    kprintf("Hello from the choochoos kernel!");
 
     // initialize timer3 to count down from UINT32_MAX at 508KHz
     *(volatile uint32_t*)(TIMER3_BASE + CRTL_OFFSET) = 0;
