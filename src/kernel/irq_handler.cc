@@ -35,7 +35,7 @@ void handle_interrupt() {
 
     kassert(no < 64);
 
-    int ret;
+    uint32_t ret;
 
     // assert interrupt, get return value
     switch (no) {
@@ -62,40 +62,55 @@ void handle_interrupt() {
             UARTIntIDIntClr u2_int_id = {.raw = (uint32_t)ret};
             UARTCtrl u2_ctlr = {.raw = *UART2_CTLR};
 
-            kdebug("irq 54: u2_int_id=0x%08lx u2_ctlr=0x%08lx", u2_int_id.raw,
-                   u2_ctlr.raw);
+            kdebug("kernel: irq 54: u2_int_id=0x%08lx u2_ctlr=0x%08lx",
+                   u2_int_id.raw, u2_ctlr.raw);
 
             kassert(!u2_int_id._.modem);  // we don't use the modem
             if (u2_int_id._.rx) u2_ctlr._.enable_int_rx = false;
             if (u2_int_id._.tx) u2_ctlr._.enable_int_tx = false;
             if (u2_int_id._.rx_timeout) u2_ctlr._.enable_int_rx_timeout = false;
-
             *UART2_CTLR = u2_ctlr.raw;
+
         } break;
         default:
             kpanic("unexpected interrupt number (%lu)", no);
     }
 
-    kdebug("irq volatile data: 0x%08lx", (uint32_t)ret);
+    kdebug("irq volatile data: 0x%08lx", ret);
 
     // if nobody is waiting for the interrupt, drop it
-    std::optional<Tid> blocked_tid_opt = event_queue.take(no);
-    if (!blocked_tid_opt.has_value()) {
-        kdebug("no tasks are waiting for interrupt no %lu", no);
+    std::optional<TidOrVolatileData> blocked_tid_or_volatile_data_opt =
+        event_queue.take(no);
+    if (!blocked_tid_or_volatile_data_opt.has_value()) {
+        kdebug("no tasks are waiting for interrupt no %lu, storing data 0x%x",
+               no, ret);
+        event_queue.put(VolatileData(ret), no);
         return;
     }
 
-    Tid blocked_tid = blocked_tid_opt.value();
-    kassert(tasks[blocked_tid].has_value());
-    TaskDescriptor& blocked_task = tasks[blocked_tid].value();
-    kassert(blocked_task.state.tag = TaskState::EVENT_WAIT);
-    blocked_task.state = {.tag = TaskState::READY, .ready = {}};
-    TaskDescriptor::write_syscall_return_value(blocked_task, ret);
+    std::visit(
+        overloaded{
+            [&](Tid& blocked_tid) {
+                kassert(tasks[blocked_tid].has_value());
+                TaskDescriptor& blocked_task = tasks[blocked_tid].value();
+                kassert(blocked_task.state.tag = TaskState::EVENT_WAIT);
+                blocked_task.state = {.tag = TaskState::READY, .ready = {}};
+                TaskDescriptor::write_syscall_return_value(blocked_task, ret);
 
-    if (ready_queue.push(blocked_tid, blocked_task.priority) ==
-        PriorityQueueErr::FULL) {
-        kpanic("ready queue full");
-    }
+                if (ready_queue.push(blocked_tid, blocked_task.priority) ==
+                    PriorityQueueErr::FULL) {
+                    kpanic("ready queue full");
+                }
+            },
+            [&](VolatileData& old_data) {
+                (void)old_data;
+                kdebug(
+                    "replacing volatile data for interrupt %lu, old=0x%x "
+                    "new=0x%x",
+                    no, old_data.raw(), ret);
+                event_queue.put(VolatileData(ret), no);
+            }},
+        blocked_tid_or_volatile_data_opt.value());
 }
 
 }  // namespace kernel::driver

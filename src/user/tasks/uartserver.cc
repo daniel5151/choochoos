@@ -80,14 +80,16 @@ static void Notifier(int channel, int eventid) {
         .tag = Request::Notify,
         .notify = {.channel = channel, .eventid = eventid, .data = {0}}};
     bool shutdown = false;
+    debug("Uart::Notifier: started with channel=%d eventid=%d" ENDL, channel,
+          eventid);
     while (!shutdown) {
+        debug("Notifier: AwaitEvent(%d)", eventid);
         req.notify.data.raw = (uint32_t)AwaitEvent(eventid);
 
         // TODO sizeof(req) will be really big because of the Putstr buf
         //  we should have a generic sizeof function that switches on the tag.
-        debug("Uart Notify channel=%d data=0x%lx" ENDL, channel,
+        debug("Notifier: received channel=%d data=0x%lx", channel,
               req.notify.data.raw);
-        bwflush(COM2);
         int n = Send(myparent, (char*)&req, sizeof(req), (char*)&shutdown,
                      sizeof(shutdown));
         if (n != sizeof(shutdown))
@@ -134,11 +136,11 @@ static volatile uint32_t* ctlr_for(int channel) {
 static void enable_tx_interrupts(int channel) {
     volatile uint32_t* ctlr = ctlr_for(channel);
     UARTCtrl uart_ctlr = {.raw = *ctlr};
-    debug("enable_tx_interrupts channel=%d old_ctlr=0x%08lx", channel,
-          uart_ctlr.raw);
+    uint32_t old_ctlr = uart_ctlr.raw;
     uart_ctlr._.enable_int_tx = 1;
-    debug("enable_tx_interrupts channel=%d new_ctlr=0x%08lx", channel,
-          uart_ctlr.raw);
+    debug("enable_tx_interrupts: channel=%d new_ctlr=0x%lx old_ctlr=0x%lx",
+          channel, uart_ctlr.raw, old_ctlr);
+    (void)old_ctlr;
     *ctlr = uart_ctlr.raw;
 }
 
@@ -147,6 +149,8 @@ static void enable_rx_interrupts(int channel) {
     UARTCtrl uart_ctlr = {.raw = *ctlr};
     uart_ctlr._.enable_int_rx = 1;
     uart_ctlr._.enable_int_rx_timeout = 1;
+    debug("enable_rx_interrupts: channel=%d new_ctlr=0x%lx", channel,
+          uart_ctlr.raw);
     *ctlr = uart_ctlr.raw;
 }
 
@@ -154,6 +158,7 @@ void Server() {
     bwsetfifo(COM1, false);
     bwsetfifo(COM2, true);
 
+    debug("Uart::Server: started");
     // TODO spawn the COM1 notifier too.
     //    Create(INT_MAX, COM1Notifier);
     Create(INT_MAX, COM2Notifier);
@@ -174,27 +179,25 @@ void Server() {
         switch (req.tag) {
             case Request::Notify: {
                 int channel = req.notify.channel;
-                // printf("Uart Notify channel=%d data=0x%lx" ENDL, channel,
-                //     req.notify.data.raw);
                 Iobuf& buf = outbuf(channel);
                 volatile uint32_t* flags = flags_for(channel);
                 volatile uint32_t* data = data_for(channel);
 
-                // TODO sometimes we see 0x00000000 for the interrupt data
-                // this is weird, and may be related do our flakiness. panics
-                // also don't show up, so maybe retry after merging prilik's
-                // panic changes?
-                if ((req.notify.data.raw & 0xf) == 0) {
-                    auto ctlr = ctlr_for(channel);
-                    *ctlr = 0;
-                    panic("Notifier: empty data");
-                }
+                debug("Server: received notify: channel=%d data=0x%lx", channel,
+                      req.notify.data.raw);
 
                 if (req.notify.data._.tx) {
+                    int bytes_written = 0;
                     while (!buf.is_empty() && !(*flags & TXFF_MASK)) {
                         char c = buf.pop_front().value();
                         *data = (uint32_t)c;
+                        bytes_written++;
                     }
+                    debug(
+                        "Server: Notify: received tx and wrote %d "
+                        "bytes, %u "
+                        "left in buffer",
+                        bytes_written, buf.size());
 
                     if (!buf.is_empty()) {
                         enable_tx_interrupts(channel);
@@ -211,7 +214,11 @@ void Server() {
                     blocked_tids[channel] = std::nullopt;
                 }
 
+                // immediately reply to the notifier so it can start to
+                // awaitevent (notifier MUST have higher priority than the UART
+                // server!)
                 bool shutdown = false;
+                debug("Uart::Server: replying to notifier (tid %d)", tid);
                 Reply(tid, (char*)&shutdown, sizeof(shutdown));
                 break;
             }
@@ -231,6 +238,11 @@ void Server() {
                     }
                 }
 
+                int written = i;
+                (void)written;
+                debug("Putstr: wrote %d bytes directly to fifo (len=%d)",
+                      written, len);
+
                 for (; i < len; i++) {
                     auto err = buf.push_back(msg[i]);
                     if (err == QueueErr::FULL) {
@@ -240,6 +252,8 @@ void Server() {
                             channel, len, tid);
                     }
                 };
+                debug("Putstr: buffered %d bytes (msglen=%d buflen=%u)",
+                      len - written, len, buf.size());
 
                 if (!buf.is_empty()) {
                     enable_tx_interrupts(channel);

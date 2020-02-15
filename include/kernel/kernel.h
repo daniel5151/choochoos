@@ -1,10 +1,21 @@
 #pragma once
 
+#include <variant>
+
 #include "common/opt_array.h"
 #include "common/priority_queue.h"
 
 #include "kernel/helpers.h"
 #include "kernel/task_descriptor.h"
+
+// helpers for variant traversal
+// TODO this doesn't belong here
+template <class... Ts>
+struct overloaded : Ts... {
+    using Ts::operator()...;
+};
+template <class... Ts>
+overloaded(Ts...)->overloaded<Ts...>;
 
 namespace kernel {
 
@@ -21,8 +32,21 @@ extern char __USER_STACKS_START__, __USER_STACKS_END__;
 #define INVALID_PRIORITY -1
 #define OUT_OF_TASK_DESCRIPTORS -2
 
+// TODO maybe put this somewhere other than kernel.h
+class VolatileData final {
+    uint32_t data;
+
+   public:
+    VolatileData(uint32_t data) : data{data} {}
+    uint32_t raw() const { return data; }
+};
+
+typedef std::variant<Tid, VolatileData> TidOrVolatileData;
+
+// kernel state
+
 extern std::optional<TaskDescriptor> tasks[MAX_SCHEDULED_TASKS];
-extern OptArray<Tid, 64> event_queue;
+extern OptArray<TidOrVolatileData, 64> event_queue;
 extern PriorityQueue<Tid, MAX_SCHEDULED_TASKS> ready_queue;
 extern Tid current_task;
 

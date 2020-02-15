@@ -34,8 +34,8 @@ void LoggerTask() {
     assert(uart >= 0);
 
     for (int i = 0;; i++) {
-        Uart::Printf(uart, COM2, "time=%d log entry %d" ENDL,
-                     Clock::Time(clock), i);
+        Uart::Printf(uart, COM2, "time=%d log entry %d %08x%08x%08x%08x" ENDL,
+                     Clock::Time(clock), i, rand(), rand(), rand(), rand());
         Clock::Delay(clock, 49);
     }
 }
@@ -62,18 +62,18 @@ void PrintTask() {
 }
 
 void FirstUserTask() {
-    // int clock = Create(INT_MAX, Clock::Server);
-    int uart = Create(INT_MAX, Uart::Server);
+    // int clock = Create(1000, Clock::Server);
+    int uart = Create(1000, Uart::Server);
 
     // assert(clock >= 0);
     assert(uart >= 0);
 
+    Create(10, InputTask);
     Create(0, PrintTask);
     Create(1, PrintTask);
     Uart::Putstr(uart, COM2, "0123456789012345678901234567890123456789" ENDL);
     Create(0, PrintTask);
 
-    //   Create(0, TimerTask);
-    //   Create(0, LoggerTask);
-    //    Create(10, InputTask);
+    // Create(0, TimerTask);
+    // Create(0, LoggerTask);
 }
