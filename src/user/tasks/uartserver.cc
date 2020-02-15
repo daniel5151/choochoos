@@ -303,7 +303,6 @@ void Server() {
                 break;
             }
             case Request::Getc: {
-                break;
                 int channel = req.getc.channel;
                 volatile uint32_t* flags = flags_for(channel);
                 volatile char* data = data_for(channel);
