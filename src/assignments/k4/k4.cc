@@ -56,9 +56,19 @@ void InputTask() {
 void PrintTask() {
     int uart = WhoIs(Uart::SERVER_ID);
     assert(uart >= 0);
-    Uart::Printf(uart, COM2,
-                 "tid=%d 0123456789012345678901234567890123456789" ENDL,
-                 MyTid());
+    Uart::Printf(
+        uart, COM2,
+        "tid=%d "
+        "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do "
+        "eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim "
+        "ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut "
+        "aliquip ex ea commodo consequat. Duis aute irure dolor in "
+        "reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla "
+        "pariatur. Excepteur sint occaecat cupidatat non proident, sunt in "
+        "culpa qui officia deserunt mollit anim id est laborum." ENDL,
+        MyTid());
+
+    Send(MyParentTid(), nullptr, 0, nullptr, 0);
 }
 
 void FirstUserTask() {
@@ -72,10 +82,13 @@ void FirstUserTask() {
     // Create(0, PrintTask);
     // Create(1, PrintTask);
     // Uart::Putstr(uart, COM2, "0123456789012345678901234567890123456789"
-    // ENDL); Create(0, PrintTask);
+    // ENDL);
 
     // Create(0, TimerTask);
     // Create(0, LoggerTask);
+
+    Create(0, PrintTask);
+    Create(1, PrintTask);
     Uart::Putstr(
         uart, COM2,
         "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do "
@@ -85,5 +98,12 @@ void FirstUserTask() {
         "reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla "
         "pariatur. Excepteur sint occaecat cupidatat non proident, sunt in "
         "culpa qui officia deserunt mollit anim id est laborum." ENDL);
+    Create(0, PrintTask);
+
+    int tid;
+    Receive(&tid, nullptr, 0);
+    Receive(&tid, nullptr, 0);
+    Receive(&tid, nullptr, 0);
+
     Clock::Shutdown(clock);
 }

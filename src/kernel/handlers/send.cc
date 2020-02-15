@@ -19,6 +19,7 @@ int Send(int receiver_tid, const char* msg, int mlen, char* reply, int rlen) {
     TaskDescriptor& receiver = tasks[receiver_tid].value();
 
     switch (receiver.state.tag) {
+        case TaskState::EVENT_WAIT:
         case TaskState::SEND_WAIT:
         case TaskState::REPLY_WAIT:
         case TaskState::READY: {
