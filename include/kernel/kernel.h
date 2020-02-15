@@ -7,6 +7,7 @@
 
 #include "kernel/helpers.h"
 #include "kernel/task_descriptor.h"
+#include "kernel/volatile_data.h"
 
 // helpers for variant traversal
 // TODO this doesn't belong here
@@ -26,25 +27,13 @@ extern char __USER_STACKS_START__, __USER_STACKS_END__;
 }
 
 #define USER_STACK_SIZE 0x40000
-
 #define MAX_SCHEDULED_TASKS 48
-
 #define INVALID_PRIORITY -1
 #define OUT_OF_TASK_DESCRIPTORS -2
-
-// TODO maybe put this somewhere other than kernel.h
-class VolatileData final {
-    uint32_t data;
-
-   public:
-    VolatileData(uint32_t data) : data{data} {}
-    uint32_t raw() const { return data; }
-};
 
 typedef std::variant<Tid, VolatileData> TidOrVolatileData;
 
 // kernel state
-
 extern std::optional<TaskDescriptor> tasks[MAX_SCHEDULED_TASKS];
 extern OptArray<TidOrVolatileData, 64> event_queue;
 extern PriorityQueue<Tid, MAX_SCHEDULED_TASKS> ready_queue;

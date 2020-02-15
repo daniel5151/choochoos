@@ -19,40 +19,13 @@ const char* msg =
     "occaecat cupidatat non proident, sunt in culpa qui officia deserunt "
     "mollit anim id est laborum." ENDL;
 
-void FirstUserTask() {
+void TXPlayground() {
     bwsetfifo(COM2, true);
+
     size_t written = 0;
     size_t len = strlen(msg);
 
     while (true) {
-        /// UARTCtrl u2_ctlr = {.raw = *UART2_CTLR};
-        /// u2_ctlr._.enable_int_rx = true;
-        /// u2_ctlr._.enable_int_rx_timeout = true;
-        ///*UART2_CTLR = u2_ctlr.raw;
-
-        ///// wait for an interrupt to come in
-        /// UARTIntIDIntClr int_id = {.raw = (uint32_t)AwaitEvent(54)};
-        /// bwprintf(COM2, "%08lx" ENDL, int_id.raw);
-
-        /// if (int_id._.rx_timeout) {
-        ///    debug("there was a rx timeout");
-        ///    assert((*UART2_FLAG & RXFE_MASK) == 0);  // fifo has data
-
-        ///    // drain the fifo
-        ///    while ((*UART2_FLAG & RXFE_MASK) == 0)
-        ///        bwputc(COM2, (char)*UART2_DATA);
-        ///} else if (int_id._.rx) {
-        ///    debug("i have something to rx");
-        ///    assert((*UART2_FLAG & RXFE_MASK) == 0);  // fifo has data
-
-        ///    // drain the fifo
-        ///    while ((*UART2_FLAG & RXFE_MASK) == 0)
-        ///        bwputc(COM2, (char)*UART2_DATA);
-        ///}
-
-        // TODO james: this works! try to make the notifier look more like this.
-        // i.e. only allow the notifier to touch the ctrl register, or have the
-        // server literally AwaitEvent().
         UARTCtrl u2_ctlr = {.raw = *UART2_CTLR};
         u2_ctlr._.enable_int_tx = true;
         *UART2_CTLR = u2_ctlr.raw;
@@ -65,9 +38,44 @@ void FirstUserTask() {
         }
 
         if (written >= len) return;
-
-        // bwprintf(COM1, "AwaitEvent(54)" ENDL);
-        // UARTIntIDIntClr int_id = {.raw = (uint32_t)AwaitEvent(54)};
-        // bwprintf(COM1, "received int %08lx" ENDL, int_id.raw);
     }
+}
+
+void RXPlayground() {
+    bwsetfifo(COM2, true);
+
+    while (true) {
+        UARTCtrl u2_ctlr = {.raw = *UART2_CTLR};
+        u2_ctlr._.enable_int_rx = true;
+        u2_ctlr._.enable_int_rx_timeout = true;
+        *UART2_CTLR = u2_ctlr.raw;
+
+        // wait for an interrupt to come in
+        UARTIntIDIntClr int_id = {.raw = (uint32_t)AwaitEvent(54)};
+        bwprintf(COM2, "%08lx" ENDL, int_id.raw);
+
+        if (int_id._.rx_timeout) {
+            debug("there was a rx timeout");
+            assert((*UART2_FLAG & RXFE_MASK) == 0);  // fifo has data
+
+            // drain the fifo
+            while ((*UART2_FLAG & RXFE_MASK) == 0)
+                bwputc(COM2, (char)*UART2_DATA);
+        } else if (int_id._.rx) {
+            debug("i have something to rx");
+            assert((*UART2_FLAG & RXFE_MASK) == 0);  // fifo has data
+
+            // drain the fifo
+            while ((*UART2_FLAG & RXFE_MASK) == 0)
+                bwputc(COM2, (char)*UART2_DATA);
+        }
+    }
+}
+
+void FirstUserTask() {
+    // Only run one of these - AwaitEvent() can't be called by two simultaneous
+    // tasks.
+
+    Create(0, RXPlayground);
+    // Create(0, TXPlayground);
 }

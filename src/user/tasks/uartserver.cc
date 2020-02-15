@@ -231,34 +231,6 @@ void Server() {
                 volatile uint32_t* flags = flags_for(channel);
                 volatile char* data = data_for(channel);
 
-                // if (buf.is_empty() && !tx_interrupts_enabled[channel]) {
-                //    for (; i < len && !(*flags & TXFF_MASK); i++) {
-                //        *data = (uint32_t)msg[i];
-                //    }
-                //}
-
-                // int written = i;
-                //(void)written;
-                // debug("Putstr: wrote %d bytes directly to fifo (len=%d)",
-                //      written, len);
-
-                // for (; i < len; i++) {
-                //    auto err = buf.push_back(msg[i]);
-                //    if (err == QueueErr::FULL) {
-                //        panic(
-                //            "Uart::Server: output buffer full for channel %d "
-                //            "(trying to accept %d-byte write from tid %d)",
-                //            channel, len, tid);
-                //    }
-                //};
-                // debug("Putstr: buffered %d bytes (msglen=%d buflen=%u)",
-                //      len - written, len, buf.size());
-
-                // if (!buf.is_empty()) {
-                //    tx_interrupts_enabled[channel] = true;
-                //    enable_tx_interrupts(channel);
-                //}
-
                 if (buf.is_empty()) {
                     // try writing directly to the wire
                     for (; i < len && !(*flags & TXFF_MASK); i++) {
