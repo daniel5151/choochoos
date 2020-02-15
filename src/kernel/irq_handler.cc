@@ -1,5 +1,6 @@
 #include "common/bwio.h"
 #include "common/ts7200.h"
+#include "common/variant_helpers.h"
 #include "kernel/kernel.h"
 
 namespace kernel::driver {

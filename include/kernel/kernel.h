@@ -9,15 +9,6 @@
 #include "kernel/task_descriptor.h"
 #include "kernel/volatile_data.h"
 
-// helpers for variant traversal
-// TODO this doesn't belong here
-template <class... Ts>
-struct overloaded : Ts... {
-    using Ts::operator()...;
-};
-template <class... Ts>
-overloaded(Ts...)->overloaded<Ts...>;
-
 namespace kernel {
 
 // defined in the linker script

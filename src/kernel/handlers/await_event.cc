@@ -1,3 +1,4 @@
+#include "common/variant_helpers.h"
 #include "kernel/kernel.h"
 
 namespace kernel::handlers {
