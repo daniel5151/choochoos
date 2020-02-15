@@ -161,7 +161,7 @@ void Server() {
     debug("Uart::Server: started");
     // TODO spawn the COM1 notifier too.
     //    Create(INT_MAX, COM1Notifier);
-    // Create(INT_MAX, COM2Notifier);
+    Create(INT_MAX, COM2Notifier);
 
     RegisterAs(SERVER_ID);
 
@@ -178,7 +178,6 @@ void Server() {
             panic("Uart::Server: bad request length %d", n);
         switch (req.tag) {
             case Request::Notify: {
-                break;
                 int channel = req.notify.channel;
                 Iobuf& buf = outbuf(channel);
                 volatile uint32_t* flags = flags_for(channel);
@@ -203,10 +202,11 @@ void Server() {
                     if (!buf.is_empty()) {
                         enable_tx_interrupts(channel);
                     }
-                } else if (blocked_tids[channel].has_value() &&
-                           (req.notify.data._.rx ||
-                            req.notify.data._.rx_timeout) &&
-                           !(*flags & RXFE_MASK)) {
+                }
+
+                if (blocked_tids[channel].has_value() &&
+                    (req.notify.data._.rx || req.notify.data._.rx_timeout) &&
+                    !(*flags & RXFE_MASK)) {
                     char c = (char)*data;
                     res = {.tag = Response::Getc,
                            .getc = {.success = true, .c = c}};
@@ -215,9 +215,7 @@ void Server() {
                     blocked_tids[channel] = std::nullopt;
                 }
 
-                // immediately reply to the notifier so it can start to
-                // awaitevent (notifier MUST have higher priority than the UART
-                // server!)
+                // Reply to the notifier so it can start to AwaitEvent() again.
                 bool shutdown = false;
                 debug("Uart::Server: replying to notifier (tid %d)", tid);
                 Reply(tid, (char*)&shutdown, sizeof(shutdown));
@@ -229,7 +227,7 @@ void Server() {
                 int channel = req.putstr.channel;
                 char* msg = req.putstr.buf;
 
-                // Iobuf& buf = outbuf(channel);
+                Iobuf& buf = outbuf(channel);
                 volatile uint32_t* flags = flags_for(channel);
                 volatile char* data = data_for(channel);
 
@@ -261,17 +259,40 @@ void Server() {
                 //    enable_tx_interrupts(channel);
                 //}
 
-                while (i < len) {
+                if (buf.is_empty()) {
+                    // try writing directly to the wire
                     for (; i < len && !(*flags & TXFF_MASK); i++) {
                         *data = msg[i];
                     }
 
                     if (i < len) {
-                        while (true) {
-                            enable_tx_interrupts(channel);
-                            UARTIntIDIntClr int_id = {
-                                .raw = (uint32_t)AwaitEvent(54)};
-                            if (int_id._.tx) break;
+                        // we couldn't write the whole message, so buffer the
+                        // rest and enable interrupts.
+                        for (; i < len; i++) {
+                            auto err = buf.push_back(msg[i]);
+                            if (err == QueueErr::FULL) {
+                                panic(
+                                    "Uart::Server: output buffer full for "
+                                    "channel "
+                                    "%d "
+                                    "(trying to accept %d-byte write from tid "
+                                    "%d)",
+                                    channel, len, tid);
+                            }
+                        }
+
+                        enable_tx_interrupts(channel);
+                    }
+                } else {
+                    // buffer the entire message
+                    for (; i < len; i++) {
+                        auto err = buf.push_back(msg[i]);
+                        if (err == QueueErr::FULL) {
+                            panic(
+                                "Uart::Server: output buffer full for channel "
+                                "%d "
+                                "(trying to accept %d-byte write from tid %d)",
+                                channel, len, tid);
                         }
                     }
                 }
@@ -311,7 +332,7 @@ void Server() {
                 break;
             }
             case Request::Shutdown: {
-                panic("todo");
+                panic("todo: Uart::Server Shutdown");
             }
         }
     }

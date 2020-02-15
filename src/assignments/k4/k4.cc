@@ -87,23 +87,28 @@ void FirstUserTask() {
     // Create(0, TimerTask);
     // Create(0, LoggerTask);
 
-    Create(0, PrintTask);
-    Create(1, PrintTask);
-    Uart::Putstr(
-        uart, COM2,
-        "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do "
-        "eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim "
-        "ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut "
-        "aliquip ex ea commodo consequat. Duis aute irure dolor in "
-        "reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla "
-        "pariatur. Excepteur sint occaecat cupidatat non proident, sunt in "
-        "culpa qui officia deserunt mollit anim id est laborum." ENDL);
-    Create(0, PrintTask);
+    while (true) {
+        Create(0, PrintTask);
+        Create(1, PrintTask);
+        Uart::Putstr(
+            uart, COM2,
+            "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do "
+            "eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut "
+            "enim "
+            "ad minim veniam, quis nostrud exercitation ullamco laboris nisi "
+            "ut "
+            "aliquip ex ea commodo consequat. Duis aute irure dolor in "
+            "reprehenderit in voluptate velit esse cillum dolore eu fugiat "
+            "nulla "
+            "pariatur. Excepteur sint occaecat cupidatat non proident, sunt in "
+            "culpa qui officia deserunt mollit anim id est laborum." ENDL);
+        Create(0, PrintTask);
 
-    int tid;
-    Receive(&tid, nullptr, 0);
-    Receive(&tid, nullptr, 0);
-    Receive(&tid, nullptr, 0);
-
-    Clock::Shutdown(clock);
+        int tid;
+        for (int i = 0; i < 3; i++) {
+            Receive(&tid, nullptr, 0);
+            Reply(tid, nullptr, 0);
+        }
+        Clock::Delay(clock, 50);
+    }
 }
