@@ -21,10 +21,11 @@ for folder in "${folders[@]}"; do
 
   input="test/${folder}.input"
   if [[ -f $input ]]; then
-      tr '\n' '\r' < "$input" | ./test/slow.exe | ts7200 "$exe" > "test/${folder}.actual";
-    else
-      ts7200 "$exe" > "test/${folder}.actual";
-    fi
+      tr '\n' '\r' < "$input" | ./test/slow.exe | ts7200 "$exe" | tee "test/${folder}.actual"
+  else
+      ts7200 "$exe" | tee "test/${folder}.actual";
+  fi
+  echo
 done
 
 for folder in "${folders[@]}"; do

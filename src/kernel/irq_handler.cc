@@ -5,6 +5,30 @@
 
 namespace kernel::driver {
 
+static uint32_t handle_uart_interrupt(uint32_t uart_base, uint32_t irq_no) {
+    volatile uint32_t* const ctlr =
+        (volatile uint32_t*)(uart_base + UART_CTLR_OFFSET);
+    const volatile uint32_t* const intr =
+        (volatile uint32_t*)(uart_base + UART_INTR_OFFSET);
+
+    uint32_t ret = *intr;
+
+    UARTIntIDIntClr u_int_id = {.raw = (uint32_t)ret};
+    UARTCtrl u_ctlr = {.raw = *ctlr};
+
+    kdebug("kernel: irq %d: u_int_id=0x%08lx u_ctlr=0x%08lx" ENDL, irq_no,
+           u_int_id.raw, u_ctlr.raw);
+    (void)irq_no;
+
+    kassert(!u_int_id._.modem);  // we don't use the modem
+    if (u_int_id._.rx) u_ctlr._.enable_int_rx = false;
+    if (u_int_id._.tx) u_ctlr._.enable_int_tx = false;
+    if (u_int_id._.rx_timeout) u_ctlr._.enable_int_rx_timeout = false;
+    *ctlr = u_ctlr.raw;
+
+    return ret;
+}
+
 static void service_interrupt(size_t no) {
     kdebug("service_interrupt: no=%lu", no);
 
@@ -26,27 +50,15 @@ static void service_interrupt(size_t no) {
             *(volatile uint32_t*)(TIMER3_BASE + CLR_OFFSET) = 1;
             ret = 0;
             break;
+        case 52: {
+            // TODO this doesn't appear to work yet
+            ret = handle_uart_interrupt(UART1_BASE, 52);
+            break;
+        }
         case 54: {
-            volatile uint32_t* const UART2_CTLR =
-                (volatile uint32_t*)(UART2_BASE + UART_CTLR_OFFSET);
-            const volatile uint32_t* const UART2_INTR =
-                (volatile uint32_t*)(UART2_BASE + UART_INTR_OFFSET);
-
-            ret = *UART2_INTR;
-
-            UARTIntIDIntClr u2_int_id = {.raw = (uint32_t)ret};
-            UARTCtrl u2_ctlr = {.raw = *UART2_CTLR};
-
-            kdebug("kernel: irq 54: u2_int_id=0x%08lx u2_ctlr=0x%08lx" ENDL,
-                   u2_int_id.raw, u2_ctlr.raw);
-
-            kassert(!u2_int_id._.modem);  // we don't use the modem
-            if (u2_int_id._.rx) u2_ctlr._.enable_int_rx = false;
-            if (u2_int_id._.tx) u2_ctlr._.enable_int_tx = false;
-            if (u2_int_id._.rx_timeout) u2_ctlr._.enable_int_rx_timeout = false;
-            *UART2_CTLR = u2_ctlr.raw;
-
-        } break;
+            ret = handle_uart_interrupt(UART2_BASE, 54);
+            break;
+        }
         default:
             kpanic("unexpected interrupt number (%u)", no);
     }

@@ -63,6 +63,10 @@ void InputTask() {
         Uart::Putstr(uart, COM2, "> ");
         Uart::Getline(uart, COM2, line, sizeof(line));
         Uart::Printf(uart, COM2, VT_CLEARLN "you wrote '%s'" ENDL, line);
+
+        // echo whatever you wrote to the track
+        // TODO parse the input, write out the right track command
+        Uart::Printf(uart, COM1, "%s", line);
     }
 }
 

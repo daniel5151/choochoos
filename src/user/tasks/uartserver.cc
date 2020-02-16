@@ -97,7 +97,7 @@ static void Notifier(int channel, int eventid) {
     }
 }
 
-// void COM1Notifier() { Notifier(??); }
+void COM1Notifier() { Notifier(COM1, 52); }
 void COM2Notifier() { Notifier(COM2, 54); }
 
 static volatile uint32_t* flags_for(int channel) {
