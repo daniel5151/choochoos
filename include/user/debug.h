@@ -15,11 +15,11 @@
 #define assert(expr)                                                          \
     do {                                                                      \
         if (!(expr)) {                                                        \
-            bwprintf(COM2,                                                    \
-                     VT_RED                                                   \
+            int my_tid = MyTid();                                             \
+            bwprintf(COM2, VT_RED                                             \
                      "[assert:%s:%d tid=%d] Assertion failed: (%s), exiting " \
                      "task\r\n" VT_NOFMT,                                     \
-                     __FILE__, __LINE__, MyTid(), #expr);                     \
+                     __FILE__, __LINE__, my_tid, #expr);                      \
             Panic();                                                          \
         }                                                                     \
     } while (false)
@@ -28,8 +28,9 @@
 /// Print a big scary error message and calls Panic()
 #define panic(fmt, ...)                                                    \
     do {                                                                   \
+        int my_tid = MyTid();                                              \
         bwprintf(COM2, VT_RED "[panic:%s:%d tid=%d] " VT_NOFMT fmt "\r\n", \
-                 __FILE__, __LINE__, MyTid(), ##__VA_ARGS__);              \
+                 __FILE__, __LINE__, my_tid, ##__VA_ARGS__);               \
         Panic();                                                           \
     } while (false)
 
@@ -43,11 +44,19 @@
 
 // Omit __FILE__ and __LINE__ from release builds for easier regression testing
 #ifdef RELEASE_MODE
-#define log(fmt, ...)                                                 \
-    bwprintf(COM2, VT_GREEN "[tid=%d] " VT_NOFMT fmt "\r\n", MyTid(), \
-             ##__VA_ARGS__);
+#define log(fmt, ...)                                                    \
+    do {                                                                 \
+        int my_tid = MyTid();                                            \
+        bwprintf(COM2, VT_GREEN "[tid=%d] " VT_NOFMT fmt "\r\n", my_tid, \
+                 ##__VA_ARGS__);                                         \
+    } while (false)
+
 #else
-#define log(fmt, ...)                                                  \
-    bwprintf(COM2, VT_GREEN "[log:%s:%d tid=%d] " VT_NOFMT fmt "\r\n", \
-             __FILE__, __LINE__, MyTid(), ##__VA_ARGS__);
+#define log(fmt, ...)                                                      \
+    do {                                                                   \
+        int my_tid = MyTid();                                              \
+        bwprintf(COM2, VT_GREEN "[log:%s:%d tid=%d] " VT_NOFMT fmt "\r\n", \
+                 __FILE__, __LINE__, my_tid, ##__VA_ARGS__);               \
+    } while (false)
+
 #endif

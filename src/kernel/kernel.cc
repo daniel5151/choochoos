@@ -98,6 +98,11 @@ void shutdown() {
     *(volatile uint32_t*)(TIMER2_BASE + CRTL_OFFSET) = 0;
     *(volatile uint32_t*)(TIMER3_BASE + CRTL_OFFSET) = 0;
 
+    // clear any lingering timer interrupts
+    *(volatile uint32_t*)(TIMER1_BASE + CLR_OFFSET) = 0;
+    *(volatile uint32_t*)(TIMER2_BASE + CLR_OFFSET) = 0;
+    *(volatile uint32_t*)(TIMER3_BASE + CLR_OFFSET) = 0;
+
     // clear all UART interrupts
     volatile uint32_t* const UART2_CTLR =
         (volatile uint32_t*)(UART2_BASE + UART_CTLR_OFFSET);
