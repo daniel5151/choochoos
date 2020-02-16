@@ -109,14 +109,14 @@ size_t num_event_blocked_tasks() { return event_queue.num_present(); }
 namespace kernel {
 
 std::optional<TaskDescriptor> tasks[MAX_SCHEDULED_TASKS];
-OptArray<Tid, 64> event_queue;
+OptArray<TidOrVolatileData, 64> event_queue;
 PriorityQueue<Tid, MAX_SCHEDULED_TASKS> ready_queue;
 Tid current_task = -1;
 
 int run() {
-    kprintf("Hello from the choochoos kernel!");
-
     driver::initialize();
+
+    kprintf("Hello from the choochoos kernel!");
 
     // initialize timer3 to count down from UINT32_MAX at 508KHz
     *(volatile uint32_t*)(TIMER3_BASE + CRTL_OFFSET) = 0;

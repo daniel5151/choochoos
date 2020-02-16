@@ -1,4 +1,6 @@
 #include <climits>
+#include <cstdlib>
+#include <cstring>
 
 #include "common/ts7200.h"
 #include "user/debug.h"
@@ -14,25 +16,94 @@ void TimerTask() {
     assert(uart >= 0);
 
     while (true) {
-        Clock::Delay(clock, 10);
         int ticks = Clock::Time(clock);
+        if (ticks < 0) return;
+
         Uart::Printf(uart, COM2,
-                     VT_SAVE VT_ROWCOL(2, 60) "%d:%02d:%d" VT_RESTORE,
+                     VT_SAVE VT_ROWCOL(2, 1) "%d:%02d:%d" VT_RESTORE,
                      ticks / (100 * 60), (ticks / 100) % 60, (ticks / 10) % 10);
+        Clock::Delay(clock, 10);
     }
 }
 
-void FirstUserTask() {
-    int clock = Create(INT_MAX, Clock::Server);
-    int uart = Create(INT_MAX, Uart::Server);
+void LoggerTask() {
+    int clock = WhoIs(Clock::SERVER_ID);
+    int uart = WhoIs(Uart::SERVER_ID);
+    int entry = 0;
+    const int start_row = 3;
+    const int lines = 10;
 
-    Create(0, TimerTask);
+    assert(clock >= 0);
+    assert(uart >= 0);
 
-    Uart::Putstr(uart, COM2, VT_CLEAR VT_SET_SCROLL(4, 20) VT_ROWCOL(20, 1));
-    Uart::Putc(uart, COM2, 'x');
+    srand(0);
 
-    for (int i = 1;; i++) {
-        Uart::Printf(uart, COM2, "%d: k4" ENDL, i);
-        Clock::Delay(clock, 25);
+    while (true) {
+        for (int i = 0; i < lines; i++) {
+            int row = start_row + i;
+            entry++;
+            Uart::Printf(
+                uart, COM2,
+                VT_SAVE VT_ROWCOL_FMT
+                "time=%d log entry %d %08x%08x%08x%08x" ENDL VT_RESTORE,
+                row, 1, Clock::Time(clock), entry, rand(), rand(), rand(),
+                rand());
+            Clock::Delay(clock, 10);
+        }
     }
+}
+
+void InputTask() {
+    int uart = WhoIs(Uart::SERVER_ID);
+
+    assert(uart >= 0);
+
+    char line[1024];
+    while (true) {
+        Uart::Putstr(uart, COM2, "> ");
+        Uart::Getline(uart, COM2, line, sizeof(line));
+        Uart::Printf(uart, COM2, VT_CLEARLN "you wrote '%s'" ENDL, line);
+    }
+}
+
+void PrintTask() {
+    int uart = WhoIs(Uart::SERVER_ID);
+    assert(uart >= 0);
+    Uart::Printf(
+        uart, COM2,
+        "tid=%d "
+        "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do "
+        "eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim "
+        "ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut "
+        "aliquip ex ea commodo consequat. Duis aute irure dolor in "
+        "reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla "
+        "pariatur. Excepteur sint occaecat cupidatat non proident, sunt in "
+        "culpa qui officia deserunt mollit anim id est laborum." ENDL,
+        MyTid());
+
+    Send(MyParentTid(), nullptr, 0, nullptr, 0);
+}
+
+void FirstUserTask() {
+    int clock = Create(1000, Clock::Server);
+    int uart = Create(1000, Uart::Server);
+
+    assert(clock >= 0);
+    assert(uart >= 0);
+
+    Uart::Putstr(uart, COM2, VT_CLEAR VT_SET_SCROLL(14, 20) VT_ROWCOL(20, 1));
+    Create(0, TimerTask);
+    Create(0, LoggerTask);
+
+    Uart::Printf(
+        uart, COM2,
+        "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do "
+        "eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim "
+        "ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut "
+        "aliquip ex ea commodo consequat. Duis aute irure dolor in "
+        "reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla "
+        "pariatur. Excepteur sint occaecat cupidatat non proident, sunt in "
+        "culpa qui officia deserunt mollit anim id est laborum." ENDL);
+
+    Create(0, InputTask);
 }
