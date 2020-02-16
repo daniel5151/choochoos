@@ -36,6 +36,8 @@ void LoggerTask() {
     assert(clock >= 0);
     assert(uart >= 0);
 
+    srand(0);
+
     while (true) {
         for (int i = 0; i < lines; i++) {
             int row = start_row + i;

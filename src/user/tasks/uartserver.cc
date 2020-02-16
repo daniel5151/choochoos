@@ -13,7 +13,7 @@ namespace Uart {
 const char* SERVER_ID = "UartServer";
 #define IOBUF_SIZE 4096
 
-typedef Queue<char, IOBUF_SIZE> Iobuf;
+using Iobuf = Queue<char, IOBUF_SIZE>;
 static Iobuf com1_out;
 static Iobuf com2_out;
 

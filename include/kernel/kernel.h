@@ -22,7 +22,7 @@ extern char __USER_STACKS_START__, __USER_STACKS_END__;
 #define INVALID_PRIORITY -1
 #define OUT_OF_TASK_DESCRIPTORS -2
 
-typedef std::variant<Tid, VolatileData> TidOrVolatileData;
+using TidOrVolatileData = std::variant<Tid, VolatileData>;
 
 // kernel state
 extern std::optional<TaskDescriptor> tasks[MAX_SCHEDULED_TASKS];

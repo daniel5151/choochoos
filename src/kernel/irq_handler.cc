@@ -45,7 +45,6 @@ static void service_interrupt(size_t no) {
             if (u2_int_id._.tx) u2_ctlr._.enable_int_tx = false;
             if (u2_int_id._.rx_timeout) u2_ctlr._.enable_int_rx_timeout = false;
             *UART2_CTLR = u2_ctlr.raw;
-            //(void)u2_ctlr;
 
         } break;
         default:

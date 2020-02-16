@@ -31,8 +31,6 @@ void TXPlayground() {
         *UART2_CTLR = u2_ctlr.raw;
 
         AwaitEvent(54);
-        //
-        //
         for (; written < len && !(*UART2_FLAG & TXFF_MASK); written++) {
             *UART2_DATA = (uint32_t)msg[written];
         }
