@@ -20,18 +20,17 @@
                      "[assert:%s:%d tid=%d] Assertion failed: (%s), exiting " \
                      "task\r\n" VT_NOFMT,                                     \
                      __FILE__, __LINE__, MyTid(), #expr);                     \
-            Exit();                                                           \
+            Panic();                                                          \
         }                                                                     \
     } while (false)
 #endif
 
-/// Print a big scary error message and calls Exit()
-// TODO: make a dedicated syscall for panics
+/// Print a big scary error message and calls Panic()
 #define panic(fmt, ...)                                                    \
     do {                                                                   \
         bwprintf(COM2, VT_RED "[panic:%s:%d tid=%d] " VT_NOFMT fmt "\r\n", \
                  __FILE__, __LINE__, MyTid(), ##__VA_ARGS__);              \
-        Exit();                                                            \
+        Panic();                                                           \
     } while (false)
 
 #ifdef RELEASE_MODE

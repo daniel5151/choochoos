@@ -12,14 +12,15 @@ struct perf_t {
 };
 
 // Extra Syscalls
+void Panic(void) __attribute__((noreturn));
 void Perf(struct perf_t* perf);
 
 // Base Syscalls
 int Create(int priority, void (*function)());
-int MyTid();
-int MyParentTid();
-void Exit() __attribute__((noreturn));
-void Yield();
+int MyTid(void);
+int MyParentTid(void);
+void Exit(void) __attribute__((noreturn));
+void Yield(void);
 int Send(int tid, const char* msg, int msglen, char* reply, int rplen);
 int Receive(int* tid, char* msg, int msglen);
 int Reply(int tid, const char* reply, int rplen);

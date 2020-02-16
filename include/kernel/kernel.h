@@ -44,6 +44,7 @@ int create_task(int priority, void* function, std::optional<Tid> force_tid);
 
 namespace handlers {
 
+void Panic();
 void Perf(user::perf_t* perf);
 
 int MyTid();
