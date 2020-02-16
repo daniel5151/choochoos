@@ -18,8 +18,6 @@ struct DelayedTask {
     int tick_threshold;
 };
 
-static PriorityQueue<DelayedTask, 32> pq;
-
 struct Request {
     enum { Time, Delay, DelayUntil, NotifierTick, Shutdown } tag;
     union {
@@ -59,7 +57,7 @@ void Notifier() {
     }
 }
 
-static void enqueue_task(int tid, int tick_threshold) {
+static void enqueue_task(PriorityQueue<DelayedTask, 32>& pq, int tid, int tick_threshold) {
     // Delayed tasks with a smaller tick_threshold should be woken
     // up first, so they should have a higher priority.
     int priority = -tick_threshold;
@@ -70,6 +68,8 @@ static void enqueue_task(int tid, int tick_threshold) {
 }
 
 void Server() {
+    PriorityQueue<DelayedTask, 32> pq;
+
     // initialize timer2 to fire interrupts every 10 ms
     *(volatile uint32_t*)(TIMER2_BASE + CRTL_OFFSET) = 0;
     *(volatile uint32_t*)(TIMER2_BASE + LDR_OFFSET) = 20;
@@ -130,7 +130,7 @@ void Server() {
                     break;
                 }
                 int tick_threshold = current_time + req.delay;
-                enqueue_task(tid, tick_threshold);
+                enqueue_task(pq, tid, tick_threshold);
 
                 break;
             }
@@ -142,7 +142,7 @@ void Server() {
                     break;
                 }
                 int tick_threshold = req.delay_until;
-                enqueue_task(tid, tick_threshold);
+                enqueue_task(pq, tid, tick_threshold);
 
                 break;
             }

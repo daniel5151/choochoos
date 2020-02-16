@@ -98,6 +98,20 @@ void shutdown() {
     *(volatile uint32_t*)(TIMER2_BASE + CRTL_OFFSET) = 0;
     *(volatile uint32_t*)(TIMER3_BASE + CRTL_OFFSET) = 0;
 
+    // clear any lingering timer interrupts
+    *(volatile uint32_t*)(TIMER1_BASE + CLR_OFFSET) = 0;
+    *(volatile uint32_t*)(TIMER2_BASE + CLR_OFFSET) = 0;
+    *(volatile uint32_t*)(TIMER3_BASE + CLR_OFFSET) = 0;
+
+    // clear all UART interrupts
+    volatile uint32_t* const UART2_CTLR =
+        (volatile uint32_t*)(UART2_BASE + UART_CTLR_OFFSET);
+    UARTCtrl u2_ctlr = {.raw = *UART2_CTLR};
+    u2_ctlr._.enable_int_rx = false;
+    u2_ctlr._.enable_int_tx = false;
+    u2_ctlr._.enable_int_rx_timeout = false;
+    *UART2_CTLR = u2_ctlr.raw;
+
     // disable all interrupts
     *(volatile uint32_t*)(VIC1_BASE + VIC_INT_ENABLE_OFFSET) = 0;
     *(volatile uint32_t*)(VIC2_BASE + VIC_INT_ENABLE_OFFSET) = 0;
@@ -112,6 +126,7 @@ std::optional<TaskDescriptor> tasks[MAX_SCHEDULED_TASKS];
 OptArray<TidOrVolatileData, 64> event_queue;
 PriorityQueue<Tid, MAX_SCHEDULED_TASKS> ready_queue;
 Tid current_task = -1;
+uint32_t idle_time_pct = 0;
 
 int run() {
     driver::initialize();
@@ -161,17 +176,12 @@ int run() {
 
             driver::handle_interrupt();
 
-#ifndef NO_IDLE_MEASUREMENTS
-            bwprintf(COM2,
-                     VT_SAVE VT_ROWCOL(1, 60) "[Idle Time %lu%%]" VT_RESTORE,
-                     100 * idle_time / (UINT32_MAX - *TIMER3_VAL));
-#endif
+            idle_time_pct = 100 * idle_time / (UINT32_MAX - *TIMER3_VAL);
         }
     }
 
     driver::shutdown();
     kprintf("Goodbye from choochoos kernel!");
-    bwflush(COM2);
 
     return 0;
 }

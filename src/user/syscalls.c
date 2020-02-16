@@ -10,6 +10,9 @@
 
 // Raw Syscall signatures
 
+void __Panic(void) __attribute__((noreturn));
+void __Perf(struct perf_t* perf);
+
 int __AwaitEvent(int eventid);
 int __Reply(int tid, const char* reply, int rplen);
 int __Receive(int* tid, char* msg, int msglen);
@@ -21,6 +24,9 @@ void __Exit(void) __attribute__((noreturn));
 void __Yield(void);
 
 // Wrapper methods around raw syscalls
+
+void Panic(void) { __Panic(); }
+void Perf(struct perf_t* perf) { __Perf(perf); }
 
 int AwaitEvent(int eventid) { return __AwaitEvent(eventid); }
 int Reply(int tid, const char* reply, int rplen) {

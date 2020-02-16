@@ -9,6 +9,10 @@
 #include "kernel/task_descriptor.h"
 #include "kernel/volatile_data.h"
 
+namespace user {
+#include "user/syscalls.h"
+}
+
 namespace kernel {
 
 // defined in the linker script
@@ -30,6 +34,8 @@ extern OptArray<TidOrVolatileData, 64> event_queue;
 extern PriorityQueue<Tid, MAX_SCHEDULED_TASKS> ready_queue;
 extern Tid current_task;
 
+extern uint32_t idle_time_pct;
+
 namespace helpers {
 
 int create_task(int priority, void* function, std::optional<Tid> force_tid);
@@ -37,6 +43,9 @@ int create_task(int priority, void* function, std::optional<Tid> force_tid);
 }  // namespace helpers
 
 namespace handlers {
+
+void Panic();
+void Perf(user::perf_t* perf);
 
 int MyTid();
 int MyParentTid();

@@ -1,3 +1,17 @@
+// Bonus Syscalls
+
+.global __Panic
+__Panic:
+    swi #10
+    bx lr
+
+.global __Perf
+__Perf:
+    swi #9
+    bx lr
+
+// Core Syscalls
+
 .global __AwaitEvent
 __AwaitEvent:
     swi #8

@@ -10,7 +10,10 @@ extern "C" {
 void _exit(int status) __attribute__((noreturn));
 }
 
-void kexit(int status) { _exit(status); }
+void kexit(int status) {
+    kernel::driver::shutdown();
+    _exit(status);
+}
 
 // TODO: implement a backtrace / crash-dump mechanism?
 void kpanic(const char* fmt, ...) {
