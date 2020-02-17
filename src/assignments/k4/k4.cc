@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <climits>
 #include <cstdlib>
 #include <cstring>
@@ -7,6 +8,9 @@
 #include "user/syscalls.h"
 #include "user/tasks/clockserver.h"
 #include "user/tasks/uartserver.h"
+
+#include "cmd.h"
+#include "trainctl.h"
 
 struct TermSize {
     size_t width;
@@ -83,21 +87,56 @@ void LoggerTask() {
     }
 }
 
+struct CmdTaskCfg {
+    TermSize term_size;
+};
+
 void CmdTask() {
+    int tid;
+    CmdTaskCfg cfg;
+    int n = Receive(&tid, (char*)&cfg, sizeof(cfg));
+    assert(n == sizeof(cfg));
+    Reply(tid, nullptr, 0);
+
     int uart = WhoIs(Uart::SERVER_ID);
 
     assert(uart >= 0);
 
-    char line[1024];
+    // -2 to compensate for the "> "
+    size_t width = std::min((size_t)80, cfg.term_size.width - 2);
+
+    char prev_line[width];
+    char line[width];
     while (true) {
         Uart::Putstr(uart, COM2, "> ");
         Uart::Getline(uart, COM2, line, sizeof(line));
-        if (line[0] == 'q') {
-            bwputstr(COM2, VT_RESET);
-            panic("TODO: gracefully shutdown k4 lol");
+
+        // empty command re-runs last input
+        if (line[0] == '\0') {
+            strcpy(line, prev_line);
+        } else {
+            memcpy(prev_line, line, sizeof(prev_line));
         }
 
-        Uart::Printf(uart, COM2, VT_CLEARLN "you wrote '%s'" ENDL, line);
+        std::optional<Command> cmd_opt = Command::from_string(line);
+        if (!cmd_opt.has_value()) {
+            Uart::Printf(uart, COM2, VT_CLEARLN "Invalid Cmd: '%s'" ENDL, line);
+        } else {
+            Command& cmd = cmd_opt.value();
+            switch (cmd.kind) {
+                case Command::Q:
+                    bwputstr(COM2, VT_RESET);
+                    panic("TODO: gracefully shutdown k4 lol");
+                case Command::GO:
+                case Command::LIGHT:
+                case Command::RV:
+                case Command::STOP:
+                case Command::SW:
+                case Command::TR:
+                    Uart::Printf(uart, COM2, VT_CLEARLN "unimplemented" ENDL);
+                    break;
+            }
+        }
     }
 }
 
@@ -111,7 +150,6 @@ void PerfTask() {
     int n = Receive(&tid, (char*)&cfg, sizeof(cfg));
     assert(n == sizeof(cfg));
     Reply(tid, nullptr, 0);
-
 
     int clock = WhoIs(Clock::SERVER_ID);
     int uart = WhoIs(Uart::SERVER_ID);
@@ -143,8 +181,10 @@ void FirstUserTask() {
 
     // spawn the perf task
     int perf_task_tid = Create(0, PerfTask);
-    PerfTaskCfg cfg = { .term_size = term_size };
-    Send(perf_task_tid, (char*)&cfg, sizeof(cfg), nullptr, 0);
+    {
+        PerfTaskCfg cfg = {.term_size = term_size};
+        Send(perf_task_tid, (char*)&cfg, sizeof(cfg), nullptr, 0);
+    }
 
     Create(0, TimerTask);
     Create(0, LoggerTask);
@@ -159,5 +199,9 @@ void FirstUserTask() {
         "pariatur. Excepteur sint occaecat cupidatat non proident, sunt in "
         "culpa qui officia deserunt mollit anim id est laborum." ENDL);
 
-    Create(0, CmdTask);
+    int cmd_task_tid = Create(0, CmdTask);
+    {
+        CmdTaskCfg cfg = {.term_size = term_size};
+        Send(cmd_task_tid, (char*)&cfg, sizeof(cfg), nullptr, 0);
+    }
 }
