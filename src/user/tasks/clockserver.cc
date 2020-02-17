@@ -1,5 +1,6 @@
 #include <climits>
 #include <cstdint>
+#include <cstring>
 
 #include "common/priority_queue.h"
 #include "common/ts7200.h"
@@ -86,6 +87,8 @@ void Server() {
     int tid;
     Request req;
     Response res;
+    memset(&res, 0, sizeof(res));
+
     while (true) {
         int n = Receive(&tid, (char*)&req, sizeof(req));
         if (n < 0) panic("Clock::Server: bad Receive() n=%d", n);

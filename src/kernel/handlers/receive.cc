@@ -32,7 +32,9 @@ int Receive(int* sender_tid, char* msg, int msglen) {
             kassert(sender.state.tag == TaskState::SEND_WAIT);
 
             size_t n = std::min(sender.state.send_wait.msglen, len);
-            memcpy(msg, sender.state.send_wait.msg, n);
+            if (msg != nullptr && sender.state.send_wait.msg != nullptr) {
+                memcpy(msg, sender.state.send_wait.msg, n);
+            }
             if (sender_tid != nullptr) {
                 *sender_tid = receiver.send_queue_head.value();
             }
