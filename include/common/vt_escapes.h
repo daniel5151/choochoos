@@ -3,6 +3,7 @@
 
 #define VT_ESC     "\033["
 
+#define VT_RESET   "\033c"
 #define VT_SAVE    "\0337"
 #define VT_RESTORE "\0338"
 #define VT_GETPOS  "\033[6n" // terminal responds with "\033<row>;<col>R"
@@ -13,9 +14,10 @@
 
 #define VT_TOPLEFT VT_ESC "H"
 #define VT_ROWCOL(row, col) VT_ESC #row ";" #col "H"
-#define VT_ROWCOL_FMT VT_ESC "%d;%dH"
+#define VT_ROWCOL_FMT VT_ESC "%u;%uH"
 
 #define VT_SET_SCROLL(startrow, endrow) VT_ESC #startrow ";" #endrow "r"
+#define VT_SET_SCROLL_FMT VT_ESC "%u;%ur"
 
 #define VT_UP(n)    VT_ESC #n "A"
 #define VT_DOWN(n)  VT_ESC #n "B"

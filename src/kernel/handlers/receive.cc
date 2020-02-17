@@ -33,7 +33,9 @@ int Receive(int* sender_tid, char* msg, int msglen) {
 
             size_t n = std::min(sender.state.send_wait.msglen, len);
             memcpy(msg, sender.state.send_wait.msg, n);
-            *sender_tid = receiver.send_queue_head.value();
+            if (sender_tid != nullptr) {
+                *sender_tid = receiver.send_queue_head.value();
+            }
 
             char* reply = sender.state.send_wait.reply;
             size_t rplen = sender.state.send_wait.rplen;
