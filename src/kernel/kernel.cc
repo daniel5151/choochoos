@@ -59,8 +59,9 @@ void initialize() {
     *(volatile uint32_t*)(VIC2_BASE + VIC_INT_SELECT_OFFSET) = 0;
     // enable timer2 interrupts
     *(volatile uint32_t*)(VIC1_BASE + VIC_INT_ENABLE_OFFSET) = (1 << 5);
-    // enable uart2 combined interrupt
-    *(volatile uint32_t*)(VIC2_BASE + VIC_INT_ENABLE_OFFSET) = (1 << (54 - 32));
+    // enable uart1 and uart2 combined interrupt
+    *(volatile uint32_t*)(VIC2_BASE + VIC_INT_ENABLE_OFFSET) =
+        (1 << (52 - 32)) | (1 << (54 - 32));
 
     // initialize timer 3 to count down from UINT32_MAX at 508KHz
     *(volatile uint32_t*)(TIMER3_BASE + CRTL_OFFSET) = 0;
@@ -86,7 +87,7 @@ void initialize() {
     }
 #pragma GCC diagnostic pop
 
-    // Spawn the name server with a direct call to _create_task, which
+    // Spawn the name server with a direct call to create_task, which
     // allows negative priorities and a forced tid.
     helpers::create_task(0, (void*)NameServer::Task, Tid(NameServer::TID));
     handlers::Create(0, (void*)FirstUserTask);
@@ -104,13 +105,16 @@ void shutdown() {
     *(volatile uint32_t*)(TIMER3_BASE + CLR_OFFSET) = 0;
 
     // clear all UART interrupts
-    volatile uint32_t* const UART2_CTLR =
-        (volatile uint32_t*)(UART2_BASE + UART_CTLR_OFFSET);
-    UARTCtrl u2_ctlr = {.raw = *UART2_CTLR};
-    u2_ctlr._.enable_int_rx = false;
-    u2_ctlr._.enable_int_tx = false;
-    u2_ctlr._.enable_int_rx_timeout = false;
-    *UART2_CTLR = u2_ctlr.raw;
+    for (uint32_t uart_base : {UART1_BASE, UART2_BASE}) {
+        volatile uint32_t* const ctlr =
+            (volatile uint32_t*)(uart_base + UART_CTLR_OFFSET);
+        UARTCtrl u_ctlr = {.raw = *ctlr};
+        u_ctlr._.enable_int_modem = false;
+        u_ctlr._.enable_int_rx = false;
+        u_ctlr._.enable_int_tx = false;
+        u_ctlr._.enable_int_rx_timeout = false;
+        *ctlr = u_ctlr.raw;
+    }
 
     // disable all interrupts
     *(volatile uint32_t*)(VIC1_BASE + VIC_INT_ENABLE_OFFSET) = 0;

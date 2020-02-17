@@ -20,7 +20,7 @@ static uint32_t handle_uart_interrupt(uint32_t uart_base, uint32_t irq_no) {
            u_int_id.raw, u_ctlr.raw);
     (void)irq_no;
 
-    kassert(!u_int_id._.modem);  // we don't use the modem
+    if (u_int_id._.modem) u_ctlr._.enable_int_modem = false;
     if (u_int_id._.rx) u_ctlr._.enable_int_rx = false;
     if (u_int_id._.tx) u_ctlr._.enable_int_tx = false;
     if (u_int_id._.rx_timeout) u_ctlr._.enable_int_rx_timeout = false;
@@ -51,7 +51,6 @@ static void service_interrupt(size_t no) {
             ret = 0;
             break;
         case 52: {
-            // TODO this doesn't appear to work yet
             ret = handle_uart_interrupt(UART1_BASE, 52);
             break;
         }

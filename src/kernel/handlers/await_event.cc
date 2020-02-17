@@ -8,6 +8,7 @@ int AwaitEvent(int eventid) {
         case 4:
         case 5:
         case 51:
+        case 52:
         case 54:
             break;
         default:

@@ -97,6 +97,23 @@ static void Notifier(int channel, int eventid) {
     }
 }
 
+static void set_up_uarts() {
+    // uart 2
+    bwsetfifo(COM2, true);
+
+    // uart 1
+    volatile int* mid = (volatile int*)(UART1_BASE + UART_LCRM_OFFSET);
+    volatile int* low = (volatile int*)(UART1_BASE + UART_LCRL_OFFSET);
+    volatile int* high = (volatile int*)(UART1_BASE + UART_LCRH_OFFSET);
+
+    *mid = 0x0;
+    *low = 0xbf;
+
+    int buf = *high;
+    buf = (buf | STP2_MASK) & ~FEN_MASK;
+    *high = buf;
+}
+
 void COM1Notifier() { Notifier(COM1, 52); }
 void COM2Notifier() { Notifier(COM2, 54); }
 
@@ -137,6 +154,9 @@ static void enable_tx_interrupts(int channel) {
     volatile uint32_t* ctlr = ctlr_for(channel);
     UARTCtrl uart_ctlr = {.raw = *ctlr};
     uint32_t old_ctlr = uart_ctlr.raw;
+
+    // TODO I think we need to enable the modem interrupts on COM1 in order to
+    // get CTS changed interrupts
     uart_ctlr._.enable_int_tx = 1;
     debug("enable_tx_interrupts: channel=%d new_ctlr=0x%lx old_ctlr=0x%lx",
           channel, uart_ctlr.raw, old_ctlr);
@@ -155,12 +175,11 @@ static void enable_rx_interrupts(int channel) {
 }
 
 void Server() {
-    bwsetfifo(COM1, false);
-    bwsetfifo(COM2, true);
+    set_up_uarts();
 
     debug("Uart::Server: started");
-    // TODO spawn the COM1 notifier too.
-    //    Create(INT_MAX, COM1Notifier);
+
+    Create(INT_MAX, COM1Notifier);
     Create(INT_MAX, COM2Notifier);
 
     RegisterAs(SERVER_ID);
@@ -188,6 +207,7 @@ void Server() {
 
                 if (req.notify.data._.tx) {
                     int bytes_written = 0;
+                    // TODO check the CTS flag for COM1
                     while (!buf.is_empty() && !(*flags & TXFF_MASK)) {
                         char c = buf.pop_front().value();
                         *data = (uint32_t)c;
@@ -233,6 +253,7 @@ void Server() {
 
                 if (buf.is_empty()) {
                     // try writing directly to the wire
+                    // TODO check the CTS flag for COM1
                     for (; i < len && !(*flags & TXFF_MASK); i++) {
                         *data = msg[i];
                     }

@@ -4,10 +4,17 @@
 
 volatile uint32_t* const UART2_CTLR =
     (volatile uint32_t*)(UART2_BASE + UART_CTLR_OFFSET);
-volatile uint32_t* const UART2_FLAG =
+const volatile uint32_t* const UART2_FLAG =
     (volatile uint32_t*)(UART2_BASE + UART_FLAG_OFFSET);
 volatile uint32_t* const UART2_DATA =
     (volatile uint32_t*)(UART2_BASE + UART_DATA_OFFSET);
+
+volatile uint32_t* const UART1_CTLR =
+    (volatile uint32_t*)(UART1_BASE + UART_CTLR_OFFSET);
+const volatile uint32_t* const UART1_FLAG =
+    (volatile uint32_t*)(UART1_BASE + UART_FLAG_OFFSET);
+volatile uint32_t* const UART1_DATA =
+    (volatile uint32_t*)(UART1_BASE + UART_DATA_OFFSET);
 
 #include <cstring>
 const char* msg =
@@ -36,6 +43,46 @@ void TXPlayground() {
         }
 
         if (written >= len) return;
+    }
+}
+
+void TrainPlayground() {
+    // set up uart 1
+    {
+        volatile int* mid = (volatile int*)(UART1_BASE + UART_LCRM_OFFSET);
+        volatile int* low = (volatile int*)(UART1_BASE + UART_LCRL_OFFSET);
+        volatile int* high = (volatile int*)(UART1_BASE + UART_LCRH_OFFSET);
+
+        *mid = 0x0;
+        *low = 0xbf;
+
+        int buf = *high;
+        buf = (buf | STP2_MASK) & ~FEN_MASK;
+        *high = buf;
+    }
+
+    size_t written = 0;
+    size_t len = strlen(msg);
+
+    while (true) {
+        size_t n = written;
+        for (; written < len && !(*UART1_FLAG & TXFF_MASK) &&
+               (*UART1_FLAG & CTS_MASK);
+             written++) {
+            *UART1_DATA = (uint32_t)msg[written];
+        }
+        n = written - n;
+        bwprintf(COM2, "wrote %d bytes to COM1" ENDL, n);
+
+        if (written >= len) return;
+
+        UARTCtrl u1_ctlr = {.raw = *UART1_CTLR};
+        u1_ctlr._.enable_int_tx = true;
+        // TODO I not entirely sure if this is the interrupt that tells us when
+        // the CTS flag is flipped. We need to test this on real hardware.
+        u1_ctlr._.enable_int_modem = true;
+        *UART1_CTLR = u1_ctlr.raw;
+        AwaitEvent(52);
     }
 }
 
@@ -74,6 +121,7 @@ void FirstUserTask() {
     // Only run one of these - AwaitEvent() can't be called by two simultaneous
     // tasks.
 
-    Create(0, RXPlayground);
-    // Create(0, TXPlayground);
+    // Create(0, RXPlayground);
+    //    Create(0, TXPlayground);
+    Create(0, TrainPlayground);
 }
