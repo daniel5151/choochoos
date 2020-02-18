@@ -86,6 +86,64 @@ void LoggerTask() {
     }
 }
 
+struct MarklinAction {
+    enum { Go, Stop, Train, Switch } tag;
+    union {
+        struct {
+        } go;
+        struct {
+        } stop;
+        struct {
+            size_t no;
+            TrainState state;
+        } train;
+        struct {
+            size_t no;
+            SwitchDir dir;
+        } sw;
+    };
+};
+
+void MarklinCommandTask() {
+    int uart = WhoIs(Uart::SERVER_ID);
+    int clock = WhoIs(Clock::SERVER_ID);
+
+    assert(uart >= 0);
+    assert(clock >= 0);
+
+    int nsres = RegisterAs("MarklinCommandTask");
+    assert(nsres >= 0);
+
+    MarklinAction act;
+    int tid;
+    for (;;) {
+        Receive(&tid, (char*)&act, sizeof(act));
+        // TODO: don't reply immediately if the act is to return sensor data
+        Reply(tid, nullptr, 0);
+        switch (act.tag) {
+            case MarklinAction::Go:
+                Uart::Putc(uart, COM1, 0x60);
+                break;
+            case MarklinAction::Stop:
+                Uart::Putc(uart, COM1, 0x61);
+                break;
+            case MarklinAction::Train:
+                Uart::Putc(uart, COM1, (char)act.train.state.raw);
+                Uart::Putc(uart, COM1, (char)act.train.no);
+                break;
+            case MarklinAction::Switch:
+                Uart::Putc(uart, COM1,
+                           act.sw.dir == SwitchDir::Straight ? 0x21 : 0x22);
+                Uart::Putc(uart, COM1, (char)act.sw.no);
+                break;
+            default:
+                panic("MarklinCommandTask received an invalid action");
+        }
+        // ensure that commands have a buffer between them
+        Clock::Delay(clock, (int)3);
+    }
+}
+
 struct CmdTaskCfg {
     TermSize term_size;
 };
@@ -99,12 +157,18 @@ void CmdTask() {
 
     int uart = WhoIs(Uart::SERVER_ID);
     int clock = WhoIs(Clock::SERVER_ID);
+    int marklin = WhoIs("MarklinCommandTask");
 
     assert(uart >= 0);
     assert(clock >= 0);
+    assert(marklin >= 0);
 
-    // XXX: move this to a better place!
-    TrainCmd train [256] = { 0 };
+    // TODO: move train/track state to a dedicated UI/Marklin Controller task
+    // possible approach: have the cmd task forward commands to the UI task,
+    // which would have all the train/track state. That task would be
+    // responsible for keeping the UI in-sync with whatever commands the marklin
+    // box is sent.
+    TrainState train[256] = {0};
 
     // -2 to compensate for the "> "
     size_t width = std::min((size_t)80, cfg.term_size.width - 2);
@@ -128,57 +192,74 @@ void CmdTask() {
         } else {
             Command& cmd = cmd_opt.value();
             switch (cmd.kind) {
-                case Command::Q:
+                case Command::Q: {
                     bwputstr(COM2, VT_RESET);
                     panic("TODO: gracefully shutdown k4 lol");
-                case Command::GO:
-                    Uart::Putc(uart, COM1, 0x60);
-                    Uart::Printf(uart, COM2, VT_CLEARLN "Sent GO command" ENDL);
-                    break;
-                case Command::LIGHT:
-                    train[cmd.light.no]._.light = !train[cmd.light.no]._.light;
-                    Uart::Putc(uart, COM1, train[cmd.light.no].raw);
-                    Uart::Putc(uart, COM1, (char)cmd.light.no);
-                    Uart::Printf(uart, COM2, VT_CLEARLN "Toggled lights on train %u" ENDL, cmd.light.no);
-                    break;
-                case Command::RV: {
-                    TrainCmd t = train[cmd.rv.no];
-
-                    t._.speed = 0;
-                    Uart::Putc(uart, COM1, t.raw);
-                    Uart::Putc(uart, COM1, (char)cmd.rv.no);
-
-                    Uart::Printf(uart, COM2, VT_CLEARLN "Stopping..." ENDL);
-                    Clock::Delay(clock, (int)300);
-
-                    t._.speed = 15;
-                    Uart::Putc(uart, COM1, t.raw);
-                    Uart::Putc(uart, COM1, (char)cmd.rv.no);
-
-                    Clock::Delay(clock, (int)3);
-
-                    t._.speed = train[cmd.rv.no]._.speed;
-                    Uart::Putc(uart, COM1, t.raw);
-                    Uart::Putc(uart, COM1, (char)cmd.rv.no);
-
-                    Uart::Printf(uart, COM2, VT_CLEARLN "Reversed train %u" ENDL, cmd.rv.no);
                 } break;
-                case Command::STOP:
-                    Uart::Putc(uart, COM1, 0x61);
+                case Command::GO: {
+                    MarklinAction act = {.tag = MarklinAction::Go, .go = {}};
+                    Send(marklin, (char*)&act, sizeof(act), nullptr, 0);
+
+                    Uart::Printf(uart, COM2, VT_CLEARLN "Sent GO command" ENDL);
+                } break;
+                case Command::LIGHT: {
+                    train[cmd.light.no]._.light = !train[cmd.light.no]._.light;
+
+                    MarklinAction act = {
+                        .tag = MarklinAction::Train,
+                        .train = {.no = cmd.light.no,
+                                  .state = train[cmd.light.no]}};
+                    Send(marklin, (char*)&act, sizeof(act), nullptr, 0);
+
+                    Uart::Printf(uart, COM2,
+                                 VT_CLEARLN "Toggled lights on train %u" ENDL,
+                                 cmd.light.no);
+                } break;
+                case Command::RV: {
+                    MarklinAction act = {
+                        .tag = MarklinAction::Train,
+                        .train = {.no = cmd.rv.no, .state = train[cmd.rv.no]}};
+
+                    // stop the train
+                    act.train.state._.speed = 0;
+                    Send(marklin, (char*)&act, sizeof(act), nullptr, 0);
+
+                    // wait for train to slow down
+                    Uart::Printf(uart, COM2, VT_CLEARLN "Stopping..." ENDL);
+                    Clock::Delay(clock, (int)400);
+
+                    // reverse the train
+                    act.train.state._.speed = 15;
+                    Send(marklin, (char*)&act, sizeof(act), nullptr, 0);
+
+                    act.train.state._.speed = train[cmd.rv.no]._.speed;
+                    Send(marklin, (char*)&act, sizeof(act), nullptr, 0);
+
+                    Uart::Printf(uart, COM2,
+                                 VT_CLEARLN "Reversed train %u" ENDL,
+                                 cmd.rv.no);
+                } break;
+                case Command::STOP: {
+                    MarklinAction act = {.tag = MarklinAction::Stop,
+                                         .stop = {}};
+                    Send(marklin, (char*)&act, sizeof(act), nullptr, 0);
+
                     Uart::Printf(uart, COM2,
                                  VT_CLEARLN "Sent STOP command" ENDL);
-                    break;
-                case Command::SW:
-                    Uart::Putc(uart, COM1,
-                               cmd.sw.dir == SwitchDir::Straight ? 0x21 : 0x22);
-                    Uart::Putc(uart, COM1, (char)cmd.sw.no);
+                } break;
+                case Command::SW: {
+                    MarklinAction act = {
+                        .tag = MarklinAction::Switch,
+                        .sw = {.no = cmd.sw.no, .dir = cmd.sw.dir}};
+                    Send(marklin, (char*)&act, sizeof(act), nullptr, 0);
+
                     Uart::Printf(uart, COM2,
                                  VT_CLEARLN "Set switch %u to be %s" ENDL,
                                  cmd.sw.no,
                                  cmd.sw.dir == SwitchDir::Straight ? "straight"
                                                                    : "curved");
-                    break;
-                case Command::TR:
+                } break;
+                case Command::TR: {
                     if (cmd.tr.speed == 15) {
                         Uart::Putstr(
                             uart, COM2, VT_CLEARLN
@@ -186,16 +267,17 @@ void CmdTask() {
                         break;
                     }
                     train[cmd.tr.no]._.speed = (unsigned)cmd.tr.speed & 0x0f;
-                    Uart::Putc(uart, COM1, (char)train[cmd.tr.no].raw);
-                    Uart::Putc(uart, COM1, (char)cmd.tr.no);
+
+                    MarklinAction act = {
+                        .tag = MarklinAction::Train,
+                        .train = {.no = cmd.tr.no, .state = train[cmd.tr.no]}};
+                    Send(marklin, (char*)&act, sizeof(act), nullptr, 0);
+
                     Uart::Printf(uart, COM2,
                                  VT_CLEARLN "Set train %u to speed %u" ENDL,
                                  cmd.tr.no, cmd.tr.speed);
-                    break;
+                } break;
             }
-
-            // HACK: ensure that spamming enter doesn't eat commands
-            Clock::Delay(clock, (int)3);
         }
     }
 }
@@ -258,6 +340,9 @@ void FirstUserTask() {
         "reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla "
         "pariatur. Excepteur sint occaecat cupidatat non proident, sunt in "
         "culpa qui officia deserunt mollit anim id est laborum." ENDL);
+
+    int marklin = Create(0, MarklinCommandTask);
+    (void)marklin;
 
     int cmd_task_tid = Create(0, CmdTask);
     {
