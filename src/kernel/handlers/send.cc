@@ -57,8 +57,12 @@ int Send(int receiver_tid, const char* msg, int mlen, char* reply, int rlen) {
         }
         case TaskState::RECV_WAIT: {
             size_t n = std::min(msglen, receiver.state.recv_wait.len);
-            memcpy(receiver.state.recv_wait.recv_buf, msg, n);
-            *receiver.state.recv_wait.tid = sender_tid;
+            if (receiver.state.recv_wait.recv_buf != nullptr && msg != nullptr) {
+                memcpy(receiver.state.recv_wait.recv_buf, msg, n);
+            }
+            if (receiver.state.recv_wait.tid != nullptr) {
+                *receiver.state.recv_wait.tid = sender_tid;
+            }
 
             receiver.state = {.tag = TaskState::READY, .ready = {}};
             ready_queue.push(receiver_tid, receiver.priority);

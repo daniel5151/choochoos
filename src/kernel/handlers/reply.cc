@@ -13,7 +13,9 @@ int Reply(int tid, const char* reply, int rplen) {
         case TaskState::REPLY_WAIT: {
             size_t n = std::min(receiver.state.reply_wait.rplen,
                                 (size_t)std::max(rplen, 0));
-            memcpy(receiver.state.reply_wait.reply, reply, n);
+            if (receiver.state.reply_wait.reply != nullptr && reply != nullptr) {
+                memcpy(receiver.state.reply_wait.reply, reply, n);
+            }
             receiver.state = {.tag = TaskState::READY, .ready = {}};
             ready_queue.push(tid, receiver.priority);
 

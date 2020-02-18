@@ -187,6 +187,7 @@ void Server() {
     int tid;
     Request req;
     Response res;
+    memset((char*)&res, 0, sizeof(res));
 
     // one for each channel
     std::optional<int> blocked_tids[2] = {std::nullopt};
