@@ -30,17 +30,17 @@ std::optional<Command> Command::from_string(char* input) {
 
     // sscanf doesn't actually enfore having a space between the command and the
     // first number, so I added some manual checks. kinda jank, but it works.
-    if (sscanf(input, "tr%u %u%n", &cmd.data.tr.no, &cmd.data.tr.speed, &chars_read) == 2) {
+    if (sscanf(input, "tr%u %u%n", &cmd.tr.no, &cmd.tr.speed, &chars_read) == 2) {
         if (input[2] != ' ')
             return std::nullopt;
 
         cmd.kind = Command::TR;
-    } else if (sscanf(input, "rv%u%n", &cmd.data.rv.no, &chars_read) == 1) {
+    } else if (sscanf(input, "rv%u%n", &cmd.rv.no, &chars_read) == 1) {
         if (input[2] != ' ')
             return std::nullopt;
 
         cmd.kind = Command::RV;
-    } else if (sscanf(input, "sw%u %c%n", &cmd.data.sw.no, &sw_dir, &chars_read) == 2) {
+    } else if (sscanf(input, "sw%u %c%n", &cmd.sw.no, &sw_dir, &chars_read) == 2) {
         if (input[2] != ' ')
             return std::nullopt;
 
@@ -49,10 +49,10 @@ std::optional<Command> Command::from_string(char* input) {
             return std::nullopt;
 
         cmd.kind = Command::SW;
-        cmd.data.sw.dir = (sw_dir == 'c')
+        cmd.sw.dir = (sw_dir == 'c')
             ? SwitchDir::Curved
             : SwitchDir::Straight;
-    } else if (sscanf(input, "l%u%n", &cmd.data.light.no, &chars_read) == 1) {
+    } else if (sscanf(input, "l%u%n", &cmd.light.no, &chars_read) == 1) {
         if (input[1] != ' ')
             return std::nullopt;
 

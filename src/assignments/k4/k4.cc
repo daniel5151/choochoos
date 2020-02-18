@@ -77,8 +77,7 @@ void LoggerTask() {
             int row = start_row + i;
             entry++;
             Uart::Printf(
-                uart, COM2,
-                VT_SAVE VT_ROWCOL_FMT
+                uart, COM2, VT_SAVE VT_ROWCOL_FMT
                 "time=%d log entry %d %08x%08x%08x%08x" ENDL VT_RESTORE,
                 row, 1, Clock::Time(clock), entry, rand(), rand(), rand(),
                 rand());
@@ -99,8 +98,13 @@ void CmdTask() {
     Reply(tid, nullptr, 0);
 
     int uart = WhoIs(Uart::SERVER_ID);
+    int clock = WhoIs(Clock::SERVER_ID);
 
     assert(uart >= 0);
+    assert(clock >= 0);
+
+    // XXX: move this to a better place!
+    TrainCmd train [256] = { 0 };
 
     // -2 to compensate for the "> "
     size_t width = std::min((size_t)80, cfg.term_size.width - 2);
@@ -128,14 +132,70 @@ void CmdTask() {
                     bwputstr(COM2, VT_RESET);
                     panic("TODO: gracefully shutdown k4 lol");
                 case Command::GO:
+                    Uart::Putc(uart, COM1, 0x60);
+                    Uart::Printf(uart, COM2, VT_CLEARLN "Sent GO command" ENDL);
+                    break;
                 case Command::LIGHT:
-                case Command::RV:
+                    train[cmd.light.no]._.light = !train[cmd.light.no]._.light;
+                    Uart::Putc(uart, COM1, train[cmd.light.no].raw);
+                    Uart::Putc(uart, COM1, (char)cmd.light.no);
+                    Uart::Printf(uart, COM2, VT_CLEARLN "Toggled lights on train %u" ENDL, cmd.light.no);
+                    break;
+                case Command::RV: {
+                    TrainCmd t = train[cmd.rv.no];
+
+                    t._.speed = 0;
+                    Uart::Putc(uart, COM1, t.raw);
+                    Uart::Putc(uart, COM1, (char)cmd.rv.no);
+
+                    Uart::Printf(uart, COM2, VT_CLEARLN "Stopping..." ENDL);
+                    Clock::Delay(clock, (int)300);
+
+                    t._.speed = 15;
+                    Uart::Putc(uart, COM1, t.raw);
+                    Uart::Putc(uart, COM1, (char)cmd.rv.no);
+
+                    Clock::Delay(clock, (int)3);
+
+                    t._.speed = train[cmd.rv.no]._.speed;
+                    Uart::Putc(uart, COM1, t.raw);
+                    Uart::Putc(uart, COM1, (char)cmd.rv.no);
+
+                    Uart::Printf(uart, COM2, VT_CLEARLN "Reversed train %u" ENDL, cmd.rv.no);
+                } break;
                 case Command::STOP:
+                    Uart::Putc(uart, COM1, 0x61);
+                    Uart::Printf(uart, COM2,
+                                 VT_CLEARLN "Sent STOP command" ENDL);
+                    break;
                 case Command::SW:
+                    Uart::Putc(uart, COM1,
+                               cmd.sw.dir == SwitchDir::Straight ? 0x21 : 0x22);
+                    Uart::Putc(uart, COM1, (char)cmd.sw.no);
+                    Uart::Printf(uart, COM2,
+                                 VT_CLEARLN "Set switch %u to be %s" ENDL,
+                                 cmd.sw.no,
+                                 cmd.sw.dir == SwitchDir::Straight ? "straight"
+                                                                   : "curved");
+                    break;
                 case Command::TR:
-                    Uart::Printf(uart, COM2, VT_CLEARLN "unimplemented" ENDL);
+                    if (cmd.tr.speed == 15) {
+                        Uart::Putstr(
+                            uart, COM2, VT_CLEARLN
+                            "please use rv command to reverse train" ENDL);
+                        break;
+                    }
+                    train[cmd.tr.no]._.speed = (unsigned)cmd.tr.speed & 0x0f;
+                    Uart::Putc(uart, COM1, (char)train[cmd.tr.no].raw);
+                    Uart::Putc(uart, COM1, (char)cmd.tr.no);
+                    Uart::Printf(uart, COM2,
+                                 VT_CLEARLN "Set train %u to speed %u" ENDL,
+                                 cmd.tr.no, cmd.tr.speed);
                     break;
             }
+
+            // HACK: ensure that spamming enter doesn't eat commands
+            Clock::Delay(clock, (int)3);
         }
     }
 }

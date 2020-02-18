@@ -1,15 +1,17 @@
 #pragma once
 
+#include <cstdint>
+
 enum class SwitchDir : size_t {
     Straight,
     Curved
 };
 
 union TrainCmd {
-    char raw;
+    uint8_t raw;
     struct {
         unsigned speed : 4;
-        unsigned light : 1;
+        bool     light : 1;
     } _;
 };
 

@@ -47,7 +47,7 @@ struct Command {
             size_t no;
             size_t speed;
         } tr;
-    } data;
+    };
 
     /// Tries to parse a valid command from the given string
     ///
