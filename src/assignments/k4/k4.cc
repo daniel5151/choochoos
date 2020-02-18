@@ -139,8 +139,8 @@ void MarklinCommandTask() {
             default:
                 panic("MarklinCommandTask received an invalid action");
         }
-        // ensure that commands have a buffer between them
-        Clock::Delay(clock, (int)3);
+        // ensure that commands have at least 250ms of delay
+        Clock::Delay(clock, (int)25);
     }
 }
 
@@ -162,6 +162,8 @@ void CmdTask() {
     assert(uart >= 0);
     assert(clock >= 0);
     assert(marklin >= 0);
+
+    Uart::Printf(uart, COM2, "Ready." ENDL);
 
     // TODO: move train/track state to a dedicated UI/Marklin Controller task
     // possible approach: have the cmd task forward commands to the UI task,
@@ -309,6 +311,42 @@ void PerfTask() {
     }
 }
 
+const size_t VALID_SWITCHES[] = {1,  2,  3,   4,   5,   6,  7,  8,
+                                 9,  10, 11,  12,  13,  14, 15, 16,
+                                 17, 18, 153, 154, 155, 156};
+const size_t VALID_TRAINS[] = {1, 24, 58, 74, 78, 79};
+
+// TODO: send train commands through UI/Controller task for visual feedback
+void init_track(int marklin) {
+    MarklinAction act;
+    memset(&act, 0, sizeof(act));
+
+    // stop all the trains
+    act.tag = MarklinAction::Train;
+    act.train.state._.speed = 0;
+    act.train.state._.light = 0;
+    for (size_t no : VALID_TRAINS) {
+        act.train.no = no;
+        Send(marklin, (char*)&act, sizeof(act), nullptr, 0);
+    }
+
+    // set all the switches to curved
+    act.tag = MarklinAction::Switch;
+    act.sw.dir = SwitchDir::Curved;
+    for (size_t no : VALID_SWITCHES) {
+        act.sw.no = no;
+        Send(marklin, (char*)&act, sizeof(act), nullptr, 0);
+    }
+
+    // set innter-ring switches straight
+    act.tag = MarklinAction::Switch;
+    act.sw.dir = SwitchDir::Straight;
+    for (size_t no : {10, 13, 17, 16}) {
+        act.sw.no = no;
+        Send(marklin, (char*)&act, sizeof(act), nullptr, 0);
+    }
+}
+
 void FirstUserTask() {
     int clock = Create(1000, Clock::Server);
     int uart = Create(1000, Uart::Server);
@@ -331,18 +369,11 @@ void FirstUserTask() {
     Create(0, TimerTask);
     Create(0, LoggerTask);
 
-    Uart::Printf(
-        uart, COM2,
-        "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do "
-        "eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim "
-        "ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut "
-        "aliquip ex ea commodo consequat. Duis aute irure dolor in "
-        "reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla "
-        "pariatur. Excepteur sint occaecat cupidatat non proident, sunt in "
-        "culpa qui officia deserunt mollit anim id est laborum." ENDL);
-
     int marklin = Create(0, MarklinCommandTask);
     (void)marklin;
+
+    Uart::Printf(uart, COM2, "Initializing Track..." ENDL);
+    init_track(marklin);
 
     int cmd_task_tid = Create(0, CmdTask);
     {
