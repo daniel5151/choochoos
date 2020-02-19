@@ -10,6 +10,7 @@
 #include "user/tasks/uartserver.h"
 
 #include "cmd.h"
+#include "sensors.h"
 #include "trainctl.h"
 
 struct TermSize {
@@ -77,7 +78,8 @@ void LoggerTask() {
             int row = start_row + i;
             entry++;
             Uart::Printf(
-                uart, COM2, VT_SAVE VT_ROWCOL_FMT
+                uart, COM2,
+                VT_SAVE VT_ROWCOL_FMT
                 "time=%d log entry %d %08x%08x%08x%08x" ENDL VT_RESTORE,
                 row, 1, Clock::Time(clock), entry, rand(), rand(), rand(),
                 rand());
@@ -87,7 +89,7 @@ void LoggerTask() {
 }
 
 struct MarklinAction {
-    enum { Go, Stop, Train, Switch } tag;
+    enum { Go, Stop, Train, Switch, QuerySensors } tag;
     union {
         struct {
         } go;
@@ -101,6 +103,8 @@ struct MarklinAction {
             size_t no;
             SwitchDir dir;
         } sw;
+        struct {
+        } query_sensors;
     };
 };
 
@@ -118,8 +122,6 @@ void MarklinCommandTask() {
     int tid;
     for (;;) {
         Receive(&tid, (char*)&act, sizeof(act));
-        // TODO: don't reply immediately if the act is to return sensor data
-        Reply(tid, nullptr, 0);
         switch (act.tag) {
             case MarklinAction::Go:
                 Uart::Putc(uart, COM1, 0x60);
@@ -136,11 +138,16 @@ void MarklinCommandTask() {
                            act.sw.dir == SwitchDir::Straight ? 0x21 : 0x22);
                 Uart::Putc(uart, COM1, (char)act.sw.no);
                 break;
+            case MarklinAction::QuerySensors: {
+                Sensors::SendQuery(uart);
+            } break;
             default:
                 panic("MarklinCommandTask received an invalid action");
         }
-        // ensure that commands have at least 250ms of delay
-        Clock::Delay(clock, (int)25);
+        Reply(tid, nullptr, 0);
+
+        // ensure that commands have at least 150ms of delay
+        Clock::Delay(clock, (int)15);
     }
 }
 
@@ -264,7 +271,8 @@ void CmdTask() {
                 case Command::TR: {
                     if (cmd.tr.speed == 15) {
                         Uart::Putstr(
-                            uart, COM2, VT_CLEARLN
+                            uart, COM2,
+                            VT_CLEARLN
                             "please use rv command to reverse train" ENDL);
                         break;
                     }
@@ -347,6 +355,49 @@ void init_track(int marklin) {
     }
 }
 
+void SensorReporterTask() {
+    int uart = WhoIs(Uart::SERVER_ID);
+    assert(uart >= 0);
+    int sensor_reader = Create(100, Sensors::ReaderTask);
+    int tid = -1;
+    Sensors::Response res;
+    while (true) {
+        {
+            int n = Receive(&tid, (char*)&res, sizeof(res));
+            Reply(tid, nullptr, 0);
+            assert(n == sizeof(res));
+            assert(tid == sensor_reader);
+        }
+
+        char line[120];
+        int n =
+            snprintf(line, sizeof(line),
+                     VT_SAVE VT_ROWCOL(2, 1) VT_CLEARLN "read sensor data ");
+        for (size_t i = 0; i < sizeof(res.bytes); i++) {
+            char c = res.bytes[i];
+            n +=
+                snprintf(line + n, sizeof(line) - (size_t)n, "%02x ", c & 0xff);
+        }
+        snprintf(line + n, sizeof(line) - (size_t)n, VT_RESTORE);
+        Uart::Putstr(uart, COM2, line);
+    }
+}
+
+void SensorPollerTask() {
+    int marklin = WhoIs("MarklinCommandTask");
+    int clock = WhoIs(Clock::SERVER_ID);
+
+    assert(marklin >= 0);
+    assert(clock >= 0);
+
+    MarklinAction act = {.tag = MarklinAction::QuerySensors,
+                         .query_sensors = {}};
+    while (true) {
+        Send(marklin, (char*)&act, sizeof(act), nullptr, 0);
+        Clock::Delay(clock, 30);
+    }
+}
+
 void FirstUserTask() {
     int clock = Create(1000, Clock::Server);
     int uart = Create(1000, Uart::Server);
@@ -369,11 +420,15 @@ void FirstUserTask() {
     Create(0, TimerTask);
     Create(0, LoggerTask);
 
-    int marklin = Create(0, MarklinCommandTask);
+    int marklin = Create(1, MarklinCommandTask);
     (void)marklin;
+
+    Create(0, SensorReporterTask);
 
     Uart::Printf(uart, COM2, "Initializing Track..." ENDL);
     init_track(marklin);
+
+    Create(0, SensorPollerTask);
 
     int cmd_task_tid = Create(0, CmdTask);
     {
