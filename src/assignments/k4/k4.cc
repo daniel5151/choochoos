@@ -110,22 +110,21 @@ struct MarklinAction {
 };
 
 void wait_for_sensor_response(int uart, char bytes[NUM_SENSOR_GROUPS * 2]) {
-    for (size_t i = 0; i < NUM_SENSOR_GROUPS * 2; i++) {
-        // TODO implement a Uart::Getn so we don't have to continuously poll the
-        // uart server
-        int res = Uart::Getc(uart, COM1);
-        if (res < 0) panic("cannot read byte from UART 1: %d", res);
-        bytes[i] = (char)res;
-    }
+    int res = Uart::Getn(uart, COM1, NUM_SENSOR_GROUPS * 2, bytes);
+    if (res < 0)
+        panic("cannot read %d bytes from UART 1: %d", NUM_SENSOR_GROUPS * 2,
+              res);
 }
 
 void report_sensor_values(int uart,
                           int time,
+                          int roundtrip,
                           const char bytes[NUM_SENSOR_GROUPS * 2]) {
     char line[120];
-    int n = snprintf(
-        line, sizeof(line),
-        VT_SAVE VT_ROWCOL(2, 1) VT_CLEARLN "time=%d read sensor data ", time);
+    int n = snprintf(line, sizeof(line),
+                     VT_SAVE VT_ROWCOL(2, 1) VT_CLEARLN
+                     "time=%d rtt=%d read sensor data ",
+                     time, roundtrip);
     for (size_t i = 0; i < NUM_SENSOR_GROUPS * 2; i++) {
         char c = bytes[i];
         n += snprintf(line + n, sizeof(line) - (size_t)n, "%02x ", c & 0xff);
@@ -165,10 +164,12 @@ void MarklinCommandTask() {
                 Uart::Putc(uart, COM1, (char)act.sw.no);
                 break;
             case MarklinAction::QuerySensors: {
-                Uart::Putc(uart, COM1, (char)(128 + NUM_SENSOR_GROUPS));
                 char bytes[NUM_SENSOR_GROUPS * 2] = {'\0'};
+                int start = Clock::Time(clock);
+                Uart::Putc(uart, COM1, (char)(128 + NUM_SENSOR_GROUPS));
                 wait_for_sensor_response(uart, bytes);
-                report_sensor_values(uart, Clock::Time(clock), bytes);
+                int end = Clock::Time(clock);
+                report_sensor_values(uart, end, end - start, bytes);
             } break;
             default:
                 panic("MarklinCommandTask received an invalid action");

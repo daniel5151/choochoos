@@ -8,6 +8,10 @@ void Server();
 int Getc(int tid, int channel);
 int Putc(int tid, int channel, char c);
 
+// Getn blocks until n bytes are received from the UART, writing the bytes to
+// buf.
+int Getn(int tid, int channel, size_t n, char* buf);
+
 // Putstr and Printf can atomically write up to 4096 bytes to the UART in a
 // single call.
 int Putstr(int tid, int channel, const char* msg);

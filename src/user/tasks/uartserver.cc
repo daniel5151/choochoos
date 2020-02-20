@@ -12,6 +12,7 @@
 namespace Uart {
 const char* SERVER_ID = "UartServer";
 #define IOBUF_SIZE 4096
+#define MAX_GETN_SIZE 10
 
 using Iobuf = Queue<char, IOBUF_SIZE>;
 static Iobuf com1_out;
@@ -29,7 +30,7 @@ Iobuf& outbuf(int channel) {
 }
 
 struct Request {
-    enum { Notify, Shutdown, Putstr, Getc } tag;
+    enum { Notify, Shutdown, Putstr, Getn } tag;
     union {
         struct {
             int channel;
@@ -47,7 +48,8 @@ struct Request {
         } putstr;
         struct {
             int channel;
-        } getc;
+            size_t n;
+        } getn;
     };
 };
 
@@ -61,7 +63,7 @@ static inline size_t putstr_request_size(const Request& req) {
 }
 
 struct Response {
-    enum { Putstr, Getc } tag;
+    enum { Putstr, Getn } tag;
     union {
         struct {
             bool success;
@@ -69,8 +71,9 @@ struct Response {
         } putstr;
         struct {
             bool success;
-            char c;
-        } getc;
+            size_t n;
+            char bytes[MAX_GETN_SIZE];
+        } getn;
     };
 };
 
@@ -174,6 +177,12 @@ static void enable_rx_interrupts(int channel) {
     *ctlr = uart_ctlr.raw;
 }
 
+struct blocked_task_t {
+    int tid;
+    size_t written;
+    Response getn_res;
+};
+
 void Server() {
     set_up_uarts();
 
@@ -190,12 +199,12 @@ void Server() {
     memset((char*)&res, 0, sizeof(res));
 
     // one for each channel
-    std::optional<int> blocked_tids[2] = {std::nullopt};
+    std::optional<blocked_task_t> blocked_tids[2] = {std::nullopt};
 
     while (true) {
-        int n = Receive(&tid, (char*)&req, sizeof(req));
-        if (n <= (int)sizeof(req.tag))
-            panic("Uart::Server: bad request length %d", n);
+        int reqlen = Receive(&tid, (char*)&req, sizeof(req));
+        if (reqlen <= (int)sizeof(req.tag))
+            panic("Uart::Server: bad request length %d", reqlen);
         switch (req.tag) {
             case Request::Notify: {
                 int channel = req.notify.channel;
@@ -226,14 +235,28 @@ void Server() {
                 }
 
                 if (blocked_tids[channel].has_value() &&
-                    (req.notify.data._.rx || req.notify.data._.rx_timeout) &&
-                    !(*flags & RXFE_MASK)) {
-                    char c = (char)*data;
-                    res = {.tag = Response::Getc,
-                           .getc = {.success = true, .c = c}};
-                    Reply(blocked_tids[channel].value(), (char*)&res,
-                          sizeof(res));
-                    blocked_tids[channel] = std::nullopt;
+                    (req.notify.data._.rx || req.notify.data._.rx_timeout)) {
+                    blocked_task_t& blocked = blocked_tids[channel].value();
+                    while (blocked.written < blocked.getn_res.getn.n &&
+                           !(*flags & RXFE_MASK)) {
+                        char c = *data;
+                        blocked.getn_res.getn.bytes[blocked.written++] = c;
+                    }
+
+                    if (blocked.written == blocked.getn_res.getn.n) {
+                        debug(
+                            "replying to getn after interrupt tid=%d "
+                            "channel=%d "
+                            "n=%u bytes[0]=%02x bytes=%-10s" ENDL,
+                            blocked.tid, channel, blocked.getn_res.getn.n,
+                            blocked.getn_res.getn.bytes[0],
+                            blocked.getn_res.getn.bytes);
+                        Reply(blocked.tid, (char*)&blocked.getn_res,
+                              sizeof(blocked.getn_res));
+                        blocked_tids[channel] = std::nullopt;
+                    } else {
+                        enable_rx_interrupts(channel);
+                    }
                 }
 
                 // Reply to the notifier so it can start to AwaitEvent() again.
@@ -296,31 +319,50 @@ void Server() {
                 Reply(tid, (char*)&res, sizeof(res));
                 break;
             }
-            case Request::Getc: {
-                int channel = req.getc.channel;
+            case Request::Getn: {
+                int channel = req.getn.channel;
+                size_t n = req.getn.n;
+                assert(n > 0);
+                assert(n <= MAX_GETN_SIZE);
                 volatile uint32_t* flags = flags_for(channel);
                 volatile char* data = data_for(channel);
-                if (!(*flags & RXFE_MASK)) {
-                    char c = (char)*data;
-                    res = {.tag = Response::Getc,
-                           .getc = {.success = true, .c = c}};
-                    Reply(tid, (char*)&res, sizeof(res));
-                    break;
-                }
 
+                res = {.tag = Response::Getn,
+                       .getn = {.success = false, .n = n, .bytes = {}}};
+
+                debug("received Getn from tid %d channel=%d n=%u" ENDL, tid,
+                      channel, n);
                 if (blocked_tids[channel].has_value()) {
-                    debug(
+                    panic(
                         "multiple tids trying to read from channel %d (%d and "
                         "%d)",
-                        channel, blocked_tids[channel].value(), tid);
-                    res = {.tag = Response::Getc,
-                           .getc = {.success = false, .c = (char)0}};
+                        channel, blocked_tids[channel].value().tid, tid);
                     Reply(tid, (char*)&res, sizeof(res));
                     break;
                 }
 
-                // record the tid, don't reply yet
-                blocked_tids[channel] = tid;
+                res.getn.success = true;
+                blocked_tids[channel] = {
+                    .tid = tid, .written = 0, .getn_res = res};
+                blocked_task_t& blocked = blocked_tids[channel].value();
+
+                while (!(*flags & RXFE_MASK) && blocked.written < n) {
+                    char c = (char)*data;
+                    blocked.getn_res.getn.bytes[blocked.written++] = c;
+                }
+
+                if (blocked.written == n) {
+                    debug(
+                        "replying to getn immediately tid=%d channel=%d "
+                        "n=%u bytes[0]=%02x bytes=%-10s" ENDL,
+                        tid, channel, n, blocked.getn_res.getn.bytes[0],
+                        blocked.getn_res.getn.bytes);
+                    Reply(tid, (char*)&blocked.getn_res,
+                          sizeof(blocked.getn_res));
+                    blocked_tids[channel] = std::nullopt;
+                    break;
+                }
+
                 enable_rx_interrupts(channel);
                 break;
             }
@@ -337,13 +379,26 @@ void Shutdown(int tid) {
 }
 
 int Getc(int tid, int channel) {
-    Request req = {.tag = Request::Getc, .getc = {channel}};
+    Request req = {.tag = Request::Getn, .getn = {.channel = channel, .n = 1}};
     Response res;
     int n = Send(tid, (char*)&req, sizeof(req), (char*)&res, sizeof(res));
     assert(n == sizeof(res));
-    assert(res.tag == Response::Getc);
-    if (res.getc.success) {
-        return (int)res.getc.c;
+    assert(res.tag == Response::Getn);
+    if (res.getn.success) {
+        return (int)res.getn.bytes[0];
+    }
+    return -1;
+}
+
+int Getn(int tid, int channel, size_t n, char* buf) {
+    Request req = {.tag = Request::Getn, .getn = {.channel = channel, .n = n}};
+    Response res;
+    int ret = Send(tid, (char*)&req, sizeof(req), (char*)&res, sizeof(res));
+    assert(ret == sizeof(res));
+    assert(res.tag == Response::Getn);
+    if (res.getn.success) {
+        memcpy(buf, res.getn.bytes, n);
+        return (int)n;
     }
     return -1;
 }
