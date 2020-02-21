@@ -159,22 +159,16 @@ size_t enqueue_sensors(const char bytes[NUM_SENSOR_GROUPS * 2],
 void report_sensor_values(SensorQueue& q,
                           int uart,
                           int time,
-                          int roundtrip,
                           const char bytes[NUM_SENSOR_GROUPS * 2]) {
     size_t num_enqueued = enqueue_sensors(bytes, q);
-    if (num_enqueued == 0) return;
+    if (num_enqueued == 0 && q.size() > 0) return;
 
     char line[256];
 
-    int n = snprintf(
-        line, sizeof(line),
-        VT_SAVE VT_ROWCOL(2, 1) VT_CLEARLN "time=%d rtt=%d sensors: ", time,
-        roundtrip);
+    int n =
+        snprintf(line, sizeof(line),
+                 VT_SAVE VT_ROWCOL(2, 1) VT_CLEARLN "time=%d sensors: ", time);
 
-    // TODO this is inconsisent on the track! Sometimes we're in a good state
-    // and the sensor values are correct. Other times it appears as though the
-    // first two bytes from the track are always zero, so our sensors values are
-    // all wrong. Maybe the bug has to do with the Getn from COM1?
     for (int i = (int)q.size() - 1; i >= 0; i--) {
         const sensor_t* s = q.peek_index((size_t)i);
         assert(s != nullptr);
@@ -193,8 +187,23 @@ void report_sensor_values(SensorQueue& q,
     Uart::Putstr(uart, COM2, line);
 }
 
-void MarklinCommandTask() {
+void SensorReporterTask() {
     SensorQueue sensor_queue;
+    char bytes[NUM_SENSOR_GROUPS * 2] = {'\0'};
+
+    int uart = WhoIs(Uart::SERVER_ID);
+    int clock = WhoIs(Clock::SERVER_ID);
+
+    assert(uart >= 0);
+    assert(clock >= 0);
+
+    while (true) {
+        wait_for_sensor_response(uart, bytes);
+        report_sensor_values(sensor_queue, uart, Clock::Time(clock), bytes);
+    }
+}
+
+void MarklinCommandTask() {
     int uart = WhoIs(Uart::SERVER_ID);
     int clock = WhoIs(Clock::SERVER_ID);
 
@@ -224,15 +233,9 @@ void MarklinCommandTask() {
                            act.sw.dir == SwitchDir::Straight ? 0x21 : 0x22);
                 Uart::Putc(uart, COM1, (char)act.sw.no);
                 break;
-            case MarklinAction::QuerySensors: {
-                char bytes[NUM_SENSOR_GROUPS * 2] = {'\0'};
-                int start = Clock::Time(clock);
+            case MarklinAction::QuerySensors:
                 Uart::Putc(uart, COM1, (char)(128 + NUM_SENSOR_GROUPS));
-                wait_for_sensor_response(uart, bytes);
-                int end = Clock::Time(clock);
-                report_sensor_values(sensor_queue, uart, end, end - start,
-                                     bytes);
-            } break;
+                break;
             default:
                 panic("MarklinCommandTask received an invalid action");
         }
@@ -421,6 +424,10 @@ void init_track(int marklin) {
     MarklinAction act;
     memset(&act, 0, sizeof(act));
 
+    // send a single sensor query
+    act = {.tag = MarklinAction::QuerySensors, .query_sensors = {}};
+    Send(marklin, (char*)&act, sizeof(act), nullptr, 0);
+
     // stop all the trains
     act.tag = MarklinAction::Train;
     act.train.state._.speed = 0;
@@ -490,6 +497,10 @@ void FirstUserTask() {
     Uart::Printf(uart, COM2, "Initializing Track..." ENDL);
     init_track(marklin);
 
+    // Clear any bytes in the COM1 FIFO so they aren't mistakenly treated as a
+    // sensor query response.
+    Uart::Drain(uart, COM1);
+    Create(1, SensorReporterTask);
     Create(0, SensorPollerTask);
 
     int cmd_task_tid = Create(0, CmdTask);

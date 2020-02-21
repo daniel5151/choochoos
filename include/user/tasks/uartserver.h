@@ -18,6 +18,9 @@ int Putstr(int tid, int channel, const char* msg);
 int Printf(int tid, int channel, const char* format, ...)
     __attribute__((format(printf, 3, 4)));
 
+// Drain empties the RX FIFO for the given channel.
+void Drain(int tid, int channel);
+
 void Getline(int tid, int channel, char* line, size_t len);
 
 void Shutdown(int tid);

@@ -30,7 +30,7 @@ Iobuf& outbuf(int channel) {
 }
 
 struct Request {
-    enum { Notify, Shutdown, Putstr, Getn } tag;
+    enum { Notify, Shutdown, Putstr, Getn, Drain } tag;
     union {
         struct {
             int channel;
@@ -50,6 +50,9 @@ struct Request {
             int channel;
             size_t n;
         } getn;
+        struct {
+            int channel;
+        } drain;
     };
 };
 
@@ -366,6 +369,18 @@ void Server() {
                 enable_rx_interrupts(channel);
                 break;
             }
+            case Request::Drain: {
+                int channel = req.drain.channel;
+                volatile uint32_t* flags = flags_for(channel);
+                volatile char* data = data_for(channel);
+
+                while (!(*flags & RXFE_MASK)) {
+                    *data;
+                }
+
+                Reply(tid, nullptr, 0);
+                break;
+            }
             case Request::Shutdown: {
                 panic("todo: Uart::Server Shutdown");
             }
@@ -469,6 +484,11 @@ void Getline(int tid, int channel, char* line, size_t len) {
     }
     Putstr(tid, channel, "\r\n");
     line[i] = '\0';
+}
+
+void Drain(int tid, int channel) {
+    Request req = {.tag = Request::Drain, .drain = {.channel = channel}};
+    Send(tid, (char*)&req, sizeof(req), nullptr, 0);
 }
 
 }  // namespace Uart
