@@ -3,6 +3,7 @@
 #include <cstdlib>
 #include <cstring>
 
+#include "common/queue.h"
 #include "common/ts7200.h"
 #include "user/debug.h"
 #include "user/syscalls.h"
@@ -116,24 +117,84 @@ void wait_for_sensor_response(int uart, char bytes[NUM_SENSOR_GROUPS * 2]) {
               res);
 }
 
-void report_sensor_values(int uart,
+struct sensor_t {
+    char group;
+    uint8_t idx;
+};
+
+bool sensor_eq(const sensor_t& s1, const sensor_t& s2) {
+    return s1.group == s2.group && s1.idx == s2.idx;
+}
+
+using SensorQueue = Queue<sensor_t, 10>;
+
+size_t enqueue_sensors(const char bytes[NUM_SENSOR_GROUPS * 2],
+                       SensorQueue& q) {
+    size_t ret = 0;
+    for (size_t bi = 0; bi < NUM_SENSOR_GROUPS * 2; bi++) {
+        char byte = bytes[bi];
+        for (size_t i = 1; i <= 8; i++) {
+            if ((byte >> (8 - i)) & 0x01) {
+                char group = (char)((int)'A' + (bi / 2));
+                uint8_t idx = (uint8_t)(i + (8 * (bi % 2)));
+
+                const sensor_t s = {.group = group, .idx = idx};
+
+                // Don't push the sensor onto the queue if it is the most
+                // recently triggered sensor.
+                if (q.size() > 0 && sensor_eq(s, *q.peek_index(q.size() - 1))) {
+                    continue;
+                }
+
+                if (q.available() == 0) q.pop_front();
+                q.push_back(s);
+                ret++;
+            }
+        }
+    }
+
+    return ret;
+}
+
+void report_sensor_values(SensorQueue& q,
+                          int uart,
                           int time,
                           int roundtrip,
                           const char bytes[NUM_SENSOR_GROUPS * 2]) {
-    char line[120];
-    int n = snprintf(line, sizeof(line),
-                     VT_SAVE VT_ROWCOL(2, 1) VT_CLEARLN
-                     "time=%d rtt=%d read sensor data ",
-                     time, roundtrip);
-    for (size_t i = 0; i < NUM_SENSOR_GROUPS * 2; i++) {
-        char c = bytes[i];
-        n += snprintf(line + n, sizeof(line) - (size_t)n, "%02x ", c & 0xff);
+    size_t num_enqueued = enqueue_sensors(bytes, q);
+    if (num_enqueued == 0) return;
+
+    char line[256];
+
+    int n = snprintf(
+        line, sizeof(line),
+        VT_SAVE VT_ROWCOL(2, 1) VT_CLEARLN "time=%d rtt=%d sensors: ", time,
+        roundtrip);
+
+    // TODO this is inconsisent on the track! Sometimes we're in a good state
+    // and the sensor values are correct. Other times it appears as though the
+    // first two bytes from the track are always zero, so our sensors values are
+    // all wrong. Maybe the bug has to do with the Getn from COM1?
+    for (int i = (int)q.size() - 1; i >= 0; i--) {
+        const sensor_t* s = q.peek_index((size_t)i);
+        assert(s != nullptr);
+        n += snprintf(line + n, sizeof(line) - (size_t)n, "%c%02u ", s->group,
+                      s->idx);
     }
+
+    // useful for debugging:
+    n += snprintf(line + n, sizeof(line) - (size_t)n, " raw: ");
+    for (size_t i = 0; i < NUM_SENSOR_GROUPS * 2; i++) {
+        char byte = bytes[i];
+        n += snprintf(line + n, sizeof(line) - (size_t)n, "%02x ", byte);
+    }
+
     snprintf(line + n, sizeof(line) - (size_t)n, VT_RESTORE);
     Uart::Putstr(uart, COM2, line);
 }
 
 void MarklinCommandTask() {
+    SensorQueue sensor_queue;
     int uart = WhoIs(Uart::SERVER_ID);
     int clock = WhoIs(Clock::SERVER_ID);
 
@@ -169,7 +230,8 @@ void MarklinCommandTask() {
                 Uart::Putc(uart, COM1, (char)(128 + NUM_SENSOR_GROUPS));
                 wait_for_sensor_response(uart, bytes);
                 int end = Clock::Time(clock);
-                report_sensor_values(uart, end, end - start, bytes);
+                report_sensor_values(sensor_queue, uart, end, end - start,
+                                     bytes);
             } break;
             default:
                 panic("MarklinCommandTask received an invalid action");

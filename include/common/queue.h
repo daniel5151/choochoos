@@ -40,6 +40,11 @@ class Queue {
         return &buf[start];
     }
 
+    const T* peek_index(size_t i) const {
+        if (i >= len) return nullptr;
+        return &buf[(start + i) % N];
+    }
+
     void clear() {
         start = 0;
         len = 0;
