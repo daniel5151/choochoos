@@ -378,6 +378,13 @@ void Server() {
                     *data;
                 }
 
+                // If any task was blocked on a Getn with an incomplete
+                // response, clear the response.
+                if (blocked_tids[channel].has_value()) {
+                    blocked_task_t& blocked = blocked_tids[channel].value();
+                    blocked.written = 0;
+                }
+
                 Reply(tid, nullptr, 0);
                 break;
             }

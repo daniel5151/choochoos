@@ -234,6 +234,12 @@ void MarklinCommandTask() {
                 Uart::Putc(uart, COM1, (char)act.sw.no);
                 break;
             case MarklinAction::QuerySensors:
+                // Drain will clear any bytes that have been received but not
+                // yet reported by the SensorReporterTask. This means that if we
+                // drop any bytes while reading from COM1, the incomplete
+                // response won't stall all future responses from being
+                // received.
+                Uart::Drain(uart, COM1);
                 Uart::Putc(uart, COM1, (char)(128 + NUM_SENSOR_GROUPS));
                 break;
             default:
