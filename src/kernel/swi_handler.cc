@@ -47,9 +47,6 @@ void handle_syscall(uint32_t no, void* user_sp) {
             handlers::Perf((user::perf_t*)user_stack->regs[0]);
             break;
         case 10:
-            Panic();
-            break;
-        case 11:
             Shutdown();
             break;
         default:

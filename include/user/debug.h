@@ -7,6 +7,12 @@
 #include "common/vt_escapes.h"
 #include "user/syscalls.h"
 
+#ifdef __cplusplus
+#define SHUTDOWN ::Shutdown
+#else
+#define SHUTDOWN Shutdown
+#endif
+
 #undef assert
 
 #ifdef NDEBUG
@@ -16,22 +22,23 @@
     do {                                                                      \
         if (!(expr)) {                                                        \
             int my_tid = MyTid();                                             \
-            bwprintf(COM2, VT_RED                                             \
+            bwprintf(COM2,                                                    \
+                     VT_RED                                                   \
                      "[assert:%s:%d tid=%d] Assertion failed: (%s), exiting " \
                      "task\r\n" VT_NOFMT,                                     \
                      __FILE__, __LINE__, my_tid, #expr);                      \
-            Panic();                                                          \
+            SHUTDOWN();                                                       \
         }                                                                     \
     } while (false)
 #endif
 
-/// Print a big scary error message and calls Panic()
+/// Print a big scary error message and calls Shutdown()
 #define panic(fmt, ...)                                                    \
     do {                                                                   \
         int my_tid = MyTid();                                              \
         bwprintf(COM2, VT_RED "[panic:%s:%d tid=%d] " VT_NOFMT fmt "\r\n", \
                  __FILE__, __LINE__, my_tid, ##__VA_ARGS__);               \
-        Panic();                                                           \
+        SHUTDOWN();                                                        \
     } while (false)
 
 #ifdef RELEASE_MODE

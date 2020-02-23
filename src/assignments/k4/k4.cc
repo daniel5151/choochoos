@@ -199,9 +199,8 @@ void CmdTask() {
                 } break;
                 case Command::LIGHT: {
                     if (!is_valid_train(cmd.light.no)) {
-                        Uart::Putstr(
-                            uart, COM2, VT_CLEARLN
-                            "invalid train no" ENDL);
+                        Uart::Putstr(uart, COM2,
+                                     VT_CLEARLN "invalid train no" ENDL);
                         break;
                     }
 
@@ -219,9 +218,8 @@ void CmdTask() {
                 } break;
                 case Command::RV: {
                     if (!is_valid_train(cmd.rv.no)) {
-                        Uart::Putstr(
-                            uart, COM2, VT_CLEARLN
-                            "invalid train no" ENDL);
+                        Uart::Putstr(uart, COM2,
+                                     VT_CLEARLN "invalid train no" ENDL);
                         break;
                     }
 
@@ -261,9 +259,8 @@ void CmdTask() {
                 } break;
                 case Command::SW: {
                     if (!is_valid_switch(cmd.sw.no)) {
-                        Uart::Putstr(
-                            uart, COM2, VT_CLEARLN
-                            "invalid switch no" ENDL);
+                        Uart::Putstr(uart, COM2,
+                                     VT_CLEARLN "invalid switch no" ENDL);
                         break;
                     }
 
@@ -282,21 +279,22 @@ void CmdTask() {
                 } break;
                 case Command::TR: {
                     if (!is_valid_train(cmd.tr.no)) {
-                        Uart::Putstr(
-                            uart, COM2, VT_CLEARLN
-                            "invalid train no" ENDL);
+                        Uart::Putstr(uart, COM2,
+                                     VT_CLEARLN "invalid train no" ENDL);
                         break;
                     }
 
                     if (cmd.tr.speed == 15) {
                         Uart::Putstr(
-                            uart, COM2, VT_CLEARLN
+                            uart, COM2,
+                            VT_CLEARLN
                             "please use rv command to reverse train" ENDL);
                         break;
                     }
                     if (cmd.tr.speed >= 16) {
                         Uart::Putstr(
-                            uart, COM2, VT_CLEARLN
+                            uart, COM2,
+                            VT_CLEARLN
                             "tr command only supports speeds 0-14" ENDL);
                         break;
                     }

@@ -2,11 +2,6 @@
 
 .global __Shutdown
 __Shutdown:
-    swi #11
-    bx lr
-
-.global __Panic
-__Panic:
     swi #10
     bx lr
 

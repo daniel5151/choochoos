@@ -39,8 +39,8 @@ extern uint32_t last_perf_call_time;
 namespace idle_time {
 extern uint32_t pct;
 extern uint32_t counter;
-}
-}
+}  // namespace idle_time
+}  // namespace perf
 
 namespace helpers {
 
@@ -51,7 +51,6 @@ int create_task(int priority, void* function, std::optional<Tid> force_tid);
 namespace handlers {
 
 void Shutdown();
-void Panic();
 void Perf(user::perf_t* perf);
 
 int MyTid();
