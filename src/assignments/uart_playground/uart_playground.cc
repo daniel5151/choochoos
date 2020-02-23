@@ -73,24 +73,31 @@ void TrainPlayground() {
         *high = buf;
     }
 
-    Create(0, TrainBusyReader);
+    // Create(0, TrainBusyReader);
 
     bool my_cts_flag = true;
     while (true) {
         if ((*UART1_FLAG & CTS_MASK) && my_cts_flag) {
-            *UART1_DATA = 133;  // sensor query
-            bwputc(COM2, '.');
+            bwputc(COM2, 'y');
             my_cts_flag = false;
+            *UART1_DATA = 133;  // sensor query
+        } else {
+            bwputc(COM2, 'n');
         }
 
         UARTCtrl u1_ctlr = {.raw = *UART1_CTLR};
         // u1_ctlr._.enable_int_tx = true;
         u1_ctlr._.enable_int_modem = true;
         *UART1_CTLR = u1_ctlr.raw;
+        bwputc(COM2, 'e');
 
         UARTIntIDIntClr id = {.raw = (uint32_t)AwaitEvent(52)};
-        if (id._.modem && (*UART1_FLAG & CTS_MASK)) {
-            my_cts_flag = true;
+        if (id._.modem) {
+            bwputc(COM2, 'm');
+            if ((*UART1_FLAG & CTS_MASK)) {
+                my_cts_flag = true;
+                bwputc(COM2, 'c');
+            }
         }
     }
 }

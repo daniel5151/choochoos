@@ -17,7 +17,6 @@ const char* SERVER_ID = "UartServer";
 using Iobuf = Queue<char, IOBUF_SIZE>;
 static Iobuf com1_out;
 static Iobuf com2_out;
-static bool com1_cts = true;
 
 Iobuf& outbuf(int channel) {
     switch (channel) {
@@ -162,6 +161,8 @@ static void enable_tx_interrupts(int channel) {
 
     switch (channel) {
         case COM1:
+            bwputc(COM2, 'e');
+            uart_ctlr._.enable_int_tx = 1;
             uart_ctlr._.enable_int_modem = 1;
             break;
         case COM2:
@@ -176,13 +177,16 @@ static void enable_tx_interrupts(int channel) {
     *ctlr = uart_ctlr.raw;
 }
 
-static bool clear_to_send(int channel) {
+static bool clear_to_send(int channel, bool& com1_cts) {
     volatile uint32_t* flags = flags_for(channel);
     switch (channel) {
         case COM1: {
-            bool ret = (*flags & CTS_MASK) && com1_cts;
+            bool ret = !(*flags & TXFF_MASK) && (*flags & CTS_MASK) && com1_cts;
             if (ret) {
+                bwputc(COM2, 'y');
                 com1_cts = false;
+            } else {
+                bwputc(COM2, 'n');
             }
             return ret;
         }
@@ -219,6 +223,7 @@ void Server() {
 
     RegisterAs(SERVER_ID);
 
+    bool com1_cts = true;
     int tid;
     Request req;
     Response res;
@@ -241,15 +246,19 @@ void Server() {
                 debug("Server: received notify: channel=%d data=0x%lx", channel,
                       req.notify.data.raw);
 
-                if (channel == COM1 && req.notify.data._.modem &&
-                    (*flags & CTS_MASK)) {
-                    com1_cts = true;
+                if (channel == COM1 && req.notify.data._.modem) {
+                    bwputc(COM2, 'm');
+                    if ((*flags & CTS_MASK)) {
+                        bwputc(COM2, 'c');
+                        com1_cts = true;
+                    }
                 }
 
                 // TX
                 if (req.notify.data._.tx || req.notify.data._.modem) {
                     int bytes_written = 0;
-                    while (!buf.is_empty() && clear_to_send(channel)) {
+                    while (!buf.is_empty() &&
+                           clear_to_send(channel, com1_cts)) {
                         char c = buf.pop_front().value();
                         *data = (uint32_t)c;
                         bytes_written++;
@@ -308,7 +317,7 @@ void Server() {
 
                 if (buf.is_empty()) {
                     // try writing directly to the wire
-                    for (; i < len && clear_to_send(channel); i++) {
+                    for (; i < len && clear_to_send(channel, com1_cts); i++) {
                         *data = msg[i];
                     }
 
