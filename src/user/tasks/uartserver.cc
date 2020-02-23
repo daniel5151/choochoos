@@ -17,6 +17,7 @@ const char* SERVER_ID = "UartServer";
 using Iobuf = Queue<char, IOBUF_SIZE>;
 static Iobuf com1_out;
 static Iobuf com2_out;
+static bool com1_cts = true;
 
 Iobuf& outbuf(int channel) {
     switch (channel) {
@@ -159,13 +160,37 @@ static void enable_tx_interrupts(int channel) {
     UARTCtrl uart_ctlr = {.raw = *ctlr};
     uint32_t old_ctlr = uart_ctlr.raw;
 
-    // TODO I think we need to enable the modem interrupts on COM1 in order to
-    // get CTS changed interrupts
-    uart_ctlr._.enable_int_tx = 1;
+    switch (channel) {
+        case COM1:
+            uart_ctlr._.enable_int_modem = 1;
+            break;
+        case COM2:
+            uart_ctlr._.enable_int_tx = 1;
+            break;
+        default:
+            panic("bad channel %d", channel);
+    }
     debug("enable_tx_interrupts: channel=%d new_ctlr=0x%lx old_ctlr=0x%lx",
           channel, uart_ctlr.raw, old_ctlr);
     (void)old_ctlr;
     *ctlr = uart_ctlr.raw;
+}
+
+static bool clear_to_send(int channel) {
+    volatile uint32_t* flags = flags_for(channel);
+    switch (channel) {
+        case COM1: {
+            bool ret = (*flags & CTS_MASK) && com1_cts;
+            if (ret) {
+                com1_cts = false;
+            }
+            return ret;
+        }
+        case COM2:
+            return !(*flags & TXFF_MASK);
+        default:
+            panic("bad channel %d", channel);
+    }
 }
 
 static void enable_rx_interrupts(int channel) {
@@ -216,10 +241,15 @@ void Server() {
                 debug("Server: received notify: channel=%d data=0x%lx", channel,
                       req.notify.data.raw);
 
-                if (req.notify.data._.tx) {
+                if (channel == COM1 && req.notify.data._.modem &&
+                    (*flags & CTS_MASK)) {
+                    com1_cts = true;
+                }
+
+                // TX
+                if (req.notify.data._.tx || req.notify.data._.modem) {
                     int bytes_written = 0;
-                    // TODO check the CTS flag for COM1
-                    while (!buf.is_empty() && !(*flags & TXFF_MASK)) {
+                    while (!buf.is_empty() && clear_to_send(channel)) {
                         char c = buf.pop_front().value();
                         *data = (uint32_t)c;
                         bytes_written++;
@@ -235,6 +265,7 @@ void Server() {
                     }
                 }
 
+                // RX
                 if (blocked_tids[channel].has_value() &&
                     (req.notify.data._.rx || req.notify.data._.rx_timeout)) {
                     blocked_task_t& blocked = blocked_tids[channel].value();
@@ -273,13 +304,11 @@ void Server() {
                 char* msg = req.putstr.buf;
 
                 Iobuf& buf = outbuf(channel);
-                volatile uint32_t* flags = flags_for(channel);
                 volatile char* data = data_for(channel);
 
                 if (buf.is_empty()) {
                     // try writing directly to the wire
-                    // TODO check the CTS flag for COM1
-                    for (; i < len && !(*flags & TXFF_MASK); i++) {
+                    for (; i < len && clear_to_send(channel); i++) {
                         *data = msg[i];
                     }
 

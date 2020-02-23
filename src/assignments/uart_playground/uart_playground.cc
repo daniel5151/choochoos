@@ -46,7 +46,19 @@ void TXPlayground() {
     }
 }
 
+#include "../src/assignments/k4/trainctl.h"
+
+void TrainBusyReader() {
+    for (size_t i = 0;; i = (i + 1) % 10) {
+        char c = (char)bwgetc(COM1);
+        bwprintf(COM2, "%02x", c);
+        if (i == 9) bwprintf(COM2, ENDL);
+    }
+}
+
 void TrainPlayground() {
+    bwsetfifo(COM2, true);
+
     // set up uart 1
     {
         volatile int* mid = (volatile int*)(UART1_BASE + UART_LCRM_OFFSET);
@@ -61,28 +73,25 @@ void TrainPlayground() {
         *high = buf;
     }
 
-    size_t written = 0;
-    size_t len = strlen(msg);
+    Create(0, TrainBusyReader);
 
+    bool my_cts_flag = true;
     while (true) {
-        size_t n = written;
-        for (; written < len && !(*UART1_FLAG & TXFF_MASK) &&
-               (*UART1_FLAG & CTS_MASK);
-             written++) {
-            *UART1_DATA = (uint32_t)msg[written];
+        if ((*UART1_FLAG & CTS_MASK) && my_cts_flag) {
+            *UART1_DATA = 133;  // sensor query
+            bwputc(COM2, '.');
+            my_cts_flag = false;
         }
-        n = written - n;
-        bwprintf(COM2, "wrote %d bytes to COM1" ENDL, n);
-
-        if (written >= len) return;
 
         UARTCtrl u1_ctlr = {.raw = *UART1_CTLR};
-        u1_ctlr._.enable_int_tx = true;
-        // TODO I not entirely sure if this is the interrupt that tells us when
-        // the CTS flag is flipped. We need to test this on real hardware.
+        // u1_ctlr._.enable_int_tx = true;
         u1_ctlr._.enable_int_modem = true;
         *UART1_CTLR = u1_ctlr.raw;
-        AwaitEvent(52);
+
+        UARTIntIDIntClr id = {.raw = (uint32_t)AwaitEvent(52)};
+        if (id._.modem && (*UART1_FLAG & CTS_MASK)) {
+            my_cts_flag = true;
+        }
     }
 }
 
@@ -121,7 +130,7 @@ void FirstUserTask() {
     // Only run one of these - AwaitEvent() can't be called by two simultaneous
     // tasks.
 
-    // Create(0, RXPlayground);
-    //    Create(0, TXPlayground);
-    Create(0, TrainPlayground);
+    // Create(10, RXPlayground);
+    //    Create(10, TXPlayground);
+    Create(10, TrainPlayground);
 }
