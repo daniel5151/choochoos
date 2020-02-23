@@ -252,6 +252,13 @@ void CmdTask() {
                             "please use rv command to reverse train" ENDL);
                         break;
                     }
+                    if (cmd.tr.speed >= 16) {
+                        Uart::Putstr(
+                            uart, COM2, VT_CLEARLN
+                            "tr command only supports speeds 0-14" ENDL);
+                        break;
+                    }
+
                     train[cmd.tr.no]._.speed = (unsigned)cmd.tr.speed & 0x0f;
 
                     MarklinAction act = {
