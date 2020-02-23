@@ -301,7 +301,7 @@ void PerfTask() {
         Uart::Printf(uart, COM2,
                      VT_SAVE VT_ROWCOL_FMT "[Idle Time %02lu%%]" VT_RESTORE, 1,
                      cfg.term_size.width - 14, perf.idle_time_pct);
-        Clock::Delay(clock, (int)5);
+        Clock::Delay(clock, (int)25);
     }
 }
 
