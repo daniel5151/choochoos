@@ -49,6 +49,9 @@ void handle_syscall(uint32_t no, void* user_sp) {
         case 10:
             Panic();
             break;
+        case 11:
+            Shutdown();
+            break;
         default:
             kpanic("invalid syscall %lu", no);
     }

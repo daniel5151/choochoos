@@ -10,6 +10,7 @@
 
 // Raw Syscall signatures
 
+void __Shutdown(void) __attribute__((noreturn));
 void __Panic(void) __attribute__((noreturn));
 void __Perf(struct perf_t* perf);
 
@@ -25,6 +26,7 @@ void __Yield(void);
 
 // Wrapper methods around raw syscalls
 
+void Shutdown(void) { __Shutdown(); }
 void Panic(void) { __Panic(); }
 void Perf(struct perf_t* perf) { __Perf(perf); }
 

@@ -12,6 +12,7 @@ struct perf_t {
 };
 
 // Extra Syscalls
+void Shutdown(void) __attribute__((noreturn));
 void Panic(void) __attribute__((noreturn));
 void Perf(struct perf_t* perf);
 

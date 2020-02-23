@@ -175,7 +175,7 @@ void CmdTask() {
             switch (cmd.kind) {
                 case Command::Q: {
                     bwputstr(COM2, VT_RESET);
-                    panic("TODO: gracefully shutdown k4 lol");
+                    Shutdown();
                 } break;
                 case Command::GO: {
                     MarklinAction act = {.tag = MarklinAction::Go, .go = {}};
