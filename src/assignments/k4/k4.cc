@@ -123,6 +123,20 @@ void SensorReporterTask() {
     }
 }
 
+static bool is_valid_switch(size_t no) {
+    for (uint8_t vno : VALID_SWITCHES) {
+        if (no == vno) return true;
+    }
+    return false;
+}
+
+static bool is_valid_train(size_t no) {
+    for (uint8_t vno : VALID_TRAINS) {
+        if (no == vno) return true;
+    }
+    return false;
+}
+
 struct CmdTaskCfg {
     TermSize term_size;
 };
@@ -184,6 +198,13 @@ void CmdTask() {
                     Uart::Printf(uart, COM2, VT_CLEARLN "Sent GO command" ENDL);
                 } break;
                 case Command::LIGHT: {
+                    if (!is_valid_train(cmd.light.no)) {
+                        Uart::Putstr(
+                            uart, COM2, VT_CLEARLN
+                            "invalid train no" ENDL);
+                        break;
+                    }
+
                     train[cmd.light.no]._.light = !train[cmd.light.no]._.light;
 
                     MarklinAction act = {
@@ -197,6 +218,13 @@ void CmdTask() {
                                  cmd.light.no);
                 } break;
                 case Command::RV: {
+                    if (!is_valid_train(cmd.rv.no)) {
+                        Uart::Putstr(
+                            uart, COM2, VT_CLEARLN
+                            "invalid train no" ENDL);
+                        break;
+                    }
+
                     MarklinAction act = {
                         .tag = MarklinAction::Train,
                         .train = {.no = cmd.rv.no, .state = train[cmd.rv.no]}};
@@ -232,6 +260,13 @@ void CmdTask() {
                                  VT_CLEARLN "Sent STOP command" ENDL);
                 } break;
                 case Command::SW: {
+                    if (!is_valid_switch(cmd.sw.no)) {
+                        Uart::Putstr(
+                            uart, COM2, VT_CLEARLN
+                            "invalid switch no" ENDL);
+                        break;
+                    }
+
                     MarklinAction act = {
                         .tag = MarklinAction::Switch,
                         .sw = {.no = cmd.sw.no, .dir = cmd.sw.dir}};
@@ -246,6 +281,13 @@ void CmdTask() {
                                                                    : "curved");
                 } break;
                 case Command::TR: {
+                    if (!is_valid_train(cmd.tr.no)) {
+                        Uart::Putstr(
+                            uart, COM2, VT_CLEARLN
+                            "invalid train no" ENDL);
+                        break;
+                    }
+
                     if (cmd.tr.speed == 15) {
                         Uart::Putstr(
                             uart, COM2, VT_CLEARLN
