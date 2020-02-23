@@ -10,23 +10,20 @@
 namespace Ui {
 
 void render_initial_screen(int uart) {
-    Uart::Printf(uart, COM2,
-                 VT_SAVE VT_ROWCOL(5, 1) "Train |" ENDL
-                                         "Speed |" ENDL VT_RESTORE);
+    Uart::Printf(uart, COM2, VT_SAVE VT_ROWCOL(5, 1) "Train |" ENDL
+                                                     "Speed |" ENDL VT_RESTORE);
     size_t i = 0;
     for (uint8_t train : VALID_TRAINS) {
         int row = 5;
         int col = 8 + i * 6;
-        Uart::Printf(uart, COM2,
-                     VT_SAVE VT_ROWCOL_FMT " %3u |" VT_DOWN(1)
-                         VT_LEFT(1) "|" VT_RESTORE,
+        Uart::Printf(uart, COM2, VT_SAVE VT_ROWCOL_FMT " %3u |" VT_DOWN(1)
+                                     VT_LEFT(1) "|" VT_RESTORE,
                      row, col, train);
         i++;
     }
 
-    Uart::Printf(uart, COM2,
-                 VT_SAVE VT_ROWCOL(8, 1) "Switches" ENDL "|" ENDL "|" ENDL
-                                         "|" VT_RESTORE);
+    Uart::Printf(uart, COM2, VT_SAVE VT_ROWCOL(8, 1) "Switches" ENDL "|" ENDL
+                                                     "|" ENDL "|" VT_RESTORE);
 
     i = 0;
     for (uint8_t sw : VALID_SWITCHES) {
@@ -40,10 +37,16 @@ void render_initial_screen(int uart) {
 
 void render_train_speed(int uart, uint8_t train, int speed) {
     size_t i = 0;
-    for (; i < NUM_VALID_TRAINS; i++) {
-        if (VALID_TRAINS[i] == train) break;
+
+    bool valid_train = false;
+    for (uint8_t t : VALID_TRAINS) {
+        if (t == train) {
+            valid_train = true;
+            break;
+        };
+        i++;
     }
-    if (i == NUM_VALID_TRAINS) return;
+    if (!valid_train) return;
 
     int row = 6;
     int col = 8 + i * 6 + 1;
@@ -54,10 +57,16 @@ void render_train_speed(int uart, uint8_t train, int speed) {
 
 void render_switch_direction(int uart, uint8_t sw, SwitchDir dir) {
     size_t i = 0;
-    for (; i < NUM_VALID_SWITCHES; i++) {
-        if (VALID_SWITCHES[i] == sw) break;
+
+    bool valid_sw = false;
+    for (uint8_t s : VALID_SWITCHES) {
+        if (s == sw) {
+            valid_sw = true;
+            break;
+        };
+        i++;
     }
-    if (i == NUM_VALID_SWITCHES) return;
+    if (!valid_sw) return;
 
     int row = 9 + i / 8;
     int col = 2 + 6 * (i % 8) + 4;
