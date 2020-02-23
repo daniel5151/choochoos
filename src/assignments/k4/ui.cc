@@ -1,5 +1,12 @@
 #include "ui.h"
 
+#include <cstdint>
+
+#include "common/ts7200.h"
+#include "common/vt_escapes.h"
+#include "user/debug.h"
+#include "user/tasks/uartserver.h"
+
 namespace Ui {
 
 void render_initial_screen(int uart) {
