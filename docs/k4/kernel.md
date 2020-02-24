@@ -10,7 +10,7 @@ Written by [Daniel Prilik](https://prilik.com) and [James Hageman](https://james
 
 This project uses a standard Makefile-based build system.
 
-Building the lastest deliverable is as simple as running:
+Building the latest deliverable is as simple as running:
 
 ```bash
 make -j
@@ -60,8 +60,8 @@ loop.
 and `irq` handlers.
 - `kernel::handlers` implements the functions to handle each syscall (`Create`,
   `MyTid`, `Send`, etc).
-- `kernel::perf` keeps the state to track our idle time measurment.
-- `kernel::helpers` contains functions used accross multiple namespaces.
+- `kernel::perf` keeps the state to track our idle time measurement.
+- `kernel::helpers` contains functions used across multiple namespaces.
 
 `kernel.h` defines the public interface of each namespace, but each namespace
 is implemented accross one or more separate files. Syscall handlers each get
@@ -78,7 +78,7 @@ is separate.
 Our entry point is the `_start` routine defined in `src/kernel/boilerplate/crt1.c`. `_start` does couple key things for the initialization of the kernel:
 
 - The initial link register is stored in the `redboot_return_addr` variable.
-  - This variable is used to implement an `_exit()` method, which can be called at any point during kernel exection to immediately return execution back to Redboot. See the "Kernel Shutdown" section for more details on kernel shutdown.
+  - This variable is used to implement an `_exit()` method, which can be called at any point during kernel execution to immediately return execution back to Redboot. See the "Kernel Shutdown" section for more details on kernel shutdown.
 - The BSS is zeroed
 - All C++ global constructors are run
 
@@ -160,7 +160,7 @@ yet to be discovered).
 
 The drawback is that we lose FIFO if the ticket counter overflows. Right now,
 the ticket counter is a `size_t` (a 32-bit unsigned integer), so we would have
-to push `2^32` `Tid`s onto `ready_queue` in order to see an overflow. However,
+to push `2^32` Tids onto `ready_queue` in order to see an overflow. However,
 the implications of an overflow are relatively minor - one task may be
 scheduled out of order with respect to priority. This is a minor concern as
 user tasks should consider priorities to be more scheduling "advice" for the
@@ -350,7 +350,7 @@ timers themselves via the timer control registers.
 ### UART IRQs
 
 The UART combined interrupts are supported in the kernel as events `52` for
-UART1 and `54` for UART2. UART interrupts are enabled in user space by writting
+UART1 and `54` for UART2. UART interrupts are enabled in user space by writing
 to the UART's CTLR (control register). For ease of use, a the following struct
 is defined in `ts7200.h`:
 
@@ -562,7 +562,7 @@ task has asked for the data yet.
 
 When a task wants to wait for an interrupt, it calls `AwaitEvent(int
 eventid)`, where `eventid` is a number between 0 and 63, corresponding to the
-interupt of the same number. The kernel records the `Tid` in the `event_queue`
+interrupt of the same number. The kernel records the `Tid` in the `event_queue`
 array. In `handle_interrupt`, if the `event_queue` has a task blocked on the
 interrupt, the Tid is removes from `event_queue`, and the task is moved back to
 the `ready_queue`. The preempted task remains ready, and thus is put back on
@@ -601,7 +601,6 @@ and display system performance metrics whenever and however they like!
 Each call to `Perf` resets the idle time measurement, providing a form of
 "windowed" idle time measurement, where the window size depends on the
 frequency at which `Perf` is called.
-
 
 ## `Shutdown()`
 
@@ -777,7 +776,7 @@ underflow), and then `Send`s to the clock server. The clock server tracks
 
 The clock server has a priority queue of delayed tasks (called `pq`), where
 tasks that want to wake up sooner have higher priority. When `Delay()` and
-`DelayUntil()` are called, the tid of the caller is pushed onto the priority
+`DelayUntil()` are called, the Tid of the caller is pushed onto the priority
 queue with `tick_threshold` set to the time that the task would like to wake
 up.  When the notifier ticks, it pops tasks off `pq` until
 `pq.peek()->tick_threshold > current_time`, and replies to them, waking them
@@ -826,7 +825,7 @@ void Getline(int tid, int channel, char* line, size_t len);
 Notably, `Putstr` and `Printf` atomically write an entire string to the UART
 (up to a maximum length of 4096 bytes), and `Getn` blocks until `n` bytes are
 received from the UART. Each of the output routines are written in terms of
-`Putstr`, and similarily, each of the input routinges are written in terms of
+`Putstr`, and similarly, each of the input routines are written in terms of
 `Getn`.
 
 The UART server has two key pieces of state: output buffers (for TX) and
@@ -851,7 +850,7 @@ the desired `n` bytes have been received (in which case a reply is sent and the
 "blocked task" is cleared).
 
 Only one reading task per UART is supported, as concurrent readers leads to
-confusing behaviour - should received bytes be sent to both tasks concurrently?
+confusing behavior - should received bytes be sent to both tasks concurrently?
 In a round robin? Or in sequential order? The semantics of multi-reader is
 confusing, and likely unnecessary for any applications that will be built on
 the kernel. So "bocked tasks" are implemented as simple `std::optional`s per
