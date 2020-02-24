@@ -73,12 +73,12 @@ Only the global state variables, `kernel::run()` and the `kernel::driver`
 routines used by `kernel::run()` are defined in `kernel.cc` - everything else
 is separate.
 
-# Initialization
+# Kernel Initialization
 
 Our entry point is the `_start` routine defined in `src/kernel/boilerplate/crt1.c`. `_start` does couple key things for the initialization of the kernel:
 
 - The initial link register is stored in the `redboot_return_addr` variable.
-  - This variable is used to implement an `_exit()` method, which can be called at any point during kernel exection to immediately return execution back to Redboot. See the "Shutdown" section for more details on kernel shutdown.
+  - This variable is used to implement an `_exit()` method, which can be called at any point during kernel exection to immediately return execution back to Redboot. See the "Kernel Shutdown" section for more details on kernel shutdown.
 - The BSS is zeroed
 - All C++ global constructors are run
 
@@ -607,10 +607,30 @@ execution back to the Redboot.
 The `assert` and `panic` routines to use `Shutdown` instead of `Exit` - and
 therefore are able to halt the entire system.
 
-# Shutdown
+# Kernel Shutdown
 
-<!-- driver::shutdown routine (for re-executable kernel) -->
-<!-- kexit implementation -->
+All good things must come to an end, which means that at some point, `ChoochoOS` may need to be shutdown. This can happen for one of three reasons:
+
+1. No running tasks
+  - i.e: all user tasks have `Exit`ed
+  - _Note:_ this includes terminating the Name Server (via it's Shutdown method)
+2. The `Shutdown` syscall
+  - A user task has notified the kernel that for whatever reason, all of userland should be terminated
+3. `kpanic` or `kassert`
+  - A critical kernel invariant has been broken, and the kernel was not able to recover
+  - (This should _not_ happen during normal kernel operation. Please notify the nearest programmer if this happens to you)
+
+Regardless as to _why_ the kernel has decided to shut down, the kernel must call the `driver::shutdown` method at some point prior to returning to Redboot. This method mirrors the `driver::initialize` method, except instead of enabling interrupts, `driver::shutdown` _disables_ all the interrupts on the VIC, and asserts any remaining interrupts. If this routine isn't run, then the next time the kernel is re-loaded, it will immediately jump to the irq_handler, even before it's had a chance to initialize. This is Very Bad, as the IRQ handler expects the kernel to already have been initialized, and would result in undefined and broken behavior.
+
+## `kexit`
+
+While not strictly required, it's very useful to have a simple method which can be called from anywhere in the kernel to immediately return to Redboot. That method is called `kexit`, and it's the backbone of the `Shutdown` syscalls, and the `kpanic` and `kassert` facilities.
+
+Given the non-linear execution flow required to exit the kernel from anywhere in the call stack, the `kexit` method is implemented using some inline assembly magic.
+
+In the `ctr1.c` file, the initial link register which points to Redboot is stashed away in a global variable. This variable is later referenced in the `_exit` method, which uses some inline assembly to set the PC to the stashed link register. Note that the `_exit` method does _not_ call the critical `driver::sutdown` routine.
+
+`kexit` is a simple wrapper around `_exit`, with the added functionality of first calling `driver::Shutdown`.
 
 # System Limitations
 
