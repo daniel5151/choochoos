@@ -21,7 +21,7 @@ int Printf(int tid, int channel, const char* format, ...)
 // Drain empties the RX FIFO for the given channel.
 void Drain(int tid, int channel);
 
+// Getline reads a line of input from the uart into `line`, treating the
+// backspace and enter keys appropriately.
 void Getline(int tid, int channel, char* line, size_t len);
-
-void Shutdown(int tid);
 }  // namespace Uart
