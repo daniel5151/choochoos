@@ -148,3 +148,6 @@ k3.pdf: docs/k1/kernel.md docs/k2/kernel2.md docs/k3/k3.md docs/k3/transcript.md
 
 k4.pdf: docs/k4/k4.md docs/k4/trainctl.md
 	pandoc --toc --from markdown --to pdf $^ > k4.pdf
+
+kernel.pdf: docs/k4/kernel.md
+	pandoc --toc --from markdown --to pdf $^ > kernel.pdf

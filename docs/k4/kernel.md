@@ -1,4 +1,4 @@
-# ChoochoOS! 🚂
+# ChoochoOS!
 
 A microkernel RTOS for the TS-7200 Single Board Computer, as used in [CS 452 - Real Time Operating Systems](https://www.student.cs.uwaterloo.ca/~cs452/W20/) at the University of Waterloo.
 
