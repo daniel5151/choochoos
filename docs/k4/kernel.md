@@ -252,18 +252,18 @@ Please refer to the "Syscall Implementations" section of this documentation for 
 
 # Syscall Implementations
 
-## `MyTid()`
+## `int MyTid()`
 
 `MyTid()` returns the kernel's `current_tid`, which is updated to the most
 recent Tid whenever as task is activated.
 
-## `MyParentTid()`
+## `int MyParentTid()`
 
 `MyParentTid()` looks up the `TaskDescriptor` by `current_tid`, which holds the
 parent Tid. (The parent Tid is set to the value of `current_tid` when a task is
 created). When called from `FirstUserTask`, `MyParentTid()` returns `-1`.
 
-## `Create(int priority, void (*function)())`
+## `int Create(int priority, void (*function)())`
 
 `Create(priority, function)` determines the lowest free Tid, and constructs a
 task descriptor in `tasks[tid]`. The task descriptor is assigned a stack
@@ -273,14 +273,14 @@ pointer, and the user stack is initialized by casting the stack pointer to a
 be the `Exit()` syscall, allowing the user to omit the final `Exit()`. The
 task's `parent_tid` is the current value of `MyTid()`.
 
-## `Yield()`
+## `void Yield()`
 
 `Yield()` puts a task back on the ready queue, allowing higher priority tasks
 to be run. The syscall implementation itself does nothing - since it leaves the
 calling task in the `READY` state, the task will be re-added to the
 `ready_queue` in `activate()`.
 
-## `Exit()`
+## `void Exit()`
 
 `Exit()` clears the task descriptor at `tasks[MyTid()]`. This prevents the task
 from being rescheduled in `activate()`, and allows the Tid to be recycled in
@@ -377,7 +377,7 @@ When the sender arrives, it notices that the receiver is in `RECV_WAIT`, so it
 writes the `msg` directly into `recv_buf`, wakes up the receiver (transitioning
 it to `READY` and pushing it onto the `ready_queue`), and goes into `REPLY_WAIT`.
 
-### `Reply(int tid, char* reply, int rplen)`
+### `int Reply(int tid, char* reply, int rplen)`
 
 `Reply(tid, reply, rplen)` only delivers the reply if the task identified by
 `tid` is in `REPLY_WAIT`. The kernel can then immediately copy the `reply` into
@@ -385,7 +385,7 @@ the `char* reply` stored in the `reply_wait` branch of the task's `state` union.
 This way, reply never blocks - it only returns an error code if the task is not
 in `REPLY_WAIT`.
 
-## Error cases
+### Error cases
 
 The SRR syscalls return two possible error codes: `-1` and `-2`. `-1` is
 returned whenever a `tid` does not represent a task - either it is out of
@@ -398,13 +398,89 @@ in two cases where a SRR transaction cannot be completed:
 
 When a receiver exits, if it has a non-empty send queue, those tasks will never
 get a reply because they won't make the transition into `REPLY_WAIT`, and thus
-would never wake up. Instead, we iterate through the send queue, waking ever
+would never wake up. Instead, we iterate through the send queue, waking every
 `SEND_WAIT` task up, and writing the syscall return value of `-2`.
 
-<!-- copy paste docs/k3/k3.md - AwaitEvent -->
-<!-- maybe flesh it out a bit as well, discuss different interrupt types -->
+## `int AwaitEvent(int eventid)`
 
-<!-- copy paste docs/k4/k4.md - New Syscalls -->
+`int AwaitEvent(int eventid)` blocks the calling task until the interrupt
+identified by `event_id` is fired. The returned integer is the interrupt's
+"volatile data", which is specific to each interrupt.
+
+The kernel contains an `event_queue`, which is an array of 64 `std::optional`
+`TidOrVolatileData`s. `TidOrVolatileData` is a `std::variant<Tid,
+VolatileData>`, representing two possible states for an interrupt: a task is
+blocked waiting for the interrupt data, or the interrupt data arrived and no
+task has asked for the data yet.
+
+When a task wants to wait for an interrupt, it calls `AwaitEvent(int
+eventid)`, where `eventid` is a number between 0 and 63, corresponding to the
+interupt of the same number. The kernel records the `Tid` in the `event_queue`
+array. In `handle_interrupt`, if the `event_queue` has a task blocked on the
+interrupt, the Tid is removes from `event_queue`, and the task is moved back to
+the `ready_queue`. The preempted task remains ready, and thus is put back on
+the `ready_queue` as well.
+
+If an interrupt arrives before any tasks has started waiting for it, it is
+stored in the `VolatileData` case of the variant. When a task calls
+`AwaitEvent`, if the data is already stored in `event_queue`, the task is
+immediately rescheduled with the data, and the entry is removed from the
+`event_queue`.
+
+Multiple tasks waiting on the same event is not currently supported, simply
+because the clock and UART servers do not require such functionality.
+
+# Additional syscalls
+
+To simplify the user programs that are to be written on our kernel, we
+implemented two additional syscalls that are not required by the CS452
+specification: `Perf` and `Shutdown`.
+
+## `Perf(struct perf_t*)`
+
+We decided that we needed a mechanism whereby user tasks could query the kernel
+for system performance information. As such, we decided to introduce a new
+syscall to our kernel: `Perf`.
+
+`Perf` uses syscall number `9` and has the following C signature: `void
+Perf(struct perf_t*)`, where `struct perf_t` contains all sorts of useful
+system performance information. At the moment, `struct perf_t` only contains a
+single field: `uint32_t idle_time_pct`, which as the name implies, is the
+current idle time percentage of the system.
+
+With this new Perf syscall, individual userland programs to are able to query
+and display system performance metrics whenever and however they like!
+
+Each call to `Perf` resets the idle time measurement, providing a form of
+"windowed" idle time measurement, where the window size depends on the
+frequency at which `Perf` is called.
+
+
+## `Shutdown()`
+
+Userland programs often make liberal use of `assert` and `panic(const char*
+fmt, ...)` to notify users if any of their invariants are broken.  These macros
+could be implemented with the regular old `Exit` syscall, which would terminate
+an individual task if something went wrong. This would be _okay_, but it
+typically results in users having to manually restart the TS-7200, as their
+programs would most likely hang once an assertion / panic fired.
+
+At the same time, we found that as programs became more complex, and spawned
+more and more long-lived tasks, it became quite difficult to trigger a kernel
+exit (i.e: by exiting all running tasks).
+
+A clean solution to both these problems was to introduce a new syscall:
+`Shutdown`.
+
+`Shutdown` uses syscall number `10` and has the following C signature: `void
+Shutdown(void) __attribute__((noreturn))`.
+
+The kernel's Shutdown handler routine is incredibly simple, simply invoking
+`kexit`, which triggers the kernel's shutdown sequence, and eventually returns
+execution back to the Redboot.
+
+The `assert` and `panic` routines to use `Shutdown` instead of `Exit` - and
+therefore are able to halt the entire system.
 
 # Shutdown
 
