@@ -122,9 +122,28 @@ The drawback is that we lose FIFO if the ticket counter overflows. Right now, th
 
 # Idle Task
 
-<!-- todo -->
+When all user tasks are blocked waiting for IRQs, our kernel enters an idle state. While earlier iterations of our kernel used a busy-looping idle task implementation, our final version of the kernel uses the TS-7200's low-power Halt state to efficiently wait for interrupts.
 
-<!-- see k3 and k4 (mostly k4) -->
+During kernel initialization, we enable the Halt/Standby magic addresses in the System Controller. This is done in two simple lines of code:
+
+- `*(volatile uint32_t*)(SYSCON_SWLOCK) = 0xaa;`
+- `*(volatile uint32_t*)(SYSCON_DEVICECFG) |= 1;`
+
+With this setup out of the way, the entire system can be put into the low power Halt mode by reading from the System Controller's Halt register (i.e: `*(volatile uint32_t*)(SYSCON_HALT);`).
+
+As it turns out, using the System Controller to halt the CPU has a very useful side effect: the CPU does _not_ need to have it's IRQs enabled for the System Controller to wake it up! This means that we can leave the CPU in the regular IRQ-disabled Kernel Mode before entering the Halt state, saving us from having to do any mode-switching assembly shenanigans. When an IRQ eventually arrives, the System Controller simply "unhalts" the CPU, which resumes executing whatever instructions come after the `SYSCON_HALT` read. Critically, the CPU does _not_ jump to the global IRQ handler, which would be quite dangerous, given that the IRQ handler is typically only entered when a user task is preempted.
+
+Thus, the entire "idle task" logic is as simple as:
+
+```cpp
+if (/* there is nothing to schedule */) {
+    idle_timer = *TIMER3_VAL;                       // read the current time before going idle
+    *(volatile uint32_t*)(SYSCON_HALT);             // go idle
+    idle_time::counter += idle_timer - *TIMER3_VAL; // update idle time counter after waking up
+    // handle the IRQ that just woke the CPU up
+    driver::handle_interrupt();
+}
+```
 
 # Context Switching
 
