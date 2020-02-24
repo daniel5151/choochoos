@@ -433,7 +433,7 @@ void FirstUserTask() {
     // Clear any bytes in the COM1 FIFO so they aren't mistakenly treated as a
     // sensor query response.
     Uart::Drain(uart, COM1);
-    Create(1, SensorReporterTask);
+    // Create(1, SensorReporterTask);
     Create(0, SensorPollerTask);
 
     int cmd_task_tid = Create(0, CmdTask);

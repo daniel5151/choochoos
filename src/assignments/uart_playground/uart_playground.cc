@@ -56,6 +56,12 @@ void TrainBusyReader() {
     }
 }
 
+enum CTSState : char {
+    WAITING_FOR_DOWN = 'd',
+    WAITING_FOR_UP = 'u',
+    ACTUALLY_CTS = 'c'
+};
+
 void TrainPlayground() {
     bwsetfifo(COM2, true);
 
@@ -75,14 +81,14 @@ void TrainPlayground() {
 
     // Create(0, TrainBusyReader);
 
-    bool my_cts_flag = true;
+    CTSState my_cts_flag = ACTUALLY_CTS;
     while (true) {
-        if ((*UART1_FLAG & CTS_MASK) && my_cts_flag) {
-            bwputc(COM2, 'y');
-            my_cts_flag = false;
+        if ((*UART1_FLAG & CTS_MASK) && my_cts_flag == ACTUALLY_CTS) {
+            bwputc(COM2, '.');
+            my_cts_flag = WAITING_FOR_DOWN;
+            bwprintf(COM2, "<%1d%c>", (bool)(*UART1_FLAG & CTS_MASK),
+                     my_cts_flag);
             *UART1_DATA = 133;  // sensor query
-        } else {
-            bwputc(COM2, 'n');
         }
 
         UARTCtrl u1_ctlr = {.raw = *UART1_CTLR};
@@ -92,12 +98,15 @@ void TrainPlayground() {
         bwputc(COM2, 'e');
 
         UARTIntIDIntClr id = {.raw = (uint32_t)AwaitEvent(52)};
+
         if (id._.modem) {
-            bwputc(COM2, 'm');
             if ((*UART1_FLAG & CTS_MASK)) {
-                my_cts_flag = true;
-                bwputc(COM2, 'c');
+                if (my_cts_flag == WAITING_FOR_UP) my_cts_flag = ACTUALLY_CTS;
+            } else if (my_cts_flag == WAITING_FOR_DOWN) {
+                my_cts_flag = WAITING_FOR_UP;
             }
+            bwprintf(COM2, "<%1d%c>", (bool)(*UART1_FLAG & CTS_MASK),
+                     my_cts_flag);
         }
     }
 }

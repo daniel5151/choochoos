@@ -18,6 +18,12 @@ using Iobuf = Queue<char, IOBUF_SIZE>;
 static Iobuf com1_out;
 static Iobuf com2_out;
 
+enum CTSState : char {
+    WAITING_FOR_DOWN = 'd',
+    WAITING_FOR_UP = 'u',
+    ACTUALLY_CTS = 'c'
+};
+
 Iobuf& outbuf(int channel) {
     switch (channel) {
         case COM1:
@@ -121,7 +127,7 @@ static void set_up_uarts() {
 void COM1Notifier() { Notifier(COM1, 52); }
 void COM2Notifier() { Notifier(COM2, 54); }
 
-static volatile uint32_t* flags_for(int channel) {
+static const volatile uint32_t* flags_for(int channel) {
     switch (channel) {
         case COM1:
             return (volatile uint32_t*)(UART1_BASE + UART_FLAG_OFFSET);
@@ -177,16 +183,18 @@ static void enable_tx_interrupts(int channel) {
     *ctlr = uart_ctlr.raw;
 }
 
-static bool clear_to_send(int channel, bool& com1_cts) {
-    volatile uint32_t* flags = flags_for(channel);
+static bool clear_to_send(int channel, CTSState& com1_cts) {
+    const volatile uint32_t* flags = flags_for(channel);
     switch (channel) {
         case COM1: {
-            bool ret = !(*flags & TXFF_MASK) && (*flags & CTS_MASK) && com1_cts;
+            bool tx = !(*flags & TXFF_MASK);
+            bool cts = (*flags & CTS_MASK);
+            bool mycts = (com1_cts == ACTUALLY_CTS);
+            bool ret = tx && cts && mycts;
+            bwprintf(COM2, "<%d%d%c>", tx, cts, com1_cts);
             if (ret) {
-                bwputc(COM2, 'y');
-                com1_cts = false;
-            } else {
-                bwputc(COM2, 'n');
+                bwputc(COM2, 'd');
+                com1_cts = WAITING_FOR_DOWN;
             }
             return ret;
         }
@@ -223,7 +231,7 @@ void Server() {
 
     RegisterAs(SERVER_ID);
 
-    bool com1_cts = true;
+    CTSState com1_cts = ACTUALLY_CTS;
     int tid;
     Request req;
     Response res;
@@ -232,30 +240,43 @@ void Server() {
     // one for each channel
     std::optional<blocked_task_t> blocked_tids[2] = {std::nullopt};
 
+    // hax
+    enable_tx_interrupts(COM1);
+
     while (true) {
         int reqlen = Receive(&tid, (char*)&req, sizeof(req));
         if (reqlen <= (int)sizeof(req.tag))
             panic("Uart::Server: bad request length %d", reqlen);
         switch (req.tag) {
             case Request::Notify: {
+                // Reply to the notifier so it can start to AwaitEvent() again.
+                {
+                    bool shutdown = false;
+                    debug("Uart::Server: replying to notifier (tid %d)", tid);
+                    Reply(tid, (char*)&shutdown, sizeof(shutdown));
+                }
+
                 int channel = req.notify.channel;
                 Iobuf& buf = outbuf(channel);
-                volatile uint32_t* flags = flags_for(channel);
+                const volatile uint32_t* flags = flags_for(channel);
                 volatile char* data = data_for(channel);
 
                 debug("Server: received notify: channel=%d data=0x%lx", channel,
                       req.notify.data.raw);
 
-                if (channel == COM1 && req.notify.data._.modem) {
-                    bwputc(COM2, 'm');
-                    if ((*flags & CTS_MASK)) {
-                        bwputc(COM2, 'c');
-                        com1_cts = true;
-                    }
-                }
-
                 // TX
                 if (req.notify.data._.tx || req.notify.data._.modem) {
+                    if (channel == COM1 && req.notify.data._.modem) {
+                        // only change to WAITING_FOR_UP once we observe it down
+                        if (!(*flags & CTS_MASK)) {
+                            bwputc(COM2, 'u');
+                            com1_cts = WAITING_FOR_UP;
+                        } else {
+                            bwputc(COM2, 'c');
+                            com1_cts = ACTUALLY_CTS;
+                        }
+                    }
+
                     int bytes_written = 0;
                     while (!buf.is_empty() &&
                            clear_to_send(channel, com1_cts)) {
@@ -270,6 +291,10 @@ void Server() {
                         bytes_written, buf.size());
 
                     if (!buf.is_empty()) {
+                        if (channel == COM1 && !(*flags & CTS_MASK)) {
+                            bwputc(COM2, 'U');
+                            com1_cts = WAITING_FOR_UP;
+                        }
                         enable_tx_interrupts(channel);
                     }
                 }
@@ -299,11 +324,6 @@ void Server() {
                         enable_rx_interrupts(channel);
                     }
                 }
-
-                // Reply to the notifier so it can start to AwaitEvent() again.
-                bool shutdown = false;
-                debug("Uart::Server: replying to notifier (tid %d)", tid);
-                Reply(tid, (char*)&shutdown, sizeof(shutdown));
                 break;
             }
             case Request::Putstr: {
@@ -311,6 +331,7 @@ void Server() {
                 int i = 0;
                 int channel = req.putstr.channel;
                 char* msg = req.putstr.buf;
+                const volatile uint32_t* flags = flags_for(channel);
 
                 Iobuf& buf = outbuf(channel);
                 volatile char* data = data_for(channel);
@@ -337,6 +358,10 @@ void Server() {
                             }
                         }
 
+                        if (channel == COM1 && !(*flags & CTS_MASK)) {
+                            bwputc(COM2, 'U');
+                            com1_cts = WAITING_FOR_UP;
+                        }
                         enable_tx_interrupts(channel);
                     }
                 } else {
@@ -363,7 +388,7 @@ void Server() {
                 size_t n = req.getn.n;
                 assert(n > 0);
                 assert(n <= MAX_GETN_SIZE);
-                volatile uint32_t* flags = flags_for(channel);
+                const volatile uint32_t* flags = flags_for(channel);
                 volatile char* data = data_for(channel);
 
                 res = {.tag = Response::Getn,
@@ -407,7 +432,7 @@ void Server() {
             }
             case Request::Drain: {
                 int channel = req.drain.channel;
-                volatile uint32_t* flags = flags_for(channel);
+                const volatile uint32_t* flags = flags_for(channel);
                 volatile char* data = data_for(channel);
 
                 while (!(*flags & RXFE_MASK)) {
