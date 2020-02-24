@@ -49,8 +49,29 @@ The output of the build process is an ELF file in the root of the repository. Th
 
 ## Kernel Namespaces
 
-<!-- TODO: james -->
-<!-- see k4 docs -->
+The kernel is organized as a collection of namespaces with a few static state
+variables.  The namespaces are as follows:
+
+- `kernel` defines the kernel's state (`tasks`, `current_task`, `ready_queue`,
+  `event_queue`) and the `run()` function that executes the main scheduling
+loop.
+- `kernel::driver` implements the functions required by `kernel::run()`
+  (`activate_task`, `schedule`, `initialize`, `shutdown`) along with the `swi`
+and `irq` handlers.
+- `kernel::handlers` implements the functions to handle each syscall (`Create`,
+  `MyTid`, `Send`, etc).
+- `kernel::perf` keeps the state to track our idle time measurment.
+- `kernel::helpers` contains functions used accross multiple namespaces.
+
+`kernel.h` defines the public interface of each namespace, but each namespace
+is implemented accross one or more separate files. Syscall handlers each get
+their own file (i.e. `src/kernel/handlers/send.cc`), as do the `irq` and `swi`
+handlers. Data structures such as `Tid` and `TaskDescriptor` are also
+separated.
+
+Only the global state variables, `kernel::run()` and the `kernel::driver`
+routines used by `kernel::run()` are defined in `kernel.cc` - everything else
+is separate.
 
 # Initialization
 
