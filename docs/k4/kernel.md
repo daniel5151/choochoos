@@ -693,7 +693,8 @@ struct Response {
 };
 ```
 
-There are 3 types of request, each with a corresponding response
+There are 3 types of request, each with a corresponding response:
+
 - `Shutdown` - terminate the name server task
 - `WhoIs` - Return the Tid associated with a given name
 - `RegisterAs` - Register a Tid with a given name
@@ -704,10 +705,27 @@ The server uses a standard message handling loop, whereby the body of the server
 
 ## Clock Server
 
+The clock server allows tasks to be delayed, and query the current time with
+10-millisecond resolution. Here is the public interface:
+
+```cpp
+namespace Clock {
+void Server();
+
+int Time(int tid);
+int Delay(int tid, int ticks);
+int DelayUntil(int tid, int ticks);
+void Shutdown(int tid);
+
+extern const char* SERVER_ID;
+
+}  // namespace Clock
+```
+
 The clock server is implemented using one timer and two tasks: the server and
-notifier. Timer 2 is set to fire interrupts every 10 milliseconds, to correspond
-to a kernel "tick". The clock server starts up the notifier, and then follows
-the usual server pattern: a `Receive()` loop that never blocks.
+notifier. Timer 2 is set to fire interrupts every 10 milliseconds, to
+correspond to a kernel "tick". The clock server starts up the notifier, and
+then follows the usual server pattern: a `Receive()` loop that never blocks.
 
 The notifier runs a simple `AwaitEvent(5)` loop (interrupt 5 is for Timer 2
 underflow), and then `Send`s to the clock server. The clock server tracks
