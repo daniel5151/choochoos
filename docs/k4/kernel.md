@@ -307,9 +307,31 @@ Please refer to the "Syscall Implementations" section of this documentation for 
 
 ## Context Switching - IRQ Handling
 
-<!-- todo: prilik -->
+Upon startup, the kernel's `initialize` method configures the VIC to trigger
+IRQs, and installs the new `_irq_handler` function as the ARM920T's interrupt
+handler. See the "Kernel Initialization" section for more details.
 
-<!-- see k3 docs -->
+The `_irq_handler` is extremely similar to the `_swi_handler` function, with a few minor differences:
+
+- Instead of switching to supervisor mode to retrieve the user's return address,
+the handler switches to IRQ mode instead.
+- The IRQ handler omits any code related to reading the immediate value of the
+last executed user instruction.
+- The IRQ handler adjusts the user's return address by `-4`.
+
+When the `_irq_handler` is invoked, the task's context is saved, and execution
+is switched back to the kernel. `_irq_handler` proceeds to call the
+`handle_interrupt` method (implemented in C), which then trampolines execution
+to the kernel's `handle_interrupt` member method.
+
+The `handle_interrupt` method is responsible for unblocking any event-blocked tasks back to the `ready_queue` (see the "Syscall Implementations - AwaitEvent" documentation for more details), and performing any interrupt specific logic (as documented in the subsequent subsections).
+
+Once `handle_interrupt` completes, it returns back to the `_irq_handler`, which eventually yields execution back to the kernel's main scheduling loop.
+
+We've taken care to ensure that the layout of the user's stack is identical
+between the `_swi_handler` and the `_irq_handler`, which greatly simplifies the
+implementation of `_activate_task`. Our kernel doesn't have to perform any
+additional bookkeeping to determine how exactly a task returned to the kernel.
 
 ### Clock IRQs
 
@@ -822,7 +844,7 @@ string has been buffered, not flushed.
 `Getn` is handled by putting storing a "blocked task" per UART. When a task
 calls `Getn` (or `Getc`, which is just a special case of `Getn`), a blocked
 task entry is created for the UART, which contains a buffer to store bytes,
-along with a counter of how many bytes have been received and the task's TID.
+along with a counter of how many bytes have been received and the task's Tid.
 The UART server then reads bytes off the UART's RX FIFO until either the FIFO
 is empty (in which case the `rx` and `rx_timeout` interrupts are enabled) or
 the desired `n` bytes have been received (in which case a reply is sent and the
