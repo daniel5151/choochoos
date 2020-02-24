@@ -3,8 +3,8 @@
 
 namespace kernel::handlers {
 
-void Panic() {
-    kpanic("user task (tid=%d) panicked!\r\n", ::kernel::handlers::MyTid());
+void Shutdown() {
+    kexit(0);
 }
 
 }  // namespace kernel::handlers

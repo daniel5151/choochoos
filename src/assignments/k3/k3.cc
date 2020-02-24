@@ -43,7 +43,7 @@ void PerfMon() {
         Perf(&perf);
         bwprintf(COM2, VT_SAVE VT_ROWCOL(1, 60) "[Idle Time %lu%%]" VT_RESTORE,
                  perf.idle_time_pct);
-        Clock::Delay(clockserver, (int)5);
+        Clock::Delay(clockserver, (int)25);
     }
 }
 

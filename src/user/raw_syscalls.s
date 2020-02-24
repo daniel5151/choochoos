@@ -1,7 +1,7 @@
 // Bonus Syscalls
 
-.global __Panic
-__Panic:
+.global __Shutdown
+__Shutdown:
     swi #10
     bx lr
 

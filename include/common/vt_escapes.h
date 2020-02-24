@@ -33,3 +33,29 @@
 #define VT_MAGENTA VT_ESC "35m"
 #define VT_CYAN    VT_ESC "36m"
 #define VT_WHITE   VT_ESC "37m"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#include <stdbool.h>
+
+typedef struct {
+    bool success;
+    unsigned int width;
+    unsigned int height;
+} TermSize;
+
+typedef char (*getc_f)(void* arg);
+typedef void (*puts_f)(void* arg, const char* s);
+
+/// Use VT_GETPOS to query the terminal's size.
+///
+/// NOTE: whatever stream getc is backed by should be drained prior to calling
+/// this method. i.e: the first byte getc returns should be the start of the
+/// VT100 response.
+TermSize query_term_size(void* arg, getc_f getc, puts_f puts);
+
+#ifdef __cplusplus
+}
+#endif

@@ -130,7 +130,14 @@ std::optional<TaskDescriptor> tasks[MAX_SCHEDULED_TASKS];
 OptArray<TidOrVolatileData, 64> event_queue;
 PriorityQueue<Tid, MAX_SCHEDULED_TASKS> ready_queue;
 Tid current_task = -1;
-uint32_t idle_time_pct = 0;
+
+namespace perf {
+uint32_t last_perf_call_time = UINT32_MAX;
+namespace idle_time {
+uint32_t pct = 0;
+uint32_t counter = 0;
+}
+}
 
 int run() {
     driver::initialize();
@@ -143,7 +150,6 @@ int run() {
     *(volatile uint32_t*)(TIMER3_BASE + CRTL_OFFSET) =
         ENABLE_MASK | CLKSEL_MASK;
 
-    uint32_t idle_time = 0;
     uint32_t idle_timer;
 
     while (true) {
@@ -176,11 +182,12 @@ int run() {
 
             idle_timer = *TIMER3_VAL;
             *(volatile uint32_t*)(SYSCON_HALT);
-            idle_time += idle_timer - *TIMER3_VAL;
+            perf::idle_time::counter += idle_timer - *TIMER3_VAL;
 
             driver::handle_interrupt();
 
-            idle_time_pct = 100 * idle_time / (UINT32_MAX - *TIMER3_VAL);
+            perf::idle_time::pct = 100 * perf::idle_time::counter /
+                                   (perf::last_perf_call_time - *TIMER3_VAL);
         }
     }
 

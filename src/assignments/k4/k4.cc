@@ -5,6 +5,7 @@
 
 #include "common/queue.h"
 #include "common/ts7200.h"
+#include "common/vt_escapes.h"
 #include "user/debug.h"
 #include "user/syscalls.h"
 #include "user/tasks/clockserver.h"
@@ -12,38 +13,7 @@
 
 #include "cmd.h"
 #include "trainctl.h"
-
-#define NUM_SENSOR_GROUPS 5
-
-struct TermSize {
-    size_t width;
-    size_t height;
-};
-
-/// Use VT100 escape sequences to query the terminal's size.
-static TermSize query_term_size(int uart) {
-    // set the cursor to some arbitrarily large row/col, such that the response
-    // returns the actual dimensions of the terminal.
-    Uart::Putstr(uart, COM2, VT_SAVE VT_ROWCOL(999, 999) VT_GETPOS VT_RESTORE);
-
-    // read VT_GETPOS response
-    char vt_response[32];
-
-    char c = '\0';
-    size_t i = 0;
-    while (c != 'R') {
-        c = (char)Uart::Getc(uart, COM2);
-        vt_response[i++] = c;
-    }
-
-    // extract dimensions from the response
-    TermSize ret;
-    int matches = sscanf(vt_response, "\033[%u;%uR", &ret.height, &ret.width);
-    assert(matches == 2);
-    return ret;
-}
-
-////////////////////////////////////////////////////////////////////////////////
+#include "ui.h"
 
 void TimerTask() {
     int clock = WhoIs(Clock::SERVER_ID);
@@ -63,73 +33,19 @@ void TimerTask() {
     }
 }
 
-void LoggerTask() {
-    int clock = WhoIs(Clock::SERVER_ID);
-    int uart = WhoIs(Uart::SERVER_ID);
-    int entry = 0;
-    const int start_row = 3;
-    const int lines = 10;
-
-    assert(clock >= 0);
-    assert(uart >= 0);
-
-    srand(0);
-
-    while (true) {
-        for (int i = 0; i < lines; i++) {
-            int row = start_row + i;
-            entry++;
-            Uart::Printf(
-                uart, COM2,
-                VT_SAVE VT_ROWCOL_FMT
-                "time=%d log entry %d %08x%08x%08x%08x" ENDL VT_RESTORE,
-                row, 1, Clock::Time(clock), entry, rand(), rand(), rand(),
-                rand());
-            Clock::Delay(clock, 10);
-        }
-    }
-}
-
-struct MarklinAction {
-    enum { Go, Stop, Train, Switch, QuerySensors } tag;
-    union {
-        struct {
-        } go;
-        struct {
-        } stop;
-        struct {
-            size_t no;
-            TrainState state;
-        } train;
-        struct {
-            size_t no;
-            SwitchDir dir;
-        } sw;
-        struct {
-        } query_sensors;
-    };
-};
-
-void wait_for_sensor_response(int uart, char bytes[NUM_SENSOR_GROUPS * 2]) {
-    int res = Uart::Getn(uart, COM1, NUM_SENSOR_GROUPS * 2, bytes);
-    if (res < 0)
-        panic("cannot read %d bytes from UART 1: %d", NUM_SENSOR_GROUPS * 2,
-              res);
-}
-
 struct sensor_t {
     char group;
     uint8_t idx;
-};
 
-bool sensor_eq(const sensor_t& s1, const sensor_t& s2) {
-    return s1.group == s2.group && s1.idx == s2.idx;
-}
+    bool operator==(const sensor_t& other) const {
+        return this->group == other.group && this->idx == other.idx;
+    }
+};
 
 using SensorQueue = Queue<sensor_t, 10>;
 
-size_t enqueue_sensors(const char bytes[NUM_SENSOR_GROUPS * 2],
-                       SensorQueue& q) {
+static size_t enqueue_sensors(const char bytes[NUM_SENSOR_GROUPS * 2],
+                              SensorQueue& q) {
     size_t ret = 0;
     for (size_t bi = 0; bi < NUM_SENSOR_GROUPS * 2; bi++) {
         char byte = bytes[bi];
@@ -142,7 +58,7 @@ size_t enqueue_sensors(const char bytes[NUM_SENSOR_GROUPS * 2],
 
                 // Don't push the sensor onto the queue if it is the most
                 // recently triggered sensor.
-                if (q.size() > 0 && sensor_eq(s, *q.peek_index(q.size() - 1))) {
+                if (q.size() > 0 && s == *q.peek_index(q.size() - 1)) {
                     continue;
                 }
 
@@ -156,18 +72,18 @@ size_t enqueue_sensors(const char bytes[NUM_SENSOR_GROUPS * 2],
     return ret;
 }
 
-void report_sensor_values(SensorQueue& q,
-                          int uart,
-                          int time,
-                          const char bytes[NUM_SENSOR_GROUPS * 2]) {
+static void report_sensor_values(SensorQueue& q,
+                                 int uart,
+                                 int time,
+                                 const char bytes[NUM_SENSOR_GROUPS * 2]) {
+    (void)time;
     size_t num_enqueued = enqueue_sensors(bytes, q);
     if (num_enqueued == 0 && q.size() > 0) return;
 
     char line[256];
 
-    int n =
-        snprintf(line, sizeof(line),
-                 VT_SAVE VT_ROWCOL(2, 1) VT_CLEARLN "time=%d sensors: ", time);
+    int n = snprintf(line, sizeof(line),
+                     VT_SAVE VT_ROWCOL(3, 1) VT_CLEARLN "Sensors: ");
 
     for (int i = (int)q.size() - 1; i >= 0; i--) {
         const sensor_t* s = q.peek_index((size_t)i);
@@ -177,11 +93,11 @@ void report_sensor_values(SensorQueue& q,
     }
 
     // useful for debugging:
-    n += snprintf(line + n, sizeof(line) - (size_t)n, " raw: ");
-    for (size_t i = 0; i < NUM_SENSOR_GROUPS * 2; i++) {
-        char byte = bytes[i];
-        n += snprintf(line + n, sizeof(line) - (size_t)n, "%02x ", byte);
-    }
+    // n += snprintf(line + n, sizeof(line) - (size_t)n, " time=%d raw: ",
+    // time); for (size_t i = 0; i < NUM_SENSOR_GROUPS * 2; i++) {
+    //     char byte = bytes[i];
+    //     n += snprintf(line + n, sizeof(line) - (size_t)n, "%02x ", byte);
+    // }
 
     snprintf(line + n, sizeof(line) - (size_t)n, VT_RESTORE);
     Uart::Putstr(uart, COM2, line);
@@ -198,58 +114,27 @@ void SensorReporterTask() {
     assert(clock >= 0);
 
     while (true) {
-        wait_for_sensor_response(uart, bytes);
+        int res = Uart::Getn(uart, COM1, NUM_SENSOR_GROUPS * 2, bytes);
+        if (res < 0)
+            panic("cannot read %d bytes from UART 1: %d", NUM_SENSOR_GROUPS * 2,
+                  res);
+
         report_sensor_values(sensor_queue, uart, Clock::Time(clock), bytes);
     }
 }
 
-void MarklinCommandTask() {
-    int uart = WhoIs(Uart::SERVER_ID);
-    int clock = WhoIs(Clock::SERVER_ID);
-
-    assert(uart >= 0);
-    assert(clock >= 0);
-
-    int nsres = RegisterAs("MarklinCommandTask");
-    assert(nsres >= 0);
-
-    MarklinAction act;
-    int tid;
-    for (;;) {
-        Receive(&tid, (char*)&act, sizeof(act));
-        switch (act.tag) {
-            case MarklinAction::Go:
-                Uart::Putc(uart, COM1, 0x60);
-                break;
-            case MarklinAction::Stop:
-                Uart::Putc(uart, COM1, 0x61);
-                break;
-            case MarklinAction::Train:
-                Uart::Putc(uart, COM1, (char)act.train.state.raw);
-                Uart::Putc(uart, COM1, (char)act.train.no);
-                break;
-            case MarklinAction::Switch:
-                Uart::Putc(uart, COM1,
-                           act.sw.dir == SwitchDir::Straight ? 0x21 : 0x22);
-                Uart::Putc(uart, COM1, (char)act.sw.no);
-                break;
-            case MarklinAction::QuerySensors:
-                // Drain will clear any bytes that have been received but not
-                // yet reported by the SensorReporterTask. This means that if we
-                // drop any bytes while reading from COM1, the incomplete
-                // response won't stall all future responses from being
-                // received.
-                Uart::Drain(uart, COM1);
-                Uart::Putc(uart, COM1, (char)(128 + NUM_SENSOR_GROUPS));
-                break;
-            default:
-                panic("MarklinCommandTask received an invalid action");
-        }
-        Reply(tid, nullptr, 0);
-
-        // ensure that commands have at least 150ms of delay
-        Clock::Delay(clock, (int)15);
+static bool is_valid_switch(size_t no) {
+    for (uint8_t vno : VALID_SWITCHES) {
+        if (no == vno) return true;
     }
+    return false;
+}
+
+static bool is_valid_train(size_t no) {
+    for (uint8_t vno : VALID_TRAINS) {
+        if (no == vno) return true;
+    }
+    return false;
 }
 
 struct CmdTaskCfg {
@@ -304,7 +189,7 @@ void CmdTask() {
             switch (cmd.kind) {
                 case Command::Q: {
                     bwputstr(COM2, VT_RESET);
-                    panic("TODO: gracefully shutdown k4 lol");
+                    Shutdown();
                 } break;
                 case Command::GO: {
                     MarklinAction act = {.tag = MarklinAction::Go, .go = {}};
@@ -313,6 +198,12 @@ void CmdTask() {
                     Uart::Printf(uart, COM2, VT_CLEARLN "Sent GO command" ENDL);
                 } break;
                 case Command::LIGHT: {
+                    if (!is_valid_train(cmd.light.no)) {
+                        Uart::Putstr(uart, COM2,
+                                     VT_CLEARLN "invalid train no" ENDL);
+                        break;
+                    }
+
                     train[cmd.light.no]._.light = !train[cmd.light.no]._.light;
 
                     MarklinAction act = {
@@ -326,6 +217,12 @@ void CmdTask() {
                                  cmd.light.no);
                 } break;
                 case Command::RV: {
+                    if (!is_valid_train(cmd.rv.no)) {
+                        Uart::Putstr(uart, COM2,
+                                     VT_CLEARLN "invalid train no" ENDL);
+                        break;
+                    }
+
                     MarklinAction act = {
                         .tag = MarklinAction::Train,
                         .train = {.no = cmd.rv.no, .state = train[cmd.rv.no]}};
@@ -333,6 +230,7 @@ void CmdTask() {
                     // stop the train
                     act.train.state._.speed = 0;
                     Send(marklin, (char*)&act, sizeof(act), nullptr, 0);
+                    Ui::render_train_speed(uart, (uint8_t)cmd.rv.no, 0);
 
                     // wait for train to slow down
                     Uart::Printf(uart, COM2, VT_CLEARLN "Stopping..." ENDL);
@@ -344,6 +242,8 @@ void CmdTask() {
 
                     act.train.state._.speed = train[cmd.rv.no]._.speed;
                     Send(marklin, (char*)&act, sizeof(act), nullptr, 0);
+                    Ui::render_train_speed(uart, (uint8_t)cmd.rv.no,
+                                           act.train.state._.speed);
 
                     Uart::Printf(uart, COM2,
                                  VT_CLEARLN "Reversed train %u" ENDL,
@@ -358,10 +258,18 @@ void CmdTask() {
                                  VT_CLEARLN "Sent STOP command" ENDL);
                 } break;
                 case Command::SW: {
+                    if (!is_valid_switch(cmd.sw.no)) {
+                        Uart::Putstr(uart, COM2,
+                                     VT_CLEARLN "invalid switch no" ENDL);
+                        break;
+                    }
+
                     MarklinAction act = {
                         .tag = MarklinAction::Switch,
                         .sw = {.no = cmd.sw.no, .dir = cmd.sw.dir}};
                     Send(marklin, (char*)&act, sizeof(act), nullptr, 0);
+                    Ui::render_switch_direction(uart, (uint8_t)cmd.sw.no,
+                                                cmd.sw.dir);
 
                     Uart::Printf(uart, COM2,
                                  VT_CLEARLN "Set switch %u to be %s" ENDL,
@@ -370,6 +278,12 @@ void CmdTask() {
                                                                    : "curved");
                 } break;
                 case Command::TR: {
+                    if (!is_valid_train(cmd.tr.no)) {
+                        Uart::Putstr(uart, COM2,
+                                     VT_CLEARLN "invalid train no" ENDL);
+                        break;
+                    }
+
                     if (cmd.tr.speed == 15) {
                         Uart::Putstr(
                             uart, COM2,
@@ -377,12 +291,23 @@ void CmdTask() {
                             "please use rv command to reverse train" ENDL);
                         break;
                     }
+                    if (cmd.tr.speed >= 16) {
+                        Uart::Putstr(
+                            uart, COM2,
+                            VT_CLEARLN
+                            "tr command only supports speeds 0-14" ENDL);
+                        break;
+                    }
+
                     train[cmd.tr.no]._.speed = (unsigned)cmd.tr.speed & 0x0f;
 
                     MarklinAction act = {
                         .tag = MarklinAction::Train,
                         .train = {.no = cmd.tr.no, .state = train[cmd.tr.no]}};
                     Send(marklin, (char*)&act, sizeof(act), nullptr, 0);
+
+                    Ui::render_train_speed(uart, (uint8_t)cmd.tr.no,
+                                           cmd.tr.speed);
 
                     Uart::Printf(uart, COM2,
                                  VT_CLEARLN "Set train %u to speed %u" ENDL,
@@ -416,17 +341,11 @@ void PerfTask() {
         Uart::Printf(uart, COM2,
                      VT_SAVE VT_ROWCOL_FMT "[Idle Time %02lu%%]" VT_RESTORE, 1,
                      cfg.term_size.width - 14, perf.idle_time_pct);
-        Clock::Delay(clock, (int)5);
+        Clock::Delay(clock, (int)25);
     }
 }
 
-const size_t VALID_SWITCHES[] = {1,  2,  3,   4,   5,   6,  7,  8,
-                                 9,  10, 11,  12,  13,  14, 15, 16,
-                                 17, 18, 153, 154, 155, 156};
-const size_t VALID_TRAINS[] = {1, 24, 58, 74, 78, 79};
-
-// TODO: send train commands through UI/Controller task for visual feedback
-void init_track(int marklin) {
+void init_track(int uart, int marklin) {
     MarklinAction act;
     memset(&act, 0, sizeof(act));
 
@@ -438,25 +357,28 @@ void init_track(int marklin) {
     act.tag = MarklinAction::Train;
     act.train.state._.speed = 0;
     act.train.state._.light = 0;
-    for (size_t no : VALID_TRAINS) {
+    for (uint8_t no : VALID_TRAINS) {
         act.train.no = no;
         Send(marklin, (char*)&act, sizeof(act), nullptr, 0);
+        Ui::render_train_speed(uart, no, 0);
     }
 
     // set all the switches to curved
     act.tag = MarklinAction::Switch;
     act.sw.dir = SwitchDir::Curved;
-    for (size_t no : VALID_SWITCHES) {
+    for (uint8_t no : VALID_SWITCHES) {
         act.sw.no = no;
         Send(marklin, (char*)&act, sizeof(act), nullptr, 0);
+        Ui::render_switch_direction(uart, no, SwitchDir::Curved);
     }
 
-    // set innter-ring switches straight
+    // set inter-ring switches straight
     act.tag = MarklinAction::Switch;
     act.sw.dir = SwitchDir::Straight;
     for (size_t no : {10, 13, 17, 16}) {
         act.sw.no = no;
         Send(marklin, (char*)&act, sizeof(act), nullptr, 0);
+        Ui::render_switch_direction(uart, (uint8_t)no, SwitchDir::Straight);
     }
 }
 
@@ -483,7 +405,11 @@ void FirstUserTask() {
     assert(uart >= 0);
 
     // read the term's dimensions
-    TermSize term_size = query_term_size(uart);
+    Uart::Drain(uart, COM2);
+    TermSize term_size = query_term_size(
+        &uart, [](void* d) { return (char)Uart::Getc(*(int*)d, COM2); },
+        [](void* d, const char* s) { Uart::Putstr(*(int*)d, COM2, s); });
+    assert(term_size.success);
 
     Uart::Putstr(uart, COM2, VT_CLEAR VT_SET_SCROLL(14, 20) VT_ROWCOL(20, 1));
 
@@ -495,13 +421,14 @@ void FirstUserTask() {
     }
 
     Create(0, TimerTask);
-    Create(0, LoggerTask);
+
+    Ui::render_initial_screen(uart);
 
     int marklin = Create(1, MarklinCommandTask);
     (void)marklin;
 
     Uart::Printf(uart, COM2, "Initializing Track..." ENDL);
-    init_track(marklin);
+    init_track(uart, marklin);
 
     // Clear any bytes in the COM1 FIFO so they aren't mistakenly treated as a
     // sensor query response.

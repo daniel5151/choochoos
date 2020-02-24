@@ -34,7 +34,13 @@ extern OptArray<TidOrVolatileData, 64> event_queue;
 extern PriorityQueue<Tid, MAX_SCHEDULED_TASKS> ready_queue;
 extern Tid current_task;
 
-extern uint32_t idle_time_pct;
+namespace perf {
+extern uint32_t last_perf_call_time;
+namespace idle_time {
+extern uint32_t pct;
+extern uint32_t counter;
+}  // namespace idle_time
+}  // namespace perf
 
 namespace helpers {
 
@@ -44,7 +50,7 @@ int create_task(int priority, void* function, std::optional<Tid> force_tid);
 
 namespace handlers {
 
-void Panic();
+void Shutdown();
 void Perf(user::perf_t* perf);
 
 int MyTid();
