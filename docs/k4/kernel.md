@@ -43,7 +43,7 @@ The output of the build process is an ELF file in the root of the repository. Th
         - swi handler, irq handler
         - syscall implementations
         - init / shutdown routines
-        - nameserver implementation
+        - Name Server implementation
 - `assignments` is special, with special makefile rules
     - contains the various "userland" implementations
 
@@ -614,13 +614,93 @@ therefore are able to halt the entire system.
 
 # System Limitations
 
-Our linker script, [ts7200_redboot.ld](ts7200_redboot.ld), defines our allocation of memory. Most notably, we define the range of memory space allocated to user stacks from `__USER_STACKS_START__` to `__USER_STACKS_END__`. Each user task is given 256KiB of stack space, so the maximum number of concurrent tasks in the system is `(__USER_STACKS_END__ - __USER_STACKS_START__) / (256 * 1024)`. However, given the variable size of our BSS and data sections (as we change code), we can't compute the optimal number of concurrent tasks until link time. So instead, we hardcode a `MAX_SCHEDULED_TASKS`, and assert at runtime that no task could possibly have a stack outside of our memory space. Currently, this value is set to 48 tasks.  The kernel is given 512KiB of stack space.
+Our linker script, [ts7200_redboot.ld](ts7200_redboot.ld), defines our allocation of memory. Most notably, we define the range of memory space allocated to user stacks from `__USER_STACKS_START__` to `__USER_STACKS_END__`. Each user task is given 256KiB of stack space, so the maximum number of concurrent tasks in the system is `(__USER_STACKS_END__ - __USER_STACKS_START__) / (256 * 1024)`. However, given the variable size of our BSS and data sections (as we change code), we can't compute the optimal number of concurrent tasks until link time. So instead, we hard-code a `MAX_SCHEDULED_TASKS`, and assert at runtime that no task could possibly have a stack outside of our memory space. Currently, this value is set to 48 tasks. The kernel is given 512KiB of stack space. These numbers are quite arbitrary, and subject to change if it turns out we require additional user tasks / user tasks are using too much RAM.
 
 # Common User Tasks
 
 ## Name Server
 
-<!-- see k2 docs -->
+The Name Server task provides tasks with a simple to use mechanism to discover one another's Tids. It's implementation can be found under `<src/include>/kernel/tasks/nameserver.<cc/h>`
+
+### Public Interface
+
+We've decided to use an incredibly simple closure mechanism for determining the Tid of the name server: It's Tid must _always_ be 1. To enforce this invariant, we have the kernel spawn the NameServer immediately after spawning the `FirstUserTask`.
+
+To make working with the name server easier, instead of having tasks communicate with it directly via Send-Receive-Reply syscalls, a pair of utility methods are provided which streamline the registration and query flows:
+
+- `int WhoIs(const char*)`: returns the Tid of a task with a given name, `-1` if the name server task is not initialized, or `-2` if there was no registered task with the given name.
+- `int RegisterAs()`: returns `0` on success, `-1` if the name server task is not initialized, or `-2` if there was an error during name registration (e.g: Name Server is at capacity.)
+  - _Note:_ as described later, the Name Server actually panics if it runs out of space, so user tasks should never actually get back `-2`.
+
+These two methods are also exposed as `extern "C"` methods, with corresponding definitions in the `include/user/syscalls.h` file.
+
+### Associating Strings with Tids
+
+The core of any name server is some sort of associative data structure to associate strings to Tids.
+
+While there are many different data structures that fit this requirement, ranging from Tries, Hash Maps, BTree Maps, etc..., we've decided to use a simple, albeit potentially inefficient data structure instead: a plain old fixed-length array of ("String", Tid) pairs. This simple data structure provides O(1) registration, and O(n) lookup, which shouldn't be too bad, as we assume that most user applications won't require too many named tasks (as reflected in the specification's omission of any sort of "de-registration" functionality).
+
+### Efficiently Storing Names
+
+Note that we've put the term "String" in quotes. This is because instead of using a fixed-size char buffer for each pair, we instead allocate strings via a separate data structure: the `StringArena`.
+
+`StringArena` is a simple class which contains a fixed-size `char` buffer, and a index to the tail of the buffer. It exposes two methods:
+
+- `size_t StringArena::add(const char* s, const size_t n)`: Copy a string of length `n` into the arena, returning a handle to the string's location within the arena (represented by a `size_t`). This handle can then be passed to the second method on the arena...
+- `const char* StringArena::get(const size_t handle)`: Return a pointer to a string associated with the given handle, or `nullptr` if the handle is invalid.
+
+Whenever `add` is called, the string is copied into the arena's fixed-size internal buffer, incrementing the tail-index to point past the end of the string. `get` simply returns a pointer into the char buffer associated with the returned handle (which at the moment, is simply an index into the char array).
+
+The `StringArena` approach allows us to avoid having to put an explicit limit on the size of name strings, as strings of varying lengths can be "packed" together in the single char buffer.
+
+### Incoming and Outgoing Messages
+
+The `WhoIs` and `RegisterAs` functions abstract over the name server's message interface, which is comprised of two tagged unions: `Request` and `Response`.
+
+```cpp
+enum class MessageKind : size_t { WhoIs, RegisterAs, Shutdown };
+
+struct Request {
+    MessageKind kind;
+    union {
+        struct {
+        } shutdown;
+        struct {
+            char name[NAMESERVER_MAX_NAME_LEN];
+            size_t len;
+        } who_is;
+        struct {
+            char name[NAMESERVER_MAX_NAME_LEN];
+            size_t len;
+            int tid;
+        } register_as;
+    };
+};
+
+struct Response {
+    MessageKind kind;
+    union {
+        struct {
+        } shutdown;
+        struct {
+            bool success;
+            int tid;
+        } who_is;
+        struct {
+            bool success;
+        } register_as;
+    };
+};
+```
+
+There are 3 types of request, each with a corresponding response
+- `Shutdown` - terminate the name server task
+- `WhoIs` - Return the Tid associated with a given name
+- `RegisterAs` - Register a Tid with a given name
+
+The latter two messages return a non-empty response, indicating if the operation was successful, and for `WhoIs`, a Tid (if one was found).
+
+The server uses a standard message handling loop, whereby the body of the server task is an infinite loop, which continuously waits for incoming messages, switches on their type, and handles them accordingly.
 
 ## Clock Server
 
