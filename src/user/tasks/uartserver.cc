@@ -30,15 +30,13 @@ Iobuf& outbuf(int channel) {
 }
 
 struct Request {
-    enum { Notify, Shutdown, Putstr, Getn, Drain } tag;
+    enum { Notify, Putstr, Getn, Drain } tag;
     union {
         struct {
             int channel;
             int eventid;
             UARTIntIDIntClr data;
         } notify;
-        struct {
-        } shutdown;
         struct {
             int channel;
             size_t len;
@@ -388,17 +386,9 @@ void Server() {
                 Reply(tid, nullptr, 0);
                 break;
             }
-            case Request::Shutdown: {
-                panic("todo: Uart::Server Shutdown");
-            }
         }
     }
 }  // namespace Uart
-
-void Shutdown(int tid) {
-    Request req = {.tag = Request::Shutdown, .shutdown = {}};
-    Send(tid, (char*)&req, sizeof(req), nullptr, 0);
-}
 
 int Getc(int tid, int channel) {
     Request req = {.tag = Request::Getn, .getn = {.channel = channel, .n = 1}};
