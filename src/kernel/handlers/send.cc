@@ -19,6 +19,7 @@ int Send(int receiver_tid, const char* msg, int mlen, char* reply, int rlen) {
     TaskDescriptor& receiver = tasks[receiver_tid].value();
 
     switch (receiver.state.tag) {
+        case TaskState::EVENT_WAIT:
         case TaskState::SEND_WAIT:
         case TaskState::REPLY_WAIT:
         case TaskState::READY: {
@@ -56,8 +57,12 @@ int Send(int receiver_tid, const char* msg, int mlen, char* reply, int rlen) {
         }
         case TaskState::RECV_WAIT: {
             size_t n = std::min(msglen, receiver.state.recv_wait.len);
-            memcpy(receiver.state.recv_wait.recv_buf, msg, n);
-            *receiver.state.recv_wait.tid = sender_tid;
+            if (receiver.state.recv_wait.recv_buf != nullptr && msg != nullptr) {
+                memcpy(receiver.state.recv_wait.recv_buf, msg, n);
+            }
+            if (receiver.state.recv_wait.tid != nullptr) {
+                *receiver.state.recv_wait.tid = sender_tid;
+            }
 
             receiver.state = {.tag = TaskState::READY, .ready = {}};
             ready_queue.push(receiver_tid, receiver.priority);
@@ -67,7 +72,7 @@ int Send(int receiver_tid, const char* msg, int mlen, char* reply, int rlen) {
             TaskDescriptor::write_syscall_return_value(receiver, (int32_t)n);
 
             sender.state = {.tag = TaskState::REPLY_WAIT,
-                            .reply_wait = {reply, rplen}};
+                            .reply_wait = {.reply = reply, .rplen = rplen}};
             // the sender should never see this - it should be overwritten
             // by Reply()
             return -3;

@@ -118,7 +118,7 @@ int bwgetc(int channel) {
             return -1;
             break;
     }
-    while (!(*flags & RXFF_MASK))
+    while ((*flags & RXFE_MASK))
         ;
     c = *data;
     return c;
@@ -141,6 +141,23 @@ int bwprintf(int channel, const char* format, ...) {
     va_end(va);
 
     return n;
+}
+
+void bwflush(int channel) {
+    volatile int* flags;
+    switch (channel) {
+        case COM1:
+            flags = (volatile int*)(UART1_BASE + UART_FLAG_OFFSET);
+            break;
+        case COM2:
+            flags = (volatile int*)(UART2_BASE + UART_FLAG_OFFSET);
+            break;
+        default:
+            return;
+    }
+
+    while (!(*flags & TXFE_MASK))
+        ;
 }
 
 //----------------------------- Custom Additions -----------------------------//

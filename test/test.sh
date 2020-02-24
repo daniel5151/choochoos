@@ -2,9 +2,12 @@
 
 set -e
 
+if [ ! -f test/slow.exe ]; then
+    go build -o test/slow.exe test/slow.go
+fi
+
 echo "running unit tests..."
 make unit_tests
-
 folders=(k1 k2 test_msgpass ns_test test_clock k3)
 
 for folder in "${folders[@]}"; do
@@ -18,10 +21,11 @@ for folder in "${folders[@]}"; do
 
   input="test/${folder}.input"
   if [[ -f $input ]]; then
-       tr '\n' '\r' < "$input" | ts7200 "$exe" > "test/${folder}.actual";
-    else
-      ts7200 "$exe" > "test/${folder}.actual";
-    fi
+      tr '\n' '\r' < "$input" | ./test/slow.exe | ts7200 "$exe" | tee "test/${folder}.actual"
+  else
+      ts7200 "$exe" | tee "test/${folder}.actual";
+  fi
+  echo
 done
 
 for folder in "${folders[@]}"; do

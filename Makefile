@@ -1,4 +1,4 @@
-CURRENT_ASSIGNMENT = k3
+CURRENT_ASSIGNMENT = k4
 
 TARGET ?= $(CURRENT_ASSIGNMENT)
 
@@ -32,7 +32,12 @@ WARNING_FLAGS =                \
 	 $(DISABLED_WARNINGS)
 
 COMMON_INCLUDES = -I. -I./include
-COMMON_FLAGS = -fPIC -mcpu=arm920t -msoft-float -MP -MMD -MT $@ $(WARNING_FLAGS) $(COMMON_INCLUDES)
+COMMON_FLAGS =      \
+	-fPIC           \
+	-mcpu=arm920t   \
+	-msoft-float    \
+	-MP -MMD -MT $@ \
+	$(WARNING_FLAGS) $(COMMON_INCLUDES)
 
 ifdef NENABLE_CACHES
     COMMON_FLAGS += -DNENABLE_CACHES
@@ -54,7 +59,7 @@ ifdef KDEBUG
 endif
 
 ifdef TESTS
-	COMMON_FLAGS += -DNO_IDLE_MEASUREMENTS
+	COMMON_FLAGS += -DTESTS
 endif
 
 CCFLAGS = $(COMMON_FLAGS) -std=c11

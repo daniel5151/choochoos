@@ -1,3 +1,5 @@
+#include "kernel/kernel.h"
+
 #include <cstring>  // memcpy
 #include <optional>
 
@@ -5,8 +7,6 @@
 #include "common/ts7200.h"
 #include "common/vt_escapes.h"
 #include "kernel/asm.h"
-
-#include "kernel/kernel.h"
 #include "kernel/tasks/nameserver.h"
 
 // CONTRACT: userland must supply a FirstUserTask function
@@ -53,25 +53,21 @@ void initialize() {
 
     // enable protection (prevents user tasks from poking VIC registers)
     *(volatile uint32_t*)(VIC1_BASE + VIC_INT_PROTECTION_OFFSET) = 1;
-    // all IRQs
+    *(volatile uint32_t*)(VIC2_BASE + VIC_INT_PROTECTION_OFFSET) = 1;
+    // all interrupts are handled as IRQs
     *(volatile uint32_t*)(VIC1_BASE + VIC_INT_SELECT_OFFSET) = 0;
+    *(volatile uint32_t*)(VIC2_BASE + VIC_INT_SELECT_OFFSET) = 0;
     // enable timer2 interrupts
     *(volatile uint32_t*)(VIC1_BASE + VIC_INT_ENABLE_OFFSET) = (1 << 5);
+    // enable uart1 and uart2 combined interrupt
+    *(volatile uint32_t*)(VIC2_BASE + VIC_INT_ENABLE_OFFSET) =
+        (1 << (52 - 32)) | (1 << (54 - 32));
 
     // initialize timer 3 to count down from UINT32_MAX at 508KHz
     *(volatile uint32_t*)(TIMER3_BASE + CRTL_OFFSET) = 0;
     *(volatile uint32_t*)(TIMER3_BASE + LDR_OFFSET) = UINT32_MAX;
     *(volatile uint32_t*)(TIMER3_BASE + CRTL_OFFSET) =
         ENABLE_MASK | CLKSEL_MASK;
-
-    // initialize timer2 to fire interrupts every 10 ms
-    *(volatile uint32_t*)(TIMER2_BASE + CRTL_OFFSET) = 0;
-    *(volatile uint32_t*)(TIMER2_BASE + LDR_OFFSET) = 20;
-    *(volatile uint32_t*)(TIMER2_BASE + CRTL_OFFSET) = ENABLE_MASK | MODE_MASK;
-
-    // set up UARTs
-    bwsetfifo(COM1, false);
-    bwsetfifo(COM2, false);
 
 #ifndef NENABLE_CACHES
     _enable_caches();
@@ -91,7 +87,7 @@ void initialize() {
     }
 #pragma GCC diagnostic pop
 
-    // Spawn the name server with a direct call to _create_task, which
+    // Spawn the name server with a direct call to create_task, which
     // allows negative priorities and a forced tid.
     helpers::create_task(0, (void*)NameServer::Task, Tid(NameServer::TID));
     handlers::Create(0, (void*)FirstUserTask);
@@ -103,6 +99,23 @@ void shutdown() {
     *(volatile uint32_t*)(TIMER2_BASE + CRTL_OFFSET) = 0;
     *(volatile uint32_t*)(TIMER3_BASE + CRTL_OFFSET) = 0;
 
+    // clear any lingering timer interrupts
+    *(volatile uint32_t*)(TIMER1_BASE + CLR_OFFSET) = 0;
+    *(volatile uint32_t*)(TIMER2_BASE + CLR_OFFSET) = 0;
+    *(volatile uint32_t*)(TIMER3_BASE + CLR_OFFSET) = 0;
+
+    // clear all UART interrupts
+    for (uint32_t uart_base : {UART1_BASE, UART2_BASE}) {
+        volatile uint32_t* const ctlr =
+            (volatile uint32_t*)(uart_base + UART_CTLR_OFFSET);
+        UARTCtrl u_ctlr = {.raw = *ctlr};
+        u_ctlr._.enable_int_modem = false;
+        u_ctlr._.enable_int_rx = false;
+        u_ctlr._.enable_int_tx = false;
+        u_ctlr._.enable_int_rx_timeout = false;
+        *ctlr = u_ctlr.raw;
+    }
+
     // disable all interrupts
     *(volatile uint32_t*)(VIC1_BASE + VIC_INT_ENABLE_OFFSET) = 0;
     *(volatile uint32_t*)(VIC2_BASE + VIC_INT_ENABLE_OFFSET) = 0;
@@ -111,20 +124,24 @@ void shutdown() {
 size_t num_event_blocked_tasks() { return event_queue.num_present(); }
 }  // namespace kernel::driver
 
-static const volatile uint32_t* TIMER3_VAL =
-    (volatile uint32_t*)(TIMER3_BASE + VAL_OFFSET);
-
 namespace kernel {
 
 std::optional<TaskDescriptor> tasks[MAX_SCHEDULED_TASKS];
-OptArray<Tid, 64> event_queue;
+OptArray<TidOrVolatileData, 64> event_queue;
 PriorityQueue<Tid, MAX_SCHEDULED_TASKS> ready_queue;
 Tid current_task = -1;
+uint32_t idle_time_pct = 0;
 
 int run() {
+    driver::initialize();
+
     kprintf("Hello from the choochoos kernel!");
 
-    driver::initialize();
+    // initialize timer3 to count down from UINT32_MAX at 508KHz
+    *(volatile uint32_t*)(TIMER3_BASE + CRTL_OFFSET) = 0;
+    *(volatile uint32_t*)(TIMER3_BASE + LDR_OFFSET) = UINT32_MAX;
+    *(volatile uint32_t*)(TIMER3_BASE + CRTL_OFFSET) =
+        ENABLE_MASK | CLKSEL_MASK;
 
     uint32_t idle_time = 0;
     uint32_t idle_timer;
@@ -153,17 +170,17 @@ int run() {
             // jumping to the IRQ handler! Instead, we manually invoke the
             // kernel's interrupt handler, which will unblock any blocked
             // tasks.
+
+            static const volatile uint32_t* TIMER3_VAL =
+                (volatile uint32_t*)(TIMER3_BASE + VAL_OFFSET);
+
             idle_timer = *TIMER3_VAL;
             *(volatile uint32_t*)(SYSCON_HALT);
             idle_time += idle_timer - *TIMER3_VAL;
 
             driver::handle_interrupt();
 
-#ifndef NO_IDLE_MEASUREMENTS
-            bwprintf(COM2,
-                     VT_SAVE VT_ROWCOL(1, 60) "[Idle Time %lu%%]" VT_RESTORE,
-                     100 * idle_time / (UINT32_MAX - *TIMER3_VAL));
-#endif
+            idle_time_pct = 100 * idle_time / (UINT32_MAX - *TIMER3_VAL);
         }
     }
 
@@ -171,5 +188,5 @@ int run() {
     kprintf("Goodbye from choochoos kernel!");
 
     return 0;
-}  // void run
+}
 }  // namespace kernel

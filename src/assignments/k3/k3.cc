@@ -33,8 +33,26 @@ void DelayerTask() {
 
 static Config configs[4] = {{3, 10, 20}, {4, 23, 9}, {5, 33, 6}, {6, 71, 3}};
 
+void PerfMon() {
+    perf_t perf;
+
+    int clockserver = WhoIs(Clock::SERVER_ID);
+    assert(clockserver >= 0);
+
+    for (;;) {
+        Perf(&perf);
+        bwprintf(COM2, VT_SAVE VT_ROWCOL(1, 60) "[Idle Time %lu%%]" VT_RESTORE,
+                 perf.idle_time_pct);
+        Clock::Delay(clockserver, (int)5);
+    }
+}
+
 void FirstUserTask() {
     int clockserver = Create(INT_MAX, Clock::Server);
+
+#ifndef TESTS
+    Create(INT_MAX, PerfMon);
+#endif
 
     for (auto& cfg : configs) {
         int tid = Create(10 - cfg.priority, DelayerTask);

@@ -1,5 +1,6 @@
 #include <climits>
 #include <cstdint>
+#include <cstring>
 
 #include "common/priority_queue.h"
 #include "common/ts7200.h"
@@ -11,14 +12,12 @@
 #define TIMER_TICKS_PER_SEC 2000  // 2 kHz
 
 namespace Clock {
-
+const char* SERVER_ID = "ClockServer";
 struct DelayedTask {
     int tid;
     // make the task ready once *timer3_value_reg < tick_threshold
     int tick_threshold;
 };
-
-static PriorityQueue<DelayedTask, 32> pq;
 
 struct Request {
     enum { Time, Delay, DelayUntil, NotifierTick, Shutdown } tag;
@@ -59,7 +58,7 @@ void Notifier() {
     }
 }
 
-static void enqueue_task(int tid, int tick_threshold) {
+static void enqueue_task(PriorityQueue<DelayedTask, 32>& pq, int tid, int tick_threshold) {
     // Delayed tasks with a smaller tick_threshold should be woken
     // up first, so they should have a higher priority.
     int priority = -tick_threshold;
@@ -70,6 +69,13 @@ static void enqueue_task(int tid, int tick_threshold) {
 }
 
 void Server() {
+    PriorityQueue<DelayedTask, 32> pq;
+
+    // initialize timer2 to fire interrupts every 10 ms
+    *(volatile uint32_t*)(TIMER2_BASE + CRTL_OFFSET) = 0;
+    *(volatile uint32_t*)(TIMER2_BASE + LDR_OFFSET) = 20;
+    *(volatile uint32_t*)(TIMER2_BASE + CRTL_OFFSET) = ENABLE_MASK | MODE_MASK;
+
     debug("clockserver started");
     int notifier_tid = Create(INT_MAX, Notifier);
     assert(notifier_tid >= 0);
@@ -81,6 +87,8 @@ void Server() {
     int tid;
     Request req;
     Response res;
+    memset(&res, 0, sizeof(res));
+
     while (true) {
         int n = Receive(&tid, (char*)&req, sizeof(req));
         if (n < 0) panic("Clock::Server: bad Receive() n=%d", n);
@@ -125,7 +133,7 @@ void Server() {
                     break;
                 }
                 int tick_threshold = current_time + req.delay;
-                enqueue_task(tid, tick_threshold);
+                enqueue_task(pq, tid, tick_threshold);
 
                 break;
             }
@@ -137,7 +145,7 @@ void Server() {
                     break;
                 }
                 int tick_threshold = req.delay_until;
-                enqueue_task(tid, tick_threshold);
+                enqueue_task(pq, tid, tick_threshold);
 
                 break;
             }

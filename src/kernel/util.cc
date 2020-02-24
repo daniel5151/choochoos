@@ -7,10 +7,11 @@
 #include "common/bwio.h"
 
 extern "C" {
-    void _exit(int status) __attribute__((noreturn));
+void _exit(int status) __attribute__((noreturn));
 }
 
 void kexit(int status) {
+    kernel::driver::shutdown();
     _exit(status);
 }
 
@@ -23,6 +24,8 @@ void kpanic(const char* fmt, ...) {
     vbwprintf(COM2, fmt, va);
     bwputstr(COM2, "\r\n");
     va_end(va);
+
+    bwflush(COM2);
 
     kexit(1);
 }

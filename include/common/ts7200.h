@@ -84,7 +84,6 @@
 #define UART_HDLCRIB_OFFSET 0x218
 #define UART_HDLCSTS_OFFSET 0x21c
 
-
 // VICs
 
 #define VIC1_BASE 0x800b0000
@@ -112,3 +111,32 @@
 #define SYSCON_DEVICECFG 0x80930080
 #define SYSCON_SWLOCK    0x809300C0
 #define SYSCON_HALT      0x80930008
+
+// clang-format on
+
+#include <stdint.h>
+#include <stdbool.h>
+
+union UARTIntIDIntClr {
+    uint32_t raw;
+    struct {
+        bool modem : 1;
+        bool rx : 1;
+        bool tx : 1;
+        bool rx_timeout : 1;
+    } _;
+};
+
+union UARTCtrl {
+    uint32_t raw;
+    struct {
+        bool uart_enable : 1;
+        bool sir_enable : 1;
+        bool sir_low_power : 1;
+        bool enable_int_modem : 1;
+        bool enable_int_rx : 1;
+        bool enable_int_tx : 1;
+        bool enable_int_rx_timeout : 1;
+        bool loopback_enable : 1;
+    } _;
+};

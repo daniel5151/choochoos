@@ -8,6 +8,6 @@ int Delay(int tid, int ticks);
 int DelayUntil(int tid, int ticks);
 void Shutdown(int tid);
 
-static const char* SERVER_ID = "ClockServer";
+extern const char* SERVER_ID;
 
 }  // namespace Clock
