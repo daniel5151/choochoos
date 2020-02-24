@@ -28,24 +28,52 @@ The output of the build process is an ELF file in the root of the repository. Th
 
 ## Navigating the Repo
 
-`choochoos` follows a fairly standard C/C++ project structure, whereby all header files are placed under the `include` directory, with corresponding implementation files placed under the `src` directory.
+`choochoos` follows a fairly standard C/C++ project structure, whereby all
+header files are placed under the `include` directory, with corresponding
+implementation files placed under the `src` directory.
 
-<!-- TODO: flesh this out -->
+`src/` and `include/` are separate, the former containing implementation files
+(`.cc`, `.c` and `.s`), and the latter containing only header files. Both are
+further subdivided into 3 different folders: `kernel/`, `user/`, and `common/`.
 
-- `src` and `include` are separate
-- further subdivided into 3 different folders: `kernel`, `user`, and `common`
-    - `common` has misc. shared code.
-        - e.g: data structures, VT100 helpers, bwio and printf libraries, etc...
-    - `user` has userland specific libraries
-        - e.g: syscall wrappers, clockserver / uartserver tasks
-    - `kernel` has all the juicy kernel bits
-        - context switch assembly
-        - swi handler, irq handler
-        - syscall implementations
-        - init / shutdown routines
-        - Name Server implementation
-- `assignments` is special, with special makefile rules
-    - contains the various "userland" implementations
+`common/` contains modules that are used throughout the kernel and user space
+programs, including:
+
+- data structures (`Queue`, `PriorityQueue`, `OptArray`)
+- VT100 escape sequences
+- The `bwio` library
+- `ts7200.h`, which defines many constants and data types specific to the
+  TS-7200 (such register locations and flag masks)
+
+`user/` contains userland specific libraries:
+
+- `syscalls.{h,c}` define the how user tasks interface with the kernel.
+- `raw_syscalls.s` defines the user-side implementation of each syscall in ARM
+  assembly.
+- `debug.h` implements helper macros such as `assert`, `panic`, and `debug`.
+- `clockserver.cc` and `uartserver.cc` implement servers which act as an
+  interface over the hardware.
+
+`kernel/` implements well, the kernel! Some notable places include:
+
+- `kernel.h` which defines the interface of each of the namespaces under
+  `kernel`.
+- `kernel/handlers/` contains files that implement the kernel side of each
+  syscall.
+- `{irq,swi}_handler.cc` define the C++ side of the hardware and software
+  interrupt handlers.
+- `asm.s` defines the assembly side of the kernel, which includes the irq and
+  swi handlers, as well as `_activate_task`
+- `kernel.cc` defines the state of the kernel and `run()`, the main scheduling
+  loop.
+
+`assignments/` is a special folder - each subfolder is a seperate userland
+program, each with its own `FirstUserTask`. Each of the userland programs may
+be linked with the kernel by running:
+
+```bash
+make -j TARGET=<assignment>
+```
 
 ## Kernel Namespaces
 
