@@ -1,8 +1,11 @@
 # ChoochoOS!
 
-A microkernel RTOS for the TS-7200 Single Board Computer, as used in [CS 452 - Real Time Operating Systems](https://www.student.cs.uwaterloo.ca/~cs452/W20/) at the University of Waterloo.
+A microkernel RTOS for the TS-7200 Single Board Computer, as used in [CS 452 -
+Real Time Operating Systems](https://www.student.cs.uwaterloo.ca/~cs452/W20/)
+at the University of Waterloo.
 
-Written by [Daniel Prilik](https://prilik.com) and [James Hageman](https://jameshageman.com).
+Written by [Daniel Prilik](https://prilik.com) and [James
+Hageman](https://jameshageman.com).
 
 # Project Structure
 
@@ -16,7 +19,10 @@ Building the latest deliverable is as simple as running:
 make -j
 ```
 
-Alternatively, this repo also includes several other programs built on top of the core kernel, as found under the `src/assignments/` directory. The executable which is built is decided by the `TARGET` makefile variable, which just happens to be defaulted to the latest deliverable.
+Alternatively, this repo also includes several other programs built on top of
+the core kernel, as found under the `src/assignments/` directory. The
+executable which is built is decided by the `TARGET` makefile variable, which
+just happens to be defaulted to the latest deliverable.
 
 e.g: to build `k3`:
 
@@ -24,7 +30,8 @@ e.g: to build `k3`:
 make -j TARGET=k3
 ```
 
-The output of the build process is an ELF file in the root of the repository. The name of the elf file is `$(TARGET).elf`.
+The output of the build process is an ELF file in the root of the repository.
+The name of the elf file is `$(TARGET).elf`.
 
 ## Navigating the Repo
 
@@ -103,30 +110,44 @@ is separate.
 
 # Kernel Initialization
 
-Our entry point is the `_start` routine defined in `src/kernel/boilerplate/crt1.c`. `_start` does couple key things for the initialization of the kernel:
+Our entry point is the `_start` routine defined in
+`src/kernel/boilerplate/crt1.c`. `_start` does couple key things for the
+initialization of the kernel:
 
 - The initial link register is stored in the `redboot_return_addr` variable.
-  - This variable is used to implement an `_exit()` method, which can be called at any point during kernel execution to immediately return execution back to Redboot. See the "Kernel Shutdown" section for more details on kernel shutdown.
+  - This variable is used to implement an `_exit()` method, which can be called
+    at any point during kernel execution to immediately return execution back
+to Redboot. See the "Kernel Shutdown" section for more details on kernel
+shutdown.
 - The BSS is zeroed
 - All C++ global constructors are run
 
-`_start` proceeds to call `main`, which then immediately calls the `kernel::run()` method.
+`_start` proceeds to call `main`, which then immediately calls the
+`kernel::run()` method.
 
-The first thing the kernel does is call the `driver::initialize()` method, which performs some critical hardware setup:
+The first thing the kernel does is call the `driver::initialize()` method,
+which performs some critical hardware setup:
 
-- Installs the SWI Handler and IRQ Handler function pointers to the ARM Vector Table
+- Installs the SWI Handler and IRQ Handler function pointers to the ARM Vector
+  Table
 - Unlocks the Halt/Standby magic addresses on the System Controller
 - Enables hardware caches
 - Programs the VIC
   - Sets all interrupts to IRQ mode
   - Un-masks Timer and UART interrupts on the VIC
-  - Enables the VIC protection bits (preventing user mode tasks from touching the VIC)
+  - Enables the VIC protection bits (preventing user mode tasks from touching
+    the VIC)
 
-Additionally, the `driver::initialize()` method spawns the `FirstUserTask` and `nameserver::Task`. As the name implies, the `FirstUserTask` is the main entry point for user code, and is spawned at priority 0. For details on the `nameserver::Task`, and the rationale for spawning it from the Kernel itself, please refer to the "Common User Tasks - Name Server" section.
+Additionally, the `driver::initialize()` method spawns the `FirstUserTask` and
+`nameserver::Task`. As the name implies, the `FirstUserTask` is the main entry
+point for user code, and is spawned at priority 0. For details on the
+`nameserver::Task`, and the rationale for spawning it from the Kernel itself,
+please refer to the "Common User Tasks - Name Server" section.
 
 # Main Scheduling Loop
 
-After initialization, the kernel enters it's main scheduling loop. This loop looks roughly as follows:
+After initialization, the kernel enters it's main scheduling loop. This loop
+looks roughly as follows:
 
 ```cpp
 while (true) {
@@ -143,7 +164,10 @@ while (true) {
 }
 ```
 
-This loop roughly mirrors the one described in lecture, aside from the fact that `Kernel::activate` does not return a "syscall request" to handle. Instead, the `activate` method implicitly includes syscall handling (see the SWI handler documentation for more details).
+This loop roughly mirrors the one described in lecture, aside from the fact
+that `Kernel::activate` does not return a "syscall request" to handle. Instead,
+the `activate` method implicitly includes syscall handling (see the SWI handler
+documentation for more details).
 
 # Scheduling and the `ready_queue`
 
@@ -196,16 +220,31 @@ kernel instead of a hard guarantee.
 
 # Idle Task
 
-When all user tasks are blocked waiting for IRQs, our kernel enters an idle state. While earlier iterations of our kernel used a busy-looping idle task implementation, our final version of the kernel uses the TS-7200's low-power Halt state to efficiently wait for interrupts.
+When all user tasks are blocked waiting for IRQs, our kernel enters an idle
+state. While earlier iterations of our kernel used a busy-looping idle task
+implementation, our final version of the kernel uses the TS-7200's low-power
+Halt state to efficiently wait for interrupts.
 
-During kernel initialization, we enable the Halt/Standby magic addresses in the System Controller. This is done in two simple lines of code:
+During kernel initialization, we enable the Halt/Standby magic addresses in the
+System Controller. This is done in two simple lines of code:
 
 - `*(volatile uint32_t*)(SYSCON_SWLOCK) = 0xaa;`
 - `*(volatile uint32_t*)(SYSCON_DEVICECFG) |= 1;`
 
-With this setup out of the way, the entire system can be put into the low power Halt mode by reading from the System Controller's Halt register (i.e: `*(volatile uint32_t*)(SYSCON_HALT);`).
+With this setup out of the way, the entire system can be put into the low power
+Halt mode by reading from the System Controller's Halt register (i.e:
+`*(volatile uint32_t*)(SYSCON_HALT);`).
 
-As it turns out, using the System Controller to halt the CPU has a very useful side effect: the CPU does _not_ need to have it's IRQs enabled for the System Controller to wake it up! This means that we can leave the CPU in the regular IRQ-disabled Kernel Mode before entering the Halt state, saving us from having to do any mode-switching assembly shenanigans. When an IRQ eventually arrives, the System Controller simply "unhalts" the CPU, which resumes executing whatever instructions come after the `SYSCON_HALT` read. Critically, the CPU does _not_ jump to the global IRQ handler, which would be quite dangerous, given that the IRQ handler is typically only entered when a user task is preempted.
+As it turns out, using the System Controller to halt the CPU has a very useful
+side effect: the CPU does _not_ need to have it's IRQs enabled for the System
+Controller to wake it up! This means that we can leave the CPU in the regular
+IRQ-disabled Kernel Mode before entering the Halt state, saving us from having
+to do any mode-switching assembly shenanigans. When an IRQ eventually arrives,
+the System Controller simply "unhalts" the CPU, which resumes executing
+whatever instructions come after the `SYSCON_HALT` read. Critically, the CPU
+does _not_ jump to the global IRQ handler, which would be quite dangerous,
+given that the IRQ handler is typically only entered when a user task is
+preempted.
 
 Thus, the entire "idle task" logic is as simple as:
 
@@ -226,9 +265,12 @@ if (/* there is nothing to schedule */) {
 
 ## Preface: Task State
 
-In our kernel, we've opted to store task state directly on the task's stack. This greatly simplifies task preemption and activation, as user state can be saved/stored using ARM's standard `stmfd` and `ldmfd` methods.
+In our kernel, we've opted to store task state directly on the task's stack.
+This greatly simplifies task preemption and activation, as user state can be
+saved/stored using ARM's standard `stmfd` and `ldmfd` methods.
 
-The following diagram describes the layout of a user task's stack after it has been preempted / right before it is activated:
+The following diagram describes the layout of a user task's stack after it has
+been preempted / right before it is activated:
 
 ```
 +----------- hi mem -----------+
@@ -244,7 +286,8 @@ The following diagram describes the layout of a user task's stack after it has b
 +----------- lo mem -----------+
 ```
 
-Alternatively, it may be useful to think of a user's saved stack pointer as a pointer to the following C-structure:
+Alternatively, it may be useful to think of a user's saved stack pointer as a
+pointer to the following C-structure:
 
 ```c
 struct UserStack {
@@ -256,11 +299,15 @@ struct UserStack {
 };
 ```
 
-Please keep this structure in mind when referencing the following sections on task activation and preemption.
+Please keep this structure in mind when referencing the following sections on
+task activation and preemption.
 
 ## Task Activation
 
-Once the scheduler has returned a Tid, the `driver::activate` method is called with the Tid. This method updates the kernel's `current_task` with the provided Tid, fetch the task's saved stack pointer from its Task Descriptor, and hands the stack pointer off to the `_activate_task` assembly routine.
+Once the scheduler has returned a Tid, the `driver::activate` method is called
+with the Tid. This method updates the kernel's `current_task` with the provided
+Tid, fetch the task's saved stack pointer from its Task Descriptor, and hands
+the stack pointer off to the `_activate_task` assembly routine.
 
 This routine is quite simple, and reproduced here in it's entirety:
 
@@ -280,13 +327,18 @@ _activate_task:
   ldmfd   sp!,{pc}^       // pop ret addr into pc, `^` updates cpsr
 ```
 
-The task will then continue its execution until it executes a syscall, or is preempted by a interrupt.
+The task will then continue its execution until it executes a syscall, or is
+preempted by a interrupt.
 
 ## Context Switching - SWI Handling
 
-Invoking a syscall switches the CPU to Supervisor mode, and jumps execution to the SWI handler. Our SWI handler is written entirely in Assembly, and was given the extremely original name `_swi_handler`.
+Invoking a syscall switches the CPU to Supervisor mode, and jumps execution to
+the SWI handler. Our SWI handler is written entirely in Assembly, and was given
+the extremely original name `_swi_handler`.
 
-This routine is a bit more involved than the `_activate_task` routine, mainly due to some tricky register / system-mode juggling. Nonetheless, it is quite short (and heavily commented). It is reproduced here in it's entirety:
+This routine is a bit more involved than the `_activate_task` routine, mainly
+due to some tricky register / system-mode juggling. Nonetheless, it is quite
+short (and heavily commented). It is reproduced here in it's entirety:
 
 ```asm
 _swi_handler:
@@ -306,9 +358,16 @@ _swi_handler:
   // execution returns to caller of _activate_task
 ```
 
-Execution is returned back to the `driver::activate` method, which proceeds to check to the state of last-executed task. If it's READY, it is queued up to be re-scheduled READY. This completes a single context switch, and execution flow is returned back to the scheduler.
+Execution is returned back to the `driver::activate` method, which proceeds to
+check to the state of last-executed task. If it's READY, it is queued up to be
+re-scheduled READY. This completes a single context switch, and execution flow
+is returned back to the scheduler.
 
-The `swi_handler` routine calls the `handle_syscall` with a task's stack pointer and syscall number. This method is implemented as a small C-stub, which immediately calls the true handle_syscall method (implemented in C++): `driver::handle_syscall()`. At a high level, this method looks roughly as follows:
+The `swi_handler` routine calls the `handle_syscall` with a task's stack
+pointer and syscall number. This method is implemented as a small C-stub, which
+immediately calls the true handle_syscall method (implemented in C++):
+`driver::handle_syscall()`. At a high level, this method looks roughly as
+follows:
 
 ```cpp
 void handle_syscall(uint32_t no, UserStack* user_sp) {
@@ -328,10 +387,12 @@ void handle_syscall(uint32_t no, UserStack* user_sp) {
 ```
 
 Notice how useful the `UserStack*` view is in this case:
+
 - Marshalling arguments to individual syscalls is as simple as accessing struct fields
 - Writing a return value to the user task is a simple write to the `regs[0]` field
 
-Please refer to the "Syscall Implementations" section of this documentation for details on the concrete implementation of the various syscall handlers.
+Please refer to the "Syscall Implementations" section of this documentation for
+details on the concrete implementation of the various syscall handlers.
 
 ## Context Switching - IRQ Handling
 
@@ -339,7 +400,8 @@ Upon startup, the kernel's `initialize` method configures the VIC to trigger
 IRQs, and installs the new `_irq_handler` function as the ARM920T's interrupt
 handler. See the "Kernel Initialization" section for more details.
 
-The `_irq_handler` is extremely similar to the `_swi_handler` function, with a few minor differences:
+The `_irq_handler` is extremely similar to the `_swi_handler` function, with a
+few minor differences:
 
 - Instead of switching to supervisor mode to retrieve the user's return address,
 the handler switches to IRQ mode instead.
@@ -352,9 +414,13 @@ is switched back to the kernel. `_irq_handler` proceeds to call the
 `handle_interrupt` method (implemented in C), which then trampolines execution
 to the kernel's `handle_interrupt` member method.
 
-The `handle_interrupt` method is responsible for unblocking any event-blocked tasks back to the `ready_queue` (see the "Syscall Implementations - AwaitEvent" documentation for more details), and performing any interrupt specific logic (as documented in the subsequent subsections).
+The `handle_interrupt` method is responsible for unblocking any event-blocked
+tasks back to the `ready_queue` (see the "Syscall Implementations - AwaitEvent"
+documentation for more details), and performing any interrupt specific logic
+(as documented in the subsequent subsections).
 
-Once `handle_interrupt` completes, it returns back to the `_irq_handler`, which eventually yields execution back to the kernel's main scheduling loop.
+Once `handle_interrupt` completes, it returns back to the `_irq_handler`, which
+eventually yields execution back to the kernel's main scheduling loop.
 
 We've taken care to ensure that the layout of the user's stack is identical
 between the `_swi_handler` and the `_irq_handler`, which greatly simplifies the
@@ -503,7 +569,8 @@ point the fields in the corresponding struct under the `union` will be populated
 - `READY`: the task is on the `ready_queue`, waiting to be scheduled.
 - `SEND_WAIT`: the task is waiting to `Send()` to another task that hasn't
   called `Receive()` yet.
-- `RECV_WAIT`: the task has called `Receive()`, but no task has sent a message to it yet.
+- `RECV_WAIT`: the task has called `Receive()`, but no task has sent a message
+  to it yet.
 - `REPLY_WAIT`: the task called `Send()` and the receiver got the message via
   `Receive()`, but no other task has called `Reply()` back at the task.
 - `EVENT_WAIT`: the task is blocked waiting on an interrupt. This is explained
@@ -535,30 +602,32 @@ therefore does not yet have a `recv_buf` to be filled. If this is the case,
 we add the sender to the end of the receiver's send queue, and put the sender in
 `SEND_WAIT`.
 
-When the receiver finally calls `Receive()`, it will see that is has a non-empty
-send queue. So it will pop the first `TaskDescriptor` off the front of its send
-queue, copy the `msg` into `recv_buf`, and transition the sender into `REPLY_WAIT`,
-using the same `char* reply` that the sender saved when they went into `SEND_WAIT`.
+When the receiver finally calls `Receive()`, it will see that is has a
+non-empty send queue. So it will pop the first `TaskDescriptor` off the front
+of its send queue, copy the `msg` into `recv_buf`, and transition the sender
+into `REPLY_WAIT`, using the same `char* reply` that the sender saved when they
+went into `SEND_WAIT`.
 
 ### Receiver-first
 
 If the receiver arrives first, it checks its send queue. If the send queue is
-non-empty, then we follow the same procedure as sender-first, and the new sender
-is placed on the send of the receiver's send queue. If the send queue is empty,
-the receiver goes into `RECV_WAIT`, holding onto the `recv_buf` to be copied into
-once a sender arrives.
+non-empty, then we follow the same procedure as sender-first, and the new
+sender is placed on the send of the receiver's send queue. If the send queue is
+empty, the receiver goes into `RECV_WAIT`, holding onto the `recv_buf` to be
+copied into once a sender arrives.
 
 When the sender arrives, it notices that the receiver is in `RECV_WAIT`, so it
 writes the `msg` directly into `recv_buf`, wakes up the receiver (transitioning
-it to `READY` and pushing it onto the `ready_queue`), and goes into `REPLY_WAIT`.
+it to `READY` and pushing it onto the `ready_queue`), and goes into
+`REPLY_WAIT`.
 
 ### `int Reply(int tid, char* reply, int rplen)`
 
 `Reply(tid, reply, rplen)` only delivers the reply if the task identified by
 `tid` is in `REPLY_WAIT`. The kernel can then immediately copy the `reply` into
-the `char* reply` stored in the `reply_wait` branch of the task's `state` union.
-This way, reply never blocks - it only returns an error code if the task is not
-in `REPLY_WAIT`.
+the `char* reply` stored in the `reply_wait` branch of the task's `state`
+union.  This way, reply never blocks - it only returns an error code if the
+task is not in `REPLY_WAIT`.
 
 ### Error cases
 
@@ -567,9 +636,11 @@ returned whenever a `tid` does not represent a task - either it is out of
 range, or it points to a TaskDescriptor in the `UNUSED` state. `-2` is returned
 in two cases where a SRR transaction cannot be completed:
 
-- If a task tries to `Reply()`to a task that is not in `REPLY_WAIT` - this would
- mean that the task never called `Send()` and thus is not expecting a reply.
-- If a task is in `SEND_WAIT` in a receiver's send queue, and the receiver exits.
+- If a task tries to `Reply()`to a task that is not in `REPLY_WAIT` - this
+  would mean that the task never called `Send()` and thus is not expecting a
+reply.
+- If a task is in `SEND_WAIT` in a receiver's send queue, and the receiver
+  exits.
 
 When a receiver exits, if it has a non-empty send queue, those tasks will never
 get a reply because they won't make the transition into `REPLY_WAIT`, and thus
@@ -658,73 +729,139 @@ therefore are able to halt the entire system.
 
 # Kernel Shutdown
 
-All good things must come to an end, which means that at some point, `ChoochoOS` may need to be shutdown. This can happen for one of three reasons:
+All good things must come to an end, which means that at some point,
+`ChoochoOS` may need to be shutdown. This can happen for one of three reasons:
 
 1. No running tasks
   - i.e: all user tasks have `Exit`ed
   - _Note:_ this includes terminating the Name Server (via it's Shutdown method)
 2. The `Shutdown` syscall
-  - A user task has notified the kernel that for whatever reason, all of userland should be terminated
+  - A user task has notified the kernel that for whatever reason, all of
+    userland should be terminated
 3. `kpanic` or `kassert`
   - A critical kernel invariant has been broken, and the kernel was not able to recover
   - (This should _not_ happen during normal kernel operation. Please notify the nearest programmer if this happens to you)
 
-Regardless as to _why_ the kernel has decided to shut down, the kernel must call the `driver::shutdown` method at some point prior to returning to Redboot. This method mirrors the `driver::initialize` method, except instead of enabling interrupts, `driver::shutdown` _disables_ all the interrupts on the VIC, and asserts any remaining interrupts. If this routine isn't run, then the next time the kernel is re-loaded, it will immediately jump to the irq_handler, even before it's had a chance to initialize. This is Very Bad, as the IRQ handler expects the kernel to already have been initialized, and would result in undefined and broken behavior.
+Regardless as to _why_ the kernel has decided to shut down, the kernel must
+call the `driver::shutdown` method at some point prior to returning to Redboot.
+This method mirrors the `driver::initialize` method, except instead of enabling
+interrupts, `driver::shutdown` _disables_ all the interrupts on the VIC, and
+asserts any remaining interrupts. If this routine isn't run, then the next time
+the kernel is re-loaded, it will immediately jump to the irq_handler, even
+before it's had a chance to initialize. This is Very Bad, as the IRQ handler
+expects the kernel to already have been initialized, and would result in
+undefined and broken behavior.
 
 ## `kexit`
 
-While not strictly required, it's very useful to have a simple method which can be called from anywhere in the kernel to immediately return to Redboot. That method is called `kexit`, and it's the backbone of the `Shutdown` syscalls, and the `kpanic` and `kassert` facilities.
+While not strictly required, it's very useful to have a simple method which can
+be called from anywhere in the kernel to immediately return to Redboot.  That
+method is called `kexit`, and it's the backbone of the `Shutdown` syscalls, and
+the `kpanic` and `kassert` facilities.
 
-Given the non-linear execution flow required to exit the kernel from anywhere in the call stack, the `kexit` method is implemented using some inline assembly magic.
+Given the non-linear execution flow required to exit the kernel from anywhere
+in the call stack, the `kexit` method is implemented using some inline assembly
+magic.
 
-In the `ctr1.c` file, the initial link register which points to Redboot is stashed away in a global variable. This variable is later referenced in the `_exit` method, which uses some inline assembly to set the PC to the stashed link register. Note that the `_exit` method does _not_ call the critical `driver::sutdown` routine.
+In the `ctr1.c` file, the initial link register which points to Redboot is
+stashed away in a global variable. This variable is later referenced in the
+`_exit` method, which uses some inline assembly to set the PC to the stashed
+link register. Note that the `_exit` method does _not_ call the critical
+`driver::sutdown` routine.
 
 `kexit` is a simple wrapper around `_exit`, with the added functionality of first calling `driver::Shutdown`.
 
 # System Limitations
 
-Our linker script, [ts7200_redboot.ld](ts7200_redboot.ld), defines our allocation of memory. Most notably, we define the range of memory space allocated to user stacks from `__USER_STACKS_START__` to `__USER_STACKS_END__`. Each user task is given 256KiB of stack space, so the maximum number of concurrent tasks in the system is `(__USER_STACKS_END__ - __USER_STACKS_START__) / (256 * 1024)`. However, given the variable size of our BSS and data sections (as we change code), we can't compute the optimal number of concurrent tasks until link time. So instead, we hard-code a `MAX_SCHEDULED_TASKS`, and assert at runtime that no task could possibly have a stack outside of our memory space. Currently, this value is set to 48 tasks. The kernel is given 512KiB of stack space. These numbers are quite arbitrary, and subject to change if it turns out we require additional user tasks / user tasks are using too much RAM.
+Our linker script, [ts7200_redboot.ld](ts7200_redboot.ld), defines our
+allocation of memory. Most notably, we define the range of memory space
+allocated to user stacks from `__USER_STACKS_START__` to `__USER_STACKS_END__`.
+Each user task is given 256KiB of stack space, so the maximum number of
+concurrent tasks in the system is `(__USER_STACKS_END__ -
+__USER_STACKS_START__) / (256 * 1024)`. However, given the variable size of our
+BSS and data sections (as we change code), we can't compute the optimal number
+of concurrent tasks until link time. So instead, we hard-code a
+`MAX_SCHEDULED_TASKS`, and assert at runtime that no task could possibly have a
+stack outside of our memory space. Currently, this value is set to 48 tasks.
+The kernel is given 512KiB of stack space. These numbers are quite arbitrary,
+and subject to change if it turns out we require additional user tasks / user
+tasks are using too much RAM.
 
 # Common User Tasks
 
 ## Name Server
 
-The Name Server task provides tasks with a simple to use mechanism to discover one another's Tids. It's implementation can be found under `<src/include>/kernel/tasks/nameserver.<cc/h>`
+The Name Server task provides tasks with a simple to use mechanism to discover
+one another's Tids. It's implementation can be found under
+`<src/include>/kernel/tasks/nameserver.<cc/h>`
 
 ### Public Interface
 
-We've decided to use an incredibly simple closure mechanism for determining the Tid of the name server: It's Tid must _always_ be 1. To enforce this invariant, we have the kernel spawn the NameServer immediately after spawning the `FirstUserTask`.
+We've decided to use an incredibly simple closure mechanism for determining the
+Tid of the name server: It's Tid must _always_ be 1. To enforce this invariant,
+we have the kernel spawn the NameServer immediately after spawning the
+`FirstUserTask`.
 
-To make working with the name server easier, instead of having tasks communicate with it directly via Send-Receive-Reply syscalls, a pair of utility methods are provided which streamline the registration and query flows:
+To make working with the name server easier, instead of having tasks
+communicate with it directly via Send-Receive-Reply syscalls, a pair of utility
+methods are provided which streamline the registration and query flows:
 
-- `int WhoIs(const char*)`: returns the Tid of a task with a given name, `-1` if the name server task is not initialized, or `-2` if there was no registered task with the given name.
-- `int RegisterAs()`: returns `0` on success, `-1` if the name server task is not initialized, or `-2` if there was an error during name registration (e.g: Name Server is at capacity.)
-  - _Note:_ as described later, the Name Server actually panics if it runs out of space, so user tasks should never actually get back `-2`.
+- `int WhoIs(const char*)`: returns the Tid of a task with a given name, `-1`
+  if the name server task is not initialized, or `-2` if there was no
+registered task with the given name.
+- `int RegisterAs()`: returns `0` on success, `-1` if the name server task is
+  not initialized, or `-2` if there was an error during name registration (e.g:
+Name Server is at capacity.)
+  - _Note:_ as described later, the Name Server actually panics if it runs out
+    of space, so user tasks should never actually get back `-2`.
 
-These two methods are also exposed as `extern "C"` methods, with corresponding definitions in the `include/user/syscalls.h` file.
+These two methods are also exposed as `extern "C"` methods, with corresponding
+definitions in the `include/user/syscalls.h` file.
 
 ### Associating Strings with Tids
 
-The core of any name server is some sort of associative data structure to associate strings to Tids.
+The core of any name server is some sort of associative data structure to
+associate strings to Tids.
 
-While there are many different data structures that fit this requirement, ranging from Tries, Hash Maps, BTree Maps, etc..., we've decided to use a simple, albeit potentially inefficient data structure instead: a plain old fixed-length array of ("String", Tid) pairs. This simple data structure provides O(1) registration, and O(n) lookup, which shouldn't be too bad, as we assume that most user applications won't require too many named tasks (as reflected in the specification's omission of any sort of "de-registration" functionality).
+While there are many different data structures that fit this requirement,
+ranging from Tries, Hash Maps, BTree Maps, etc..., we've decided to use a
+simple, albeit potentially inefficient data structure instead: a plain old
+fixed-length array of ("String", Tid) pairs. This simple data structure
+provides O(1) registration, and O(n) lookup, which shouldn't be too bad, as we
+assume that most user applications won't require too many named tasks (as
+reflected in the specification's omission of any sort of "de-registration"
+functionality).
 
 ### Efficiently Storing Names
 
-Note that we've put the term "String" in quotes. This is because instead of using a fixed-size char buffer for each pair, we instead allocate strings via a separate data structure: the `StringArena`.
+Note that we've put the term "String" in quotes. This is because instead of
+using a fixed-size char buffer for each pair, we instead allocate strings via a
+separate data structure: the `StringArena`.
 
-`StringArena` is a simple class which contains a fixed-size `char` buffer, and a index to the tail of the buffer. It exposes two methods:
+`StringArena` is a simple class which contains a fixed-size `char` buffer, and
+a index to the tail of the buffer. It exposes two methods:
 
-- `size_t StringArena::add(const char* s, const size_t n)`: Copy a string of length `n` into the arena, returning a handle to the string's location within the arena (represented by a `size_t`). This handle can then be passed to the second method on the arena...
-- `const char* StringArena::get(const size_t handle)`: Return a pointer to a string associated with the given handle, or `nullptr` if the handle is invalid.
+- `size_t StringArena::add(const char* s, const size_t n)`: Copy a string of
+  length `n` into the arena, returning a handle to the string's location within
+the arena (represented by a `size_t`). This handle can then be passed to the
+second method on the arena...
+- `const char* StringArena::get(const size_t handle)`: Return a pointer to a
+  string associated with the given handle, or `nullptr` if the handle is
+invalid.
 
-Whenever `add` is called, the string is copied into the arena's fixed-size internal buffer, incrementing the tail-index to point past the end of the string. `get` simply returns a pointer into the char buffer associated with the returned handle (which at the moment, is simply an index into the char array).
+Whenever `add` is called, the string is copied into the arena's fixed-size
+internal buffer, incrementing the tail-index to point past the end of the
+string. `get` simply returns a pointer into the char buffer associated with the
+returned handle (which at the moment, is simply an index into the char array).
 
-The `StringArena` approach allows us to avoid having to put an explicit limit on the size of name strings, as strings of varying lengths can be "packed" together in the single char buffer.
+The `StringArena` approach allows us to avoid having to put an explicit limit
+on the size of name strings, as strings of varying lengths can be "packed"
+together in the single char buffer.
 
 ### Incoming and Outgoing Messages
 
-The `WhoIs` and `RegisterAs` functions abstract over the name server's message interface, which is comprised of two tagged unions: `Request` and `Response`.
+The `WhoIs` and `RegisterAs` functions abstract over the name server's message
+interface, which is comprised of two tagged unions: `Request` and `Response`.
 
 ```cpp
 enum class MessageKind : size_t { WhoIs, RegisterAs, Shutdown };
@@ -768,9 +905,12 @@ There are 3 types of request, each with a corresponding response:
 - `WhoIs` - Return the Tid associated with a given name
 - `RegisterAs` - Register a Tid with a given name
 
-The latter two messages return a non-empty response, indicating if the operation was successful, and for `WhoIs`, a Tid (if one was found).
+The latter two messages return a non-empty response, indicating if the
+operation was successful, and for `WhoIs`, a Tid (if one was found).
 
-The server uses a standard message handling loop, whereby the body of the server task is an infinite loop, which continuously waits for incoming messages, switches on their type, and handles them accordingly.
+The server uses a standard message handling loop, whereby the body of the
+server task is an infinite loop, which continuously waits for incoming
+messages, switches on their type, and handles them accordingly.
 
 ## Clock Server
 
