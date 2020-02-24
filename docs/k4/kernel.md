@@ -55,6 +55,7 @@ The output of the build process is an ELF file in the root of the repository. Th
 # Initialization
 
 Our entry point is the `_start` routine defined in `src/kernel/boilerplate/crt1.c`. `_start` does couple key things for the initialization of the kernel:
+
 - The initial link register is stored in the `redboot_return_addr` variable.
   - This variable is used to implement an `_exit()` method, which can be called at any point during kernel exection to immediately return execution back to Redboot. See the "Shutdown" section for more details on kernel shutdown.
 - The BSS is zeroed
