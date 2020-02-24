@@ -267,11 +267,67 @@ Please refer to the "Syscall Implementations" section of this documentation for 
 
 ### Clock IRQs
 
-<!-- see k3 docs -->
+Clock interrupts are supported for the 3 hardware timers as events `4` (timer
+1), `5` (timer 2) and `51` (timer 3).
+
+Whenever any of the 3 timers generates an interrupt, the kernel automatically
+writes to the corresponding timer's clear register, which prevents the
+interrupt from firing again once a the kernel switches back into user mode. No
+meaningful volatile data is returned from the `AwaitEvent()` syscall for Clock
+IRQs.
+
+User tasks that wish to receive timer interrupts must properly configure the
+timers themselves via the timer control registers.
 
 ### UART IRQs
 
-<!-- see k4 docs -->
+The UART combined interrupts are supported in the kernel as events `52` for
+UART1 and `54` for UART2. UART interrupts are enabled in user space by writting
+to the UART's CTLR (control register). For ease of use, a the following struct
+is defined in `ts7200.h`:
+
+```cpp
+union UARTCtrl {
+    uint32_t raw;
+    struct {
+        bool uart_enable : 1;
+        bool sir_enable : 1;
+        bool sir_low_power : 1;
+        bool enable_int_modem : 1;
+        bool enable_int_rx : 1;
+        bool enable_int_tx : 1;
+        bool enable_int_rx_timeout : 1;
+        bool loopback_enable : 1;
+    } _;
+};
+```
+
+User tasks may manipulate the control register by creating a `UARTCtrl` struct,
+setting `.raw` to the register's data, modifying the bitfields in `._`, and
+writing `.raw` back to the register. By default, only the `uart_enable` bit is
+set. Interrupts are enabled via the `enable_int_*` bits.
+
+When UART interrupts are enabled, `AwaitEvent(52|54)` will block the calling
+task until the combined UART interrupt is raised. These calls to `AwaitEvent`
+will return the UART's INTR (interrupt register) as an `int`. Again we define a
+struct for ease of use:
+
+```cpp
+union UARTIntIDIntClr {
+    uint32_t raw;
+    struct {
+        bool modem : 1;
+        bool rx : 1;
+        bool tx : 1;
+        bool rx_timeout : 1;
+    } _;
+};
+```
+
+The fields in `._` correspond to each of the possible combined interrupts.
+Whenever an interrupt is raised, the kernel will automatically disable that
+interrupt on the UART's control register to prevent unwanted reentry.
+Therefore, is is up the user task to re-enable each interrupt as required.
 
 # Syscall Implementations
 
