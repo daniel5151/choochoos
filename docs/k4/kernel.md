@@ -231,15 +231,154 @@ Please refer to the "Syscall Implementations" section of this documentation for 
 
 ## Syscall Implementations
 
-<!-- update this -->
+### `MyTid()`
 
-- `MyTid()` returns the kernel's `current_tid`, which is updated to the most recent Tid whenever as task is activated.
-- `Create(priority, function)` determines the lowest free Tid, and constructs a task descriptor in `tasks[tid]`. The task descriptor is assigned a stack pointer, and the user stack is initialized by casting the stack pointer to a `FreshUserStack*`, and writing to that struct's fields. Notably, we write `stack->lr = (void*)User::Exit`, which sets the return address of `function` to be the `Exit()` syscall, allowing the user to omit the final `Exit()`. The task's `parent_tid` is the current value of `MyTid()`.
-- `MyParentTid()` looks up the `TaskDescriptor` by `current_tid`, which holds the parent Tid. (The parent Tid is set to the value of `current_tid` when
-- `Yield()` does nothing. Since it leaves the calling task in the `READY` state, the task will be re-added to the `ready_queue` in `activate()`.
-- `Exit()` clears the task descriptor at `tasks[MyTid()]`. This prevents the task from being rescheduled in `activate()`, and allows the Tid to be recycled in future calls to `Create()`.
+`MyTid()` returns the kernel's `current_tid`, which is updated to the most
+recent Tid whenever as task is activated.
 
-<!-- copy paste docs/k2/kernel2.md - Send-Recieve-Reply -->
+### `MyParentTid()`
+
+`MyParentTid()` looks up the `TaskDescriptor` by `current_tid`, which holds the
+parent Tid. (The parent Tid is set to the value of `current_tid` when a task is
+created). When called from `FirstUserTask`, `MyParentTid()` returns `-1`.
+
+### `Create(int priority, void (*function)())`
+
+`Create(priority, function)` determines the lowest free Tid, and constructs a
+task descriptor in `tasks[tid]`. The task descriptor is assigned a stack
+pointer, and the user stack is initialized by casting the stack pointer to a
+`FreshUserStack*`, and writing to that struct's fields. Notably, we write
+`stack->lr = (void*)User::Exit`, which sets the return address of `function` to
+be the `Exit()` syscall, allowing the user to omit the final `Exit()`. The
+task's `parent_tid` is the current value of `MyTid()`.
+
+### `Yield()`
+
+`Yield()` puts a task back on the ready queue, allowing higher priority tasks
+to be run. The syscall implementation itself does nothing - since it leaves the
+calling task in the `READY` state, the task will be re-added to the
+`ready_queue` in `activate()`.
+
+### `Exit()`
+
+`Exit()` clears the task descriptor at `tasks[MyTid()]`. This prevents the task
+from being rescheduled in `activate()`, and allows the Tid to be recycled in
+future calls to `Create()`.
+
+### `Send`-`Receive`-`Reply`
+
+`Send(..)`, `Receive(..)` and `Reply(..)` are complicated syscalls, and are
+best described together.
+
+Send-Receive-Reply is implemented via a `TaskState state;` field in
+`TaskDescriptor`.  `TaskState` is a tagged union with the following structure:
+
+```cpp
+struct TaskState {
+    enum uint8_t { READY, SEND_WAIT, RECV_WAIT, REPLY_WAIT, EVENT_WAIT } tag;
+    union {
+        struct {
+        } ready;
+        struct {
+            const char* msg;
+            size_t msglen;
+            char* reply;
+            size_t rplen;
+            std::optional<Tid> next;
+        } send_wait;
+        struct {
+            int* tid;
+            char* recv_buf;
+            size_t len;
+        } recv_wait;
+        struct {
+            char* reply;
+            size_t rplen;
+        } reply_wait;
+        struct {
+        } event_wait;
+    };
+};
+```
+
+So each `TaskDescriptor` can be in any of the states described by `tag`, at which
+point the fields in the corresponding struct under the `union` will be populated:
+
+- `READY`: the task is on the `ready_queue`, waiting to be scheduled.
+- `SEND_WAIT`: the task is waiting to `Send()` to another task that hasn't
+  called `Receive()` yet.
+- `RECV_WAIT`: the task has called `Receive()`, but no task has sent a message to it yet.
+- `REPLY_WAIT`: the task called `Send()` and the receiver got the message via
+  `Receive()`, but no other task has called `Reply()` back at the task.
+- `EVENT_WAIT`: the task is blocked waiting on an interrupt. This is explained
+  in more detail in the `AwaitEvent()` section below.
+
+To implement these state transitions, each task has a `send_queue` of tasks
+that are waiting to send to it (and must therefore be in the `SEND_WAIT`
+state). This send queue is built as an intrusive linked list, where the `next`
+"pointer" is actually just another Tid, or `-1` to represent the end of the
+list. When a task wants to `Send()` to another task that is not in `RECV_WAIT`,
+it will be put on the receiver's send queue (denoted by the fields
+`send_queue_head` and `send_queue_tail`, also Tids), and the sending task will
+be put in `SEND_WAIT`. Note that the `send_wait` branch of the union contains
+everything that the sender passed to `Send()`, plus the `next` pointer, if any
+other task get added to that same send queue.
+
+If a task is in `SEND_WAIT`, it can only be blocked sending to one receiving
+task, so we only need at most one `next` pointer per task. The result is very
+memory efficient: by storing one word on each task descriptor, we can support
+send queues up to length `MAX_SCHEDULED_TASKS - 1`.
+
+Let's step through the two possibilities for an SRR transaction: sender-first
+and receiver-first.
+
+#### Sender-first
+
+If a sender arrives first, that means the receiver is not in `RECV_WAIT`, and
+therefore does not yet have a `recv_buf` to be filled. If this is the case,
+we add the sender to the end of the receiver's send queue, and put the sender in
+`SEND_WAIT`.
+
+When the receiver finally calls `Receive()`, it will see that is has a non-empty
+send queue. So it will pop the first `TaskDescriptor` off the front of its send
+queue, copy the `msg` into `recv_buf`, and transition the sender into `REPLY_WAIT`,
+using the same `char* reply` that the sender saved when they went into `SEND_WAIT`.
+
+#### Receiver-first
+
+If the receiver arrives first, it checks its send queue. If the send queue is
+non-empty, then we follow the same procedure as sender-first, and the new sender
+is placed on the send of the receiver's send queue. If the send queue is empty,
+the receiver goes into `RECV_WAIT`, holding onto the `recv_buf` to be copied into
+once a sender arrives.
+
+When the sender arrives, it notices that the receiver is in `RECV_WAIT`, so it
+writes the `msg` directly into `recv_buf`, wakes up the receiver (transitioning
+it to `READY` and pushing it onto the `ready_queue`), and goes into `REPLY_WAIT`.
+
+#### `Reply(int tid, char* reply, int rplen)`
+
+`Reply(tid, reply, rplen)` only delivers the reply if the task identified by
+`tid` is in `REPLY_WAIT`. The kernel can then immediately copy the `reply` into
+the `char* reply` stored in the `reply_wait` branch of the task's `state` union.
+This way, reply never blocks - it only returns an error code if the task is not
+in `REPLY_WAIT`.
+
+### Error cases
+
+The SRR syscalls return two possible error codes: `-1` and `-2`. `-1` is
+returned whenever a `tid` does not represent a task - either it is out of
+range, or it points to a TaskDescriptor in the `UNUSED` state. `-2` is returned
+in two cases where a SRR transaction cannot be completed:
+
+- If a task tries to `Reply()`to a task that is not in `REPLY_WAIT` - this would
+ mean that the task never called `Send()` and thus is not expecting a reply.
+- If a task is in `SEND_WAIT` in a receiver's send queue, and the receiver exits.
+
+When a receiver exits, if it has a non-empty send queue, those tasks will never
+get a reply because they won't make the transition into `REPLY_WAIT`, and thus
+would never wake up. Instead, we iterate through the send queue, waking ever
+`SEND_WAIT` task up, and writing the syscall return value of `-2`.
 
 <!-- copy paste docs/k3/k3.md - AwaitEvent -->
 <!-- maybe flesh it out a bit as well, discuss different interrupt types -->
