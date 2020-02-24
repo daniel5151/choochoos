@@ -4,9 +4,9 @@ A microkernel RTOS for the TS-7200 Single Board Computer, as used in [CS 452 - R
 
 Written by [Daniel Prilik](https://prilik.com) and [James Hageman](https://jameshageman.com).
 
-## Project Structure
+# Project Structure
 
-### Building `choochoos`
+## Building `choochoos`
 
 <!-- TODO: flesh this out -->
 
@@ -15,7 +15,7 @@ Written by [Daniel Prilik](https://prilik.com) and [James Hageman](https://james
     - i.e: we like designated initializers and std::optional
     - look at k3.md
 
-### Navigating the Repo
+## Navigating the Repo
 
 `choochoos` follows a fairly standard C/C++ project structure, whereby all header files are placed under the `include` directory, with corresponding implementation files placed under the `src` directory.
 
@@ -36,12 +36,12 @@ Written by [Daniel Prilik](https://prilik.com) and [James Hageman](https://james
 - `assignments` is special, with special makefile rules
     - contains the various "userland" implementations
 
-### Kernel Namespaces
+## Kernel Namespaces
 
 <!-- TODO: james -->
 <!-- see k4 docs -->
 
-## Initialization
+# Initialization
 
 Our entry point is the `_start` routine defined in `src/kernel/boilerplate/crt1.c`. `_start` does couple key things for the initialization of the kernel:
 - The link register is stored in the `redboot_return_addr` variable, so we can exit from any point in the kernel's execution by jumping directly to `redboot_return_addr`
@@ -53,7 +53,7 @@ Our entry point is the `_start` routine defined in `src/kernel/boilerplate/crt1.
 <!-- TODO: discuss the driver:initialize() method -->
 <!-- discuss FirstUserTask (and nameserver) -->
 
-## Main Scheduling Loop
+# Main Scheduling Loop
 
 After initialization, the kernel enters it's main scheduling loop. This loop looks roughly as follows:
 
@@ -74,7 +74,7 @@ while (true) {
 
 This loop roughly mirrors the one described in lecture, aside from the fact that `Kernel::activate` does not return a "syscall request" to handle. Instead, the `activate` method implicitly includes syscall handling (see the SWI handler documentation for more details).
 
-## Scheduling
+# Scheduling
 
 <!-- TODO: james, pls update / double check if this stuff still applies  -->
 
@@ -98,15 +98,15 @@ Using this ticketed binary heap has both drawbacks and benefits over a fixed-pri
 
 The drawback is that we lose FIFO if the ticket counter overflows. Right now, the ticket counter is a `size_t` (a 32-bit unsigned integer), so we would have to push `2^32` `Tid`s onto `ready_queue` in order to see an overflow. This definitely won't happen in our `k1` demo, but it doesn't seem impossible in a longer running program that is rapidly switching tasks. We're experimenting with using the non-native `uint64_t`, and we will profile such a change as we wrap up `k2`.
 
-## Idle Task
+# Idle Task
 
 <!-- todo -->
 
 <!-- see k3 and k4 (mostly k4) -->
 
-## Context Switching
+# Context Switching
 
-### Preface: Task State
+## Preface: Task State
 
 In our kernel, we've opted to store task state directly on the task's stack. This greatly simplifies task preemption and activation, as user state can be saved/stored using ARM's standard `stmfd` and `ldmfd` methods.
 
@@ -140,7 +140,7 @@ struct UserStack {
 
 Please keep this structure in mind when referencing the following sections on task activation and preemption.
 
-### Task Activation
+## Task Activation
 
 Once the scheduler has returned a Tid, the `driver::activate` method is called with the Tid. This method updates the kernel's `current_task` with the provided Tid, fetch the task's saved stack pointer from its Task Descriptor, and hands the stack pointer off to the `_activate_task` assembly routine.
 
@@ -164,7 +164,7 @@ _activate_task:
 
 The task will then continue its execution until it executes a syscall, or is preempted by a interrupt.
 
-### Context Switching - SWI Handling
+## Context Switching - SWI Handling
 
 Invoking a syscall switches the CPU to Supervisor mode, and jumps execution to the SWI handler. Our SWI handler is written entirely in Assembly, and was given the extremely original name `_swi_handler`.
 
@@ -215,34 +215,34 @@ Notice how useful the `UserStack*` view is in this case:
 
 Please refer to the "Syscall Implementations" section of this documentation for details on the concrete implementation of the various syscall handlers.
 
-### Context Switching - IRQ Handling
+## Context Switching - IRQ Handling
 
 <!-- todo: prilik -->
 
 <!-- see k3 docs -->
 
-#### Clock IRQs
+### Clock IRQs
 
 <!-- see k3 docs -->
 
-#### UART IRQs
+### UART IRQs
 
 <!-- see k4 docs -->
 
-## Syscall Implementations
+# Syscall Implementations
 
-### `MyTid()`
+## `MyTid()`
 
 `MyTid()` returns the kernel's `current_tid`, which is updated to the most
 recent Tid whenever as task is activated.
 
-### `MyParentTid()`
+## `MyParentTid()`
 
 `MyParentTid()` looks up the `TaskDescriptor` by `current_tid`, which holds the
 parent Tid. (The parent Tid is set to the value of `current_tid` when a task is
 created). When called from `FirstUserTask`, `MyParentTid()` returns `-1`.
 
-### `Create(int priority, void (*function)())`
+## `Create(int priority, void (*function)())`
 
 `Create(priority, function)` determines the lowest free Tid, and constructs a
 task descriptor in `tasks[tid]`. The task descriptor is assigned a stack
@@ -252,20 +252,20 @@ pointer, and the user stack is initialized by casting the stack pointer to a
 be the `Exit()` syscall, allowing the user to omit the final `Exit()`. The
 task's `parent_tid` is the current value of `MyTid()`.
 
-### `Yield()`
+## `Yield()`
 
 `Yield()` puts a task back on the ready queue, allowing higher priority tasks
 to be run. The syscall implementation itself does nothing - since it leaves the
 calling task in the `READY` state, the task will be re-added to the
 `ready_queue` in `activate()`.
 
-### `Exit()`
+## `Exit()`
 
 `Exit()` clears the task descriptor at `tasks[MyTid()]`. This prevents the task
 from being rescheduled in `activate()`, and allows the Tid to be recycled in
 future calls to `Create()`.
 
-### `Send`-`Receive`-`Reply`
+## `Send`-`Receive`-`Reply`
 
 `Send(..)`, `Receive(..)` and `Reply(..)` are complicated syscalls, and are
 best described together.
@@ -332,7 +332,7 @@ send queues up to length `MAX_SCHEDULED_TASKS - 1`.
 Let's step through the two possibilities for an SRR transaction: sender-first
 and receiver-first.
 
-#### Sender-first
+### Sender-first
 
 If a sender arrives first, that means the receiver is not in `RECV_WAIT`, and
 therefore does not yet have a `recv_buf` to be filled. If this is the case,
@@ -344,7 +344,7 @@ send queue. So it will pop the first `TaskDescriptor` off the front of its send
 queue, copy the `msg` into `recv_buf`, and transition the sender into `REPLY_WAIT`,
 using the same `char* reply` that the sender saved when they went into `SEND_WAIT`.
 
-#### Receiver-first
+### Receiver-first
 
 If the receiver arrives first, it checks its send queue. If the send queue is
 non-empty, then we follow the same procedure as sender-first, and the new sender
@@ -356,7 +356,7 @@ When the sender arrives, it notices that the receiver is in `RECV_WAIT`, so it
 writes the `msg` directly into `recv_buf`, wakes up the receiver (transitioning
 it to `READY` and pushing it onto the `ready_queue`), and goes into `REPLY_WAIT`.
 
-#### `Reply(int tid, char* reply, int rplen)`
+### `Reply(int tid, char* reply, int rplen)`
 
 `Reply(tid, reply, rplen)` only delivers the reply if the task identified by
 `tid` is in `REPLY_WAIT`. The kernel can then immediately copy the `reply` into
@@ -364,7 +364,7 @@ the `char* reply` stored in the `reply_wait` branch of the task's `state` union.
 This way, reply never blocks - it only returns an error code if the task is not
 in `REPLY_WAIT`.
 
-### Error cases
+## Error cases
 
 The SRR syscalls return two possible error codes: `-1` and `-2`. `-1` is
 returned whenever a `tid` does not represent a task - either it is out of
@@ -385,25 +385,25 @@ would never wake up. Instead, we iterate through the send queue, waking ever
 
 <!-- copy paste docs/k4/k4.md - New Syscalls -->
 
-## Shutdown
+# Shutdown
 
 <!-- driver::shutdown routine (for re-executable kernel) -->
 <!-- kexit implementation -->
 
-## System Limitations
+# System Limitations
 
 Our linker script, [ts7200_redboot.ld](ts7200_redboot.ld), defines our allocation of memory. Most notably, we define the range of memory space allocated to user stacks from `__USER_STACKS_START__` to `__USER_STACKS_END__`. Each user task is given 256KiB of stack space, so the maximum number of concurrent tasks in the system is `(__USER_STACKS_END__ - __USER_STACKS_START__) / (256 * 1024)`. However, given the variable size of our BSS and data sections (as we change code), we can't compute the optimal number of concurrent tasks until link time. So instead, we hardcode a `MAX_SCHEDULED_TASKS`, and assert at runtime that no task could possibly have a stack outside of our memory space. Currently, this value is set to 48 tasks.  The kernel is given 512KiB of stack space.
 
-## Common User Tasks
+# Common User Tasks
 
-### Name Server
+## Name Server
 
 <!-- see k2 docs -->
 
-### Clock Server
+## Clock Server
 
 <!-- see k3 docs -->
 
-### UART Server
+## UART Server
 
 <!-- see k4 docs -->
