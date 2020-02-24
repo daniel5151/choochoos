@@ -8,12 +8,23 @@ Written by [Daniel Prilik](https://prilik.com) and [James Hageman](https://james
 
 ## Building `choochoos`
 
-<!-- TODO: flesh this out -->
+This project uses a standard Makefile-based build system.
 
-- actually include build instructions in this PDF
-- mention use of c++2a
-    - i.e: we like designated initializers and std::optional
-    - look at k3.md
+Building the lastest deliverable is as simple as running:
+
+```bash
+make -j
+```
+
+Alternatively, this repo also includes several other programs built on top of the core kernel, as found under the `src/assignments/` directory. The executable which is built is decided by the `TARGET` makefile variable, which just happens to be defaulted to the latest deliverable.
+
+e.g: to build `k3`:
+
+```bash
+make -j TARGET=k3
+```
+
+The output of the build process is an ELF file in the root of the repository. The name of the elf file is `$(TARGET).elf`.
 
 ## Navigating the Repo
 
@@ -44,14 +55,24 @@ Written by [Daniel Prilik](https://prilik.com) and [James Hageman](https://james
 # Initialization
 
 Our entry point is the `_start` routine defined in `src/kernel/boilerplate/crt1.c`. `_start` does couple key things for the initialization of the kernel:
-- The link register is stored in the `redboot_return_addr` variable, so we can exit from any point in the kernel's execution by jumping directly to `redboot_return_addr`
+- The initial link register is stored in the `redboot_return_addr` variable.
+  - This variable is used to implement an `_exit()` method, which can be called at any point during kernel exection to immediately return execution back to Redboot. See the "Shutdown" section for more details on kernel shutdown.
 - The BSS is zeroed
 - All C++ global constructors are run
 
 `_start` proceeds to call `main`, which then immediately calls the `kernel::run()` method.
 
-<!-- TODO: discuss the driver:initialize() method -->
-<!-- discuss FirstUserTask (and nameserver) -->
+The first thing the kernel does is call the `driver::initialize()` method, which performs some critical hardware setup:
+
+- Installs the SWI Handler and IRQ Handler function pointers to the ARM Vector Table
+- Unlocks the Halt/Standby magic addresses on the System Controller
+- Enables hardware caches
+- Programs the VIC
+  - Sets all interrupts to IRQ mode
+  - Un-masks Timer and UART interrupts on the VIC
+  - Enables the VIC protection bits (preventing user mode tasks from touching the VIC)
+
+Additionally, the `driver::initialize()` method spawns the `FirstUserTask` and `nameserver::Task`. As the name implies, the `FirstUserTask` is the main entry point for user code, and is spawned at priority 0. For details on the `nameserver::Task`, and the rationale for spawning it from the Kernel itself, please refer to the "Common User Tasks - Name Server" section.
 
 # Main Scheduling Loop
 
