@@ -182,8 +182,8 @@ void Timer() {
 }
 
 void TrainPlayground() {
-    int uart = Create(INT_MAX, Uart::Server);
-    int clock = Create(INT_MAX, Clock::Server);
+    int uart = Create(INT_MAX - 1, Uart::Server);
+    int clock = Create(INT_MAX - 1, Clock::Server);
     Create(11, QTask);
     Create(11, TrackReader);
     int timer = Create(12, Timer);

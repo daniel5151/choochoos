@@ -20,6 +20,9 @@ using Iobuf = Queue<char, IOBUF_SIZE>;
 static Iobuf com1_out;
 static Iobuf com2_out;
 
+#define DBG false
+#define TRC false
+
 struct CTSState {
     enum {
         WAITING_FOR_DOWN = 'd',
@@ -35,6 +38,11 @@ struct CTSState {
         struct {
         } actually_cts;
     };
+    CTSState& operator=(const CTSState& other) {
+        memcpy((void*)this, (void*)&other, sizeof(CTSState));
+        DBG&& bwprintf(COM2, "<cts=%c>", this->tag);
+        return *this;
+    }
 };
 
 Iobuf& outbuf(int channel) {
@@ -112,6 +120,8 @@ static void Notifier(int channel, int eventid) {
         debug("Notifier: AwaitEvent(%d)", eventid);
         req.notify.data.raw = (uint32_t)AwaitEvent(eventid);
 
+        if (channel == COM1)
+            DBG&& bwprintf(COM2, "<got 0x%lx>", req.notify.data.raw);
         // TODO sizeof(req) will be really big because of the Putstr buf we
         // should have a generic sizeof function that switches on the tag.
         debug("Notifier: received channel=%d data=0x%lx", channel,
@@ -184,6 +194,9 @@ static void enable_tx_interrupts(int channel) {
     switch (channel) {
         case COM1:
             uart_ctlr._.enable_int_modem = 1;
+
+            if (channel == COM1)
+                DBG&& bwprintf(COM2, "<ctrl=0x%lx>", uart_ctlr.raw);
             break;
         case COM2:
             uart_ctlr._.enable_int_tx = 1;
@@ -193,16 +206,18 @@ static void enable_tx_interrupts(int channel) {
     }
     debug("enable_tx_interrupts: channel=%d new_ctlr=0x%lx old_ctlr=0x%lx",
           channel, uart_ctlr.raw, old_ctlr);
-    (void)old_ctlr;
-    *ctlr = uart_ctlr.raw;
+
+    if (uart_ctlr.raw != old_ctlr) {
+        *ctlr = uart_ctlr.raw;
+    }
 }
 
 static bool clear_to_send(int channel, CTSState& com1_cts, int clock) {
-    const volatile uint32_t* flags = flags_for(channel);
+    uint32_t flags = *flags_for(channel);
     switch (channel) {
         case COM1: {
-            bool tx = !(*flags & TXFF_MASK);
-            bool cts = (*flags & CTS_MASK);
+            bool tx = !(flags & TXFF_MASK);
+            bool cts = (flags & CTS_MASK);
             if (!(tx && cts)) return false;
             switch (com1_cts.tag) {
                 case CTSState::ACTUALLY_CTS:
@@ -217,6 +232,7 @@ static bool clear_to_send(int channel, CTSState& com1_cts, int clock) {
                         com1_cts = {
                             .tag = CTSState::WAITING_FOR_DOWN,
                             .waiting_for_down = {.since = Clock::Time(clock)}};
+                        bwprintf(COM2, "<wfd t/o>");
                         return true;
                     }
                     return false;
@@ -226,7 +242,7 @@ static bool clear_to_send(int channel, CTSState& com1_cts, int clock) {
             return false;
         }
         case COM2:
-            return !(*flags & TXFF_MASK);
+            return !(flags & TXFF_MASK);
         default:
             panic("bad channel %d", channel);
     }
@@ -308,6 +324,9 @@ void Server() {
                 debug("Server: received notify: channel=%d data=0x%lx", channel,
                       req.notify.data.raw);
 
+                if (channel == COM1)
+                    DBG&& bwprintf(COM2, "<hndl 0x%lx>", req.notify.data.raw);
+
                 // TX
                 if (req.notify.data._.tx || req.notify.data._.modem) {
                     if (channel == COM1 && req.notify.data._.modem) {
@@ -321,6 +340,7 @@ void Server() {
                             // cts went down, so now we wait for up
                             com1_cts = {.tag = CTSState::WAITING_FOR_UP,
                                         .waiting_for_up = {}};
+                            enable_tx_interrupts(channel);
                         }
                     }
 
@@ -328,8 +348,11 @@ void Server() {
                     while (!buf.is_empty() &&
                            clear_to_send(channel, com1_cts, clock)) {
                         char c = buf.pop_front().value();
+                        if (channel == COM1) {
+                            enable_tx_interrupts(channel);
+                        }
                         *data = (uint32_t)c;
-                        if (channel == COM1) bwputc(COM2, 't');
+                        if (channel == COM1) TRC&& bwputc(COM2, 't');
                         record_byte_sent(flush_blocked_tids[channel]);
                         bytes_written++;
                     }
@@ -387,8 +410,9 @@ void Server() {
                     // try writing directly to the wire
                     for (; i < len && clear_to_send(channel, com1_cts, clock);
                          i++) {
+                        if (channel == COM1) enable_tx_interrupts(channel);
                         *data = msg[i];
-                        if (channel == COM1) bwputc(COM2, 'T');
+                        if (channel == COM1) TRC&& bwputc(COM2, 'T');
                     }
 
                     if (i < len) {
