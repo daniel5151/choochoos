@@ -16,11 +16,10 @@ static uint32_t handle_uart_interrupt(uint32_t uart_base, uint32_t irq_no) {
     UARTIntIDIntClr u_int_id = {.raw = (uint32_t)ret};
     UARTCtrl u_ctlr = {.raw = *ctlr};
 
-    kdebug("kernel: irq %d: u_int_id=0x%08lx u_ctlr=0x%08lx" ENDL, irq_no,
+    kdebug("kernel: irq %lu: u_int_id=0x%08lx u_ctlr=0x%08lx" ENDL, irq_no,
            u_int_id.raw, u_ctlr.raw);
     (void)irq_no;
 
-    if (irq_no == 52) kassert(u_ctlr._.enable_int_modem);
     if (u_int_id._.modem) u_ctlr._.enable_int_modem = false;
     if (u_int_id._.rx) u_ctlr._.enable_int_rx = false;
     if (u_int_id._.tx) u_ctlr._.enable_int_tx = false;

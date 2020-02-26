@@ -1,6 +1,8 @@
 #include "common/ts7200.h"
 #include "user/debug.h"
 #include "user/syscalls.h"
+#include "user/tasks/clockserver.h"
+#include "user/tasks/uartserver.h"
 
 volatile uint32_t* const UART2_CTLR =
     (volatile uint32_t*)(UART2_BASE + UART_CTLR_OFFSET);
@@ -79,15 +81,13 @@ void TrainPlayground() {
         *high = buf;
     }
 
-    // Create(0, TrainBusyReader);
+    Create(0, TrainBusyReader);
 
     CTSState my_cts_flag = ACTUALLY_CTS;
     while (true) {
         if ((*UART1_FLAG & CTS_MASK) && my_cts_flag == ACTUALLY_CTS) {
-            bwputc(COM2, '.');
+            bwprintf(COM2, "sent" ENDL);
             my_cts_flag = WAITING_FOR_DOWN;
-            bwprintf(COM2, "<%1d%c>", (bool)(*UART1_FLAG & CTS_MASK),
-                     my_cts_flag);
             *UART1_DATA = 133;  // sensor query
         }
 
@@ -95,8 +95,6 @@ void TrainPlayground() {
         // u1_ctlr._.enable_int_tx = true;
         u1_ctlr._.enable_int_modem = true;
         *UART1_CTLR = u1_ctlr.raw;
-        bwputc(COM2, 'e');
-
         UARTIntIDIntClr id = {.raw = (uint32_t)AwaitEvent(52)};
 
         if (id._.modem) {
@@ -105,8 +103,6 @@ void TrainPlayground() {
             } else if (my_cts_flag == WAITING_FOR_DOWN) {
                 my_cts_flag = WAITING_FOR_UP;
             }
-            bwprintf(COM2, "<%1d%c>", (bool)(*UART1_FLAG & CTS_MASK),
-                     my_cts_flag);
         }
     }
 }
@@ -142,11 +138,84 @@ void RXPlayground() {
     }
 }
 
+namespace withservers {
+#include <climits>
+
+void QTask() {
+    int uart = WhoIs(Uart::SERVER_ID);
+    assert(uart >= 0);
+    while (true) {
+        char c = (char)Uart::Getc(uart, COM2);
+        if (c == 'q') {
+            Shutdown();
+        }
+    }
+}
+
+void TrackReader() {
+    int uart = WhoIs(Uart::SERVER_ID);
+    assert(uart >= 0);
+
+    char bytes[10];
+    while (true) {
+        char line[80] = {'\0'};
+        Uart::Getn(uart, COM1, 10, bytes);
+        size_t n = 0;
+        for (char b : bytes) {
+            n += snprintf(line + n, sizeof(line) - n, "%02x", b);
+        }
+        n += snprintf(line + n, sizeof(line) - n, ENDL);
+        Uart::Putstr(uart, COM2, line);
+    }
+}
+
+void Timer() {
+    int uart = WhoIs(Uart::SERVER_ID);
+    int clock = WhoIs(Clock::SERVER_ID);
+    assert(uart >= 0);
+    assert(clock >= 0);
+
+    while (true) {
+        Clock::Delay(clock, 10);
+        Uart::Putstr(uart, COM2, ".");
+    }
+}
+
+void TrainPlayground() {
+    int uart = Create(INT_MAX, Uart::Server);
+    int clock = Create(INT_MAX, Clock::Server);
+    Create(11, QTask);
+    Create(11, TrackReader);
+    int timer = Create(12, Timer);
+
+    bwprintf(COM2, "me=%d uart=%d clock=%d timer=%d" ENDL, MyTid(), uart, clock,
+             timer);
+
+    Clock::Delay(clock, 50);
+    for (char i = 0;; i++) {
+        Uart::Putstr(uart, COM2, "d");
+        Uart::Drain(uart, COM1);
+        Uart::Putstr(uart, COM2, "w");
+        Uart::Putc(uart, COM1, (char)133);
+        if (i % 8 == 7) {
+            Uart::Putstr(uart, COM2, "f");
+            Uart::Flush(uart, COM1);
+        }
+        if (i % 40 == 39) {
+            Uart::Putstr(uart, COM2, "<sleep>");
+            Clock::Delay(clock, 100);
+            Uart::Putstr(uart, COM2, "<wake>");
+        }
+    }
+}
+}  // namespace withservers
+
 void FirstUserTask() {
     // Only run one of these - AwaitEvent() can't be called by two simultaneous
     // tasks.
 
     // Create(10, RXPlayground);
-    //    Create(10, TXPlayground);
-    Create(10, TrainPlayground);
+    // Create(10, TXPlayground);
+    // Create(10, TrainPlayground);
+    Create(10, withservers::TrainPlayground);
 }
