@@ -15,6 +15,7 @@
 #include "trainctl.h"
 #include "ui.h"
 
+const bool DEBUG_SENSORS = true;
 void TimerTask() {
     int clock = WhoIs(Clock::SERVER_ID);
     int uart = WhoIs(Uart::SERVER_ID);
@@ -92,12 +93,14 @@ static void report_sensor_values(SensorQueue& q,
                       s->idx);
     }
 
-    // useful for debugging:
-    // n += snprintf(line + n, sizeof(line) - (size_t)n, " time=%d raw: ",
-    // time); for (size_t i = 0; i < NUM_SENSOR_GROUPS * 2; i++) {
-    //     char byte = bytes[i];
-    //     n += snprintf(line + n, sizeof(line) - (size_t)n, "%02x ", byte);
-    // }
+    if (DEBUG_SENSORS) {
+        n += snprintf(line + n, sizeof(line) - (size_t)n,
+                      " time=%d raw: ", time);
+        for (size_t i = 0; i < NUM_SENSOR_GROUPS * 2; i++) {
+            char byte = bytes[i];
+            n += snprintf(line + n, sizeof(line) - (size_t)n, "%02x ", byte);
+        }
+    }
 
     snprintf(line + n, sizeof(line) - (size_t)n, VT_RESTORE);
     Uart::Putstr(uart, COM2, line);
@@ -389,10 +392,11 @@ void SensorPollerTask() {
     assert(marklin >= 0);
     assert(clock >= 0);
 
-    MarklinAction act = {.tag = MarklinAction::QuerySensors,
-                         .query_sensors = {}};
+    const MarklinAction act = {.tag = MarklinAction::QuerySensors,
+                               .query_sensors = {}};
     while (true) {
         Send(marklin, (char*)&act, sizeof(act), nullptr, 0);
+        // TODO tighten this send loop without corrupting the sensor results.
         Clock::Delay(clock, 30);
     }
 }
@@ -428,12 +432,13 @@ void FirstUserTask() {
     (void)marklin;
 
     Uart::Printf(uart, COM2, "Initializing Track..." ENDL);
+
     init_track(uart, marklin);
 
     // Clear any bytes in the COM1 FIFO so they aren't mistakenly treated as a
     // sensor query response.
     Uart::Drain(uart, COM1);
-    // Create(1, SensorReporterTask);
+    Create(2, SensorReporterTask);
     Create(0, SensorPollerTask);
 
     int cmd_task_tid = Create(0, CmdTask);

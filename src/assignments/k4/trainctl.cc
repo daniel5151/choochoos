@@ -49,7 +49,7 @@ void MarklinCommandTask() {
         }
         Reply(tid, nullptr, 0);
 
-        // ensure that commands have at least 250ms of delay
-        Clock::Delay(clock, (int)25);
+        // Ensure that last command completed before receiving another.
+        Uart::Flush(uart, COM1);
     }
 }
