@@ -50,7 +50,7 @@ else
 	ifdef NO_OPTIMIZATION
 		COMMON_FLAGS += -O0 -DNO_OPTIMIZATION
 	else
-		COMMON_FLAGS += -O3
+		COMMON_FLAGS += -O2
 	endif
 endif
 
