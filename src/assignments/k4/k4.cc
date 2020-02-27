@@ -15,7 +15,10 @@
 #include "trainctl.h"
 #include "ui.h"
 
-const bool DEBUG_SENSORS = true;
+const bool DEBUG_SENSORS = false;
+
+const char* SPINNER = "|/-\\";
+
 void TimerTask() {
     int clock = WhoIs(Clock::SERVER_ID);
     int uart = WhoIs(Uart::SERVER_ID);
@@ -73,18 +76,20 @@ static size_t enqueue_sensors(const char bytes[NUM_SENSOR_GROUPS * 2],
     return ret;
 }
 
-static void report_sensor_values(SensorQueue& q,
+static void report_sensor_values(size_t i,
+                                 SensorQueue& q,
                                  int uart,
                                  int time,
                                  const char bytes[NUM_SENSOR_GROUPS * 2]) {
     (void)time;
     size_t num_enqueued = enqueue_sensors(bytes, q);
-    if (num_enqueued == 0 && q.size() > 0) return;
 
     char line[256];
 
     int n = snprintf(line, sizeof(line),
-                     VT_SAVE VT_ROWCOL(3, 1) VT_CLEARLN "Sensors: ");
+                     VT_SAVE VT_ROWCOL(3, 1) VT_CLEARLN "[%s%c" VT_NOFMT
+                                                        "] Sensors: ",
+                     num_enqueued > 0 ? VT_GREEN : "", SPINNER[i % 4]);
 
     for (int i = (int)q.size() - 1; i >= 0; i--) {
         const sensor_t* s = q.peek_index((size_t)i);
@@ -104,26 +109,6 @@ static void report_sensor_values(SensorQueue& q,
 
     snprintf(line + n, sizeof(line) - (size_t)n, VT_RESTORE);
     Uart::Putstr(uart, COM2, line);
-}
-
-void SensorReporterTask() {
-    SensorQueue sensor_queue;
-    char bytes[NUM_SENSOR_GROUPS * 2] = {'\0'};
-
-    int uart = WhoIs(Uart::SERVER_ID);
-    int clock = WhoIs(Clock::SERVER_ID);
-
-    assert(uart >= 0);
-    assert(clock >= 0);
-
-    while (true) {
-        int res = Uart::Getn(uart, COM1, NUM_SENSOR_GROUPS * 2, bytes);
-        if (res < 0)
-            panic("cannot read %d bytes from UART 1: %d", NUM_SENSOR_GROUPS * 2,
-                  res);
-
-        report_sensor_values(sensor_queue, uart, Clock::Time(clock), bytes);
-    }
 }
 
 static bool is_valid_switch(size_t no) {
@@ -352,8 +337,8 @@ void init_track(int uart, int marklin) {
     MarklinAction act;
     memset(&act, 0, sizeof(act));
 
-    // send a single sensor query
-    act = {.tag = MarklinAction::QuerySensors, .query_sensors = {}};
+    // send GO to start, to ensure that the track is on
+    act = {.tag = MarklinAction::Go, .go = {}};
     Send(marklin, (char*)&act, sizeof(act), nullptr, 0);
 
     // stop all the trains
@@ -386,18 +371,31 @@ void init_track(int uart, int marklin) {
 }
 
 void SensorPollerTask() {
+    SensorQueue sensor_queue;
+    char bytes[NUM_SENSOR_GROUPS * 2] = {'\0'};
+
     int marklin = WhoIs("MarklinCommandTask");
+    int uart = WhoIs(Uart::SERVER_ID);
     int clock = WhoIs(Clock::SERVER_ID);
 
     assert(marklin >= 0);
+    assert(uart >= 0);
     assert(clock >= 0);
 
     const MarklinAction act = {.tag = MarklinAction::QuerySensors,
                                .query_sensors = {}};
-    while (true) {
+
+    // Clear any bytes in the COM1 FIFO so they aren't mistakenly treated as a
+    // sensor query response.
+    Uart::Drain(uart, COM1);
+    for (size_t i = 0;; i++) {
         Send(marklin, (char*)&act, sizeof(act), nullptr, 0);
-        // TODO tighten this send loop without corrupting the sensor results.
-        Clock::Delay(clock, 30);
+        int res = Uart::Getn(uart, COM1, NUM_SENSOR_GROUPS * 2, bytes);
+        if (res < 0)
+            panic("cannot read %d bytes from UART 1: %d", NUM_SENSOR_GROUPS * 2,
+                  res);
+
+        report_sensor_values(i, sensor_queue, uart, Clock::Time(clock), bytes);
     }
 }
 
@@ -435,11 +433,7 @@ void FirstUserTask() {
 
     init_track(uart, marklin);
 
-    // Clear any bytes in the COM1 FIFO so they aren't mistakenly treated as a
-    // sensor query response.
-    Uart::Drain(uart, COM1);
-    Create(2, SensorReporterTask);
-    Create(0, SensorPollerTask);
+    Create(2, SensorPollerTask);
 
     int cmd_task_tid = Create(0, CmdTask);
     {

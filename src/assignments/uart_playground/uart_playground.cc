@@ -152,21 +152,15 @@ void QTask() {
     }
 }
 
-void TrackReader() {
-    int uart = WhoIs(Uart::SERVER_ID);
-    assert(uart >= 0);
-
-    char bytes[10];
-    while (true) {
-        char line[80] = {'\0'};
-        Uart::Getn(uart, COM1, 10, bytes);
-        size_t n = 0;
-        for (char b : bytes) {
-            n += snprintf(line + n, sizeof(line) - n, "%02x", b);
-        }
-        n += snprintf(line + n, sizeof(line) - n, ENDL);
-        Uart::Putstr(uart, COM2, line);
+static void display_sensor_data(int uart, char* bytes, size_t len) {
+    char line[80] = {'\0'};
+    size_t n = 0;
+    for (size_t i = 0; i < len; i++) {
+        char b = bytes[i];
+        n += snprintf(line + n, sizeof(line) - n, "%02x", b);
     }
+    n += snprintf(line + n, sizeof(line) - n, ENDL);
+    Uart::Putstr(uart, COM2, line);
 }
 
 void Timer() {
@@ -185,7 +179,6 @@ void TrainPlayground() {
     int uart = Create(INT_MAX - 1, Uart::Server);
     int clock = Create(INT_MAX - 1, Clock::Server);
     Create(11, QTask);
-    Create(11, TrackReader);
     int timer = Create(12, Timer);
 
     bwprintf(COM2, "me=%d uart=%d clock=%d timer=%d" ENDL, MyTid(), uart, clock,
@@ -197,15 +190,9 @@ void TrainPlayground() {
         Uart::Drain(uart, COM1);
         Uart::Putstr(uart, COM2, "w");
         Uart::Putc(uart, COM1, (char)133);
-        if (i % 8 == 7) {
-            Uart::Putstr(uart, COM2, "f");
-            Uart::Flush(uart, COM1);
-        }
-        if (i % 40 == 39) {
-            Uart::Putstr(uart, COM2, "<sleep>");
-            Clock::Delay(clock, 100);
-            Uart::Putstr(uart, COM2, "<wake>");
-        }
+        char bytes[10] = {0};
+        Uart::Getn(uart, COM1, 10, bytes);
+        display_sensor_data(uart, bytes, 10);
     }
 }
 }  // namespace withservers
