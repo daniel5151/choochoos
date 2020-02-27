@@ -40,6 +40,7 @@ struct MarklinAction {
         } query_sensors;
     };
 
+    void bwexec() const;
 };
 
 void do_marklin_action(const MarklinAction& act);

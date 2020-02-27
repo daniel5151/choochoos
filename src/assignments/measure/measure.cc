@@ -13,6 +13,8 @@
 static const volatile uint32_t* TIMER3_VAL =
     (volatile uint32_t*)(TIMER3_BASE + VAL_OFFSET);
 
+uint32_t currtime() { return UINT32_MAX - *TIMER3_VAL; }
+
 void init_track() {
     MarklinAction act;
     memset(&act, 0, sizeof(act));
@@ -22,29 +24,30 @@ void init_track() {
     act.train.state._.speed = 0;
     act.train.state._.light = 0;
     for (uint8_t no : VALID_TRAINS) {
-        bwprintf(COM2, "Stopping train %hhu" ENDL, no);
+        bwprintf(COM2, "// Stopping train %hhu" ENDL, no);
         act.train.no = no;
-        do_marklin_action(act);
+        act.bwexec();
     }
 
     // set all the switches to curved
     act.tag = MarklinAction::Switch;
     act.sw.dir = SwitchDir::Curved;
     for (uint8_t no : VALID_SWITCHES) {
+        bwprintf(COM2, "// Toggling switch %hhu" ENDL, no);
         act.sw.no = no;
-        do_marklin_action(act);
+        act.bwexec();
     }
 }
 
-void make_inner_loop() {
+void make_outer_loop() {
     MarklinAction act;
     memset(&act, 0, sizeof(act));
 
     act.tag = MarklinAction::Switch;
     act.sw.dir = SwitchDir::Straight;
-    for (size_t no : {10, 13, 17, 16}) {
+    for (size_t no : {6, 7, 8, 9, 14, 15}) {
         act.sw.no = no;
-        do_marklin_action(act);
+        act.bwexec();
     }
 }
 
@@ -67,7 +70,6 @@ bool bwgetnextsensor(sensor_t& s) {
         c = (char)bwgetc(COM1);
     }
 
-
     for (size_t bi = 0; bi < NUM_SENSOR_GROUPS * 2; bi++) {
         char byte = bytes[bi];
         for (size_t i = 1; i <= 8; i++) {
@@ -83,67 +85,92 @@ bool bwgetnextsensor(sensor_t& s) {
 }
 
 void speed_test(uint8_t tr) {
-    bwprintf(COM2, "Reset track (y/n): ");
+    bwprintf(COM2, "// Reset track (y/n): ");
     char reset[2];
     bwgetline(reset, 2);
     if (reset[0] == 'y') {
-        bwprintf(COM2, "Setting up track for speed test..." ENDL);
+        bwprintf(COM2, "// Setting up track for speed test..." ENDL);
         // reset the track...
         init_track();
         // ...with a loop in the center
-        make_inner_loop();
+        make_outer_loop();
     }
 
     bwprintf(COM2,
-             "Hit [ENTER] once train %hhu is"
-             " inside the inner ring." ENDL,
+             "// Hit [ENTER] once train %hhu is"
+             " on the outer ring." ENDL,
              tr);
     bwgetline(nullptr, 1);
 
-    bwprintf(COM2, "Starting speed test..." ENDL);
+    bwprintf(COM2, "// Starting speed test..." ENDL);
+    bwprintf(COM2, R"#({ "train": %hhu, "events": [)#" ENDL, tr);
 
     MarklinAction act;
     memset(&act, 0, sizeof(act));
 
-    for (uint8_t speed = 14; speed >= 1; speed--) {
+    // turn the train off (for posterity)
+    act.tag = MarklinAction::Train;
+    act.train.no = tr;
+    act.train.state._.speed = 0;
+    act.bwexec();
+    bwsleep(5000);
+
+    for (uint8_t speed = 15; speed >= 1; speed--) {
+        bool calibration = speed == 15;
+        if (speed == 15) {
+            speed = 14;
+        }
+
         // start the train
-        bwprintf(COM2, "Setting speed to %hhu...", speed);
+        if (!calibration) {
+            bwprintf(COM2, R"#({"event":"speed","val":%hhu,"time":%lu},)#" ENDL,
+                     speed, currtime());
+        }
+
         act.tag = MarklinAction::Train;
         act.train.no = tr;
         act.train.state._.speed = speed & 0x0f;
-        do_marklin_action(act);
-
-        // let it get up to speed
-        bwsleep(3000);  // arbitrary
-        bwprintf(COM2, "Done!" ENDL);
+        act.bwexec();
 
         sensor_t s;
 
         uint32_t start_time = *TIMER3_VAL;
-        while (start_time - *TIMER3_VAL < 508 * 10000) {
-            while (!bwgetnextsensor(s));
-            bwprintf(COM2, "Hit %c%hhu at time %lu" ENDL, s.group, s.idx,
-                     *TIMER3_VAL);
+        while (start_time - *TIMER3_VAL < 508 * 13000) {  // 13 seconds
+            while (!bwgetnextsensor(s))
+                ;
+            if (!calibration) {
+                bwprintf(
+                    COM2,
+                    R"#({"event":"sensor","speed":%hhu,"sensor":"%c%hhu","time":%lu},)#" ENDL,
+                    speed, s.group, s.idx, currtime());
+            }
         }
 
-        // TODO: bring the speed back up to 14, but stop once the train hits a
+        // bring the speed back up to 14, but stop once the train hits a
         // known-good stopping point (i.e: one that's not on a curve)
+        bwprintf(COM2, "// Done collecting! Sending the train to A3..." ENDL);
+        act.tag = MarklinAction::Train;
+        act.train.no = tr;
+        act.train.state._.speed = 14;
+        act.bwexec();
 
-        // stop the train
-        bwprintf(COM2, "Stopping train" ENDL);
+        bwsleep(2500); // let the train get up to speed 14, for consistency
+        bwgetnextsensor(s); // clean any dummy sensors that may have triggered
+
+        while (!bwgetnextsensor(s) ||
+               !(s.group == 'A' && (s.idx == 3 || s.idx == 4)))
+            ;
+
+        bwprintf(COM2, "// Stopping train" ENDL);
         act.tag = MarklinAction::Train;
         act.train.no = tr;
         act.train.state._.speed = 0;
-        do_marklin_action(act);
-        bwsleep(250);  // arbitrary
+        act.bwexec();
 
-        // for efficiency's sake, send an emergency stop signal to immediately
-        // stop the train.
-        act.tag = MarklinAction::Stop;
-        do_marklin_action(act);
-        act.tag = MarklinAction::Go;
-        do_marklin_action(act);
+        bwsleep(5000);  // ensure train has stopped
     }
+
+    bwprintf(COM2, "]}" ENDL);
 }
 
 void setup_com1() {
@@ -159,18 +186,15 @@ void setup_com1() {
     *high = buf;
 }
 
-
 void FirstUserTask() {
     uint8_t tr;
 
     setup_com1();
 
-    bwprintf(COM2, "Enter train to test: ");
+    bwprintf(COM2, "// Enter train to test: ");
     char buf[16];
     bwgetline(buf, 16);
     sscanf(buf, "%hhu", &tr);
 
     speed_test(tr);
-
-    bwprintf(COM2, "bruh" ENDL);
 }
