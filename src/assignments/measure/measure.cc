@@ -109,20 +109,18 @@ void speed_test(uint8_t tr) {
     memset(&act, 0, sizeof(act));
 
     // turn the train off (for posterity)
+    bwprintf(COM2, "// Stopping train..." ENDL);
     act.tag = MarklinAction::Train;
     act.train.no = tr;
     act.train.state._.speed = 0;
     act.bwexec();
     bwsleep(5000);
 
-    for (uint8_t speed = 15; speed >= 1; speed--) {
-        bool calibration = speed == 15;
-        if (speed == 15) {
-            speed = 14;
-        }
-
+    bool calibration_round = true;
+    bwprintf(COM2, "// Doing calibration round..." ENDL);
+    for (uint8_t speed = 14; speed >= 1; speed--) {
         // start the train
-        if (!calibration) {
+        if (!calibration_round) {
             bwprintf(COM2, R"#({"event":"speed","val":%hhu,"time":%lu},)#" ENDL,
                      speed, currtime());
         }
@@ -138,7 +136,7 @@ void speed_test(uint8_t tr) {
         while (start_time - *TIMER3_VAL < 508 * 13000) {  // 13 seconds
             while (!bwgetnextsensor(s))
                 ;
-            if (!calibration) {
+            if (!calibration_round) {
                 bwprintf(
                     COM2,
                     R"#({"event":"sensor","speed":%hhu,"sensor":"%c%hhu","time":%lu},)#" ENDL,
@@ -168,6 +166,11 @@ void speed_test(uint8_t tr) {
         act.bwexec();
 
         bwsleep(5000);  // ensure train has stopped
+
+        if (calibration_round) {
+            speed = 15; // re-do 14
+            calibration_round = false;
+        }
     }
 
     bwprintf(COM2, "]}" ENDL);
