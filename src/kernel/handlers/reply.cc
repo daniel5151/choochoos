@@ -2,8 +2,6 @@
 
 #include "kernel/kernel.h"
 
-#include "common/bwio.h"
-
 namespace kernel::handlers {
 
 int Reply(int tid, const char* reply, int rplen) {
@@ -20,7 +18,6 @@ int Reply(int tid, const char* reply, int rplen) {
                 memcpy(receiver.state.reply_wait.reply, reply, n);
             }
             receiver.state = {.tag = TaskState::READY, .ready = {}};
-            // bwprintf(COM2, "<kpr %d->%d>", MyTid(), tid);
             ready_queue.push(tid, receiver.priority);
 
             // Return the length of the reply to the original sender.
