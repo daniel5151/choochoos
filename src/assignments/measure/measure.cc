@@ -84,7 +84,7 @@ bool bwgetnextsensor(sensor_t& s) {
     return false;
 }
 
-void speed_test(uint8_t tr) {
+void speed_test(uint8_t tr, uint8_t start_speed) {
     bwprintf(COM2, "// Reset track (y/n): ");
     char reset[2];
     bwgetline(reset, 2);
@@ -118,7 +118,7 @@ void speed_test(uint8_t tr) {
 
     bool calibration_round = true;
     bwprintf(COM2, "// Doing calibration round..." ENDL);
-    for (uint8_t speed = 14; speed >= 1; speed--) {
+    for (uint8_t speed = start_speed; speed >= 1; speed--) {
         // start the train
         if (!calibration_round) {
             bwprintf(COM2, R"#({"event":"speed","val":%hhu,"time":%lu},)#" ENDL,
@@ -134,6 +134,7 @@ void speed_test(uint8_t tr) {
 
         uint32_t start_time = *TIMER3_VAL;
         while (start_time - *TIMER3_VAL < 508 * 13000) {  // 13 seconds
+            // ensures we get at least once sensor
             while (!bwgetnextsensor(s))
                 ;
             if (!calibration_round) {
@@ -152,8 +153,10 @@ void speed_test(uint8_t tr) {
         act.train.state._.speed = 14;
         act.bwexec();
 
-        bwsleep(2500); // let the train get up to speed 14, for consistency
-        bwgetnextsensor(s); // clean any dummy sensors that may have triggered
+        bwsleep(2500);  // let the train get up to speed 14, for consistency
+        // clean any dummy sensors that may have triggered
+        while (!bwgetnextsensor(s))
+            ;
 
         while (!bwgetnextsensor(s) ||
                !(s.group == 'A' && (s.idx == 3 || s.idx == 4)))
@@ -168,7 +171,7 @@ void speed_test(uint8_t tr) {
         bwsleep(5000);  // ensure train has stopped
 
         if (calibration_round) {
-            speed = 15; // re-do 14
+            speed = (uint8_t)(start_speed + 1);  // re-do test
             calibration_round = false;
         }
     }
@@ -191,13 +194,18 @@ void setup_com1() {
 
 void FirstUserTask() {
     uint8_t tr;
+    uint8_t start_speed;
+    char buf[16];
 
     setup_com1();
 
     bwprintf(COM2, "// Enter train to test: ");
-    char buf[16];
     bwgetline(buf, 16);
     sscanf(buf, "%hhu", &tr);
 
-    speed_test(tr);
+    bwprintf(COM2, "// Enter start speed for data collection: ");
+    bwgetline(buf, 16);
+    sscanf(buf, "%hhu", &start_speed);
+
+    speed_test(tr, start_speed);
 }
