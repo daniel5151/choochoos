@@ -15,9 +15,9 @@
 #include "trainctl.h"
 #include "ui.h"
 
-const bool DEBUG_SENSORS = false;
+static const bool DEBUG_SENSORS = false;
 
-const char* SPINNER = "|/-\\";
+static const char* SPINNER = "|/-\\";
 
 void TimerTask() {
     int clock = WhoIs(Clock::SERVER_ID);

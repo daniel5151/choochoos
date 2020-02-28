@@ -17,11 +17,6 @@ const char* SERVER_ID = "UartServer";
 #define COM1_WAITING_FOR_DOWN_TIMEOUT 25  // 250ms
 
 using Iobuf = Queue<char, IOBUF_SIZE>;
-static Iobuf com1_out;
-static Iobuf com2_out;
-
-#define DBG false
-#define TRC false
 
 struct CTSState {
     enum {
@@ -38,23 +33,7 @@ struct CTSState {
         struct {
         } actually_cts;
     };
-    CTSState& operator=(const CTSState& other) {
-        memcpy((void*)this, (void*)&other, sizeof(CTSState));
-        DBG&& bwprintf(COM2, "<cts=%c>", this->tag);
-        return *this;
-    }
 };
-
-Iobuf& outbuf(int channel) {
-    switch (channel) {
-        case COM1:
-            return com1_out;
-        case COM2:
-            return com2_out;
-        default:
-            panic("outbuf: unknown channel %d", channel);
-    }
-}
 
 struct Request {
     enum { Notify, Putstr, Getn, Drain, Flush } tag;
@@ -120,8 +99,6 @@ static void Notifier(int channel, int eventid) {
         debug("Notifier: AwaitEvent(%d)", eventid);
         req.notify.data.raw = (uint32_t)AwaitEvent(eventid);
 
-        if (channel == COM1)
-            DBG&& bwprintf(COM2, "<got 0x%lx>", req.notify.data.raw);
         // TODO sizeof(req) will be really big because of the Putstr buf we
         // should have a generic sizeof function that switches on the tag.
         debug("Notifier: received channel=%d data=0x%lx", channel,
@@ -150,8 +127,8 @@ static void set_up_uarts() {
     *high = buf;
 }
 
-void COM1Notifier() { Notifier(COM1, 52); }
-void COM2Notifier() { Notifier(COM2, 54); }
+static void COM1Notifier() { Notifier(COM1, 52); }
+static void COM2Notifier() { Notifier(COM2, 54); }
 
 static const volatile uint32_t* flags_for(int channel) {
     switch (channel) {
@@ -194,9 +171,6 @@ static void enable_tx_interrupts(int channel) {
     switch (channel) {
         case COM1:
             uart_ctlr._.enable_int_modem = 1;
-
-            if (channel == COM1)
-                DBG&& bwprintf(COM2, "<ctrl=0x%lx>", uart_ctlr.raw);
             break;
         case COM2:
             uart_ctlr._.enable_int_tx = 1;
@@ -232,7 +206,6 @@ static bool clear_to_send(int channel, CTSState& com1_cts, int clock) {
                         com1_cts = {
                             .tag = CTSState::WAITING_FOR_DOWN,
                             .waiting_for_down = {.since = Clock::Time(clock)}};
-                        bwprintf(COM2, "<wfd t/o>");
                         return true;
                     }
                     return false;
@@ -280,6 +253,11 @@ inline static void record_byte_sent(std::optional<flush_blocked_task_t>& t) {
     }
 }
 
+inline static void check_channel(int channel) {
+    if (channel == COM1 || channel == COM2) return;
+    panic("bad channel %d", channel);
+}
+
 void Server() {
     set_up_uarts();
 
@@ -299,6 +277,7 @@ void Server() {
     memset((char*)&res, 0, sizeof(res));
 
     // one for each channel
+    Iobuf tx_buffers[2] = {Iobuf(), Iobuf()};
     std::optional<rx_blocked_task_t> rx_blocked_tids[2] = {std::nullopt};
     std::optional<flush_blocked_task_t> flush_blocked_tids[2] = {std::nullopt};
 
@@ -317,15 +296,13 @@ void Server() {
                 }
 
                 int channel = req.notify.channel;
-                Iobuf& buf = outbuf(channel);
+                check_channel(channel);
+                Iobuf& buf = tx_buffers[channel];
                 const volatile uint32_t* flags = flags_for(channel);
                 volatile char* data = data_for(channel);
 
                 debug("Server: received notify: channel=%d data=0x%lx", channel,
                       req.notify.data.raw);
-
-                if (channel == COM1)
-                    DBG&& bwprintf(COM2, "<hndl 0x%lx>", req.notify.data.raw);
 
                 // TX
                 if (req.notify.data._.tx || req.notify.data._.modem) {
@@ -352,7 +329,6 @@ void Server() {
                             enable_tx_interrupts(channel);
                         }
                         *data = (uint32_t)c;
-                        if (channel == COM1) TRC&& bwputc(COM2, 't');
                         record_byte_sent(flush_blocked_tids[channel]);
                         bytes_written++;
                     }
@@ -399,9 +375,10 @@ void Server() {
                 const int len = (int)req.putstr.len;
                 int i = 0;
                 int channel = req.putstr.channel;
+                check_channel(channel);
                 char* msg = req.putstr.buf;
 
-                Iobuf& buf = outbuf(channel);
+                Iobuf& buf = tx_buffers[channel];
                 volatile char* data = data_for(channel);
 
                 if (buf.is_empty()) {
@@ -412,7 +389,6 @@ void Server() {
                          i++) {
                         if (channel == COM1) enable_tx_interrupts(channel);
                         *data = msg[i];
-                        if (channel == COM1) TRC&& bwputc(COM2, 'T');
                     }
 
                     if (i < len) {
@@ -423,11 +399,8 @@ void Server() {
                             if (err == QueueErr::FULL) {
                                 panic(
                                     "Uart::Server: output buffer full for "
-                                    "channel "
-                                    "%d "
-                                    "(trying to accept %d-byte write from "
-                                    "tid "
-                                    "%d)",
+                                    "channel %d (trying to accept %d-byte "
+                                    "write from tid %d)",
                                     channel, len, tid);
                             }
                         }
@@ -440,10 +413,8 @@ void Server() {
                         auto err = buf.push_back(msg[i]);
                         if (err == QueueErr::FULL) {
                             panic(
-                                "Uart::Server: output buffer full for "
-                                "channel "
-                                "%d "
-                                "(trying to accept %d-byte write from tid "
+                                "Uart::Server: output buffer full for channel "
+                                "%d (trying to accept %d-byte write from tid "
                                 "%d)",
                                 channel, len, tid);
                         }
@@ -526,7 +497,8 @@ void Server() {
             }
             case Request::Flush: {
                 int channel = req.flush.channel;
-                Iobuf& buf = outbuf(channel);
+                check_channel(channel);
+                Iobuf& buf = tx_buffers[channel];
                 if (buf.is_empty()) {
                     Reply(tid, nullptr, 0);
                     break;
