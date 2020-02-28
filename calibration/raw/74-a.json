@@ -1,18 +1,4 @@
-load ARM/dprilik/choochoos.elf; go
-Using default protocol (TFTP)
-Entry point: 0x01002aec, address range: 0x01000000-0x0101a854
-Hello from the choochoos kernel!
-// Enter train to test: 74
-// Enter start speed for data collection: 14
-// Reset track (y/n): n
-// Hit [ENTER] once train 74 is on the outer ring.
-
-// Starting speed test...
 { "train": 74, "events": [
-// Stopping train...
-// Doing calibration round...
-// Done collecting! Sending the train to A3...
-// Stopping train
 {"event":"speed","val":14,"time":19709761},
 {"event":"sensor","speed":14,"sensor":"A4","time":19869180},
 {"event":"sensor","speed":14,"sensor":"C5","time":20775700},
@@ -54,8 +40,6 @@ Hello from the choochoos kernel!
 {"event":"sensor","speed":14,"sensor":"E11","time":26400309},
 {"event":"sensor","speed":14,"sensor":"D10","time":26683077},
 {"event":"sensor","speed":14,"sensor":"D10","time":26716300},
-// Done collecting! Sending the train to A3...
-// Stopping train
 {"event":"speed","val":13,"time":31564331},
 {"event":"sensor","speed":13,"sensor":"A4","time":31723737},
 {"event":"sensor","speed":13,"sensor":"C5","time":32567903},
@@ -97,8 +81,6 @@ Hello from the choochoos kernel!
 {"event":"sensor","speed":13,"sensor":"E11","time":38098988},
 {"event":"sensor","speed":13,"sensor":"D10","time":38381757},
 {"event":"sensor","speed":13,"sensor":"D10","time":38414979},
-// Done collecting! Sending the train to A3...
-// Stopping train
 {"event":"speed","val":12,"time":43231853},
 {"event":"sensor","speed":12,"sensor":"A4","time":43391272},
 {"event":"sensor","speed":12,"sensor":"C5","time":44266635},
@@ -139,8 +121,6 @@ Hello from the choochoos kernel!
 {"event":"sensor","speed":12,"sensor":"E11","time":49920494},
 {"event":"sensor","speed":12,"sensor":"D10","time":50203263},
 {"event":"sensor","speed":12,"sensor":"D10","time":50236485},
-// Done collecting! Sending the train to A3...
-// Stopping train
 {"event":"speed","val":11,"time":55053306},
 {"event":"sensor","speed":11,"sensor":"A4","time":55212712},
 {"event":"sensor","speed":11,"sensor":"C5","time":55963315},
@@ -178,8 +158,6 @@ Hello from the choochoos kernel!
 {"event":"sensor","speed":11,"sensor":"C15","time":61454873},
 {"event":"sensor","speed":11,"sensor":"D12","time":61800023},
 {"event":"sensor","speed":11,"sensor":"D12","time":61833246},
-// Done collecting! Sending the train to A3...
-// Stopping train
 {"event":"speed","val":10,"time":67211501},
 {"event":"sensor","speed":10,"sensor":"A4","time":67370920},
 {"event":"sensor","speed":10,"sensor":"C5","time":68183942},
@@ -218,8 +196,6 @@ Hello from the choochoos kernel!
 {"event":"sensor","speed":10,"sensor":"C5","time":73864746},
 {"event":"sensor","speed":10,"sensor":"C15","time":74116293},
 {"event":"sensor","speed":10,"sensor":"C15","time":74149502},
-// Done collecting! Sending the train to A3...
-// Stopping train
 {"event":"speed","val":9,"time":79870882},
 {"event":"sensor","speed":9,"sensor":"A4","time":80030261},
 {"event":"sensor","speed":9,"sensor":"C5","time":80874441},
@@ -256,8 +232,6 @@ Hello from the choochoos kernel!
 {"event":"sensor","speed":9,"sensor":"B16","time":86487527},
 {"event":"sensor","speed":9,"sensor":"C5","time":86988634},
 {"event":"sensor","speed":9,"sensor":"C5","time":87021764},
-// Done collecting! Sending the train to A3...
-// Stopping train
 {"event":"speed","val":8,"time":92992692},
 {"event":"sensor","speed":8,"sensor":"A4","time":93152071},
 {"event":"sensor","speed":8,"sensor":"C5","time":94027368},
@@ -290,8 +264,6 @@ Hello from the choochoos kernel!
 {"event":"sensor","speed":8,"sensor":"A4","time":99695007},
 {"event":"sensor","speed":8,"sensor":"A4","time":99728124},
 {"event":"sensor","speed":8,"sensor":"B16","time":100229139},
-// Done collecting! Sending the train to A3...
-// Stopping train
 {"event":"speed","val":7,"time":106667978},
 {"event":"sensor","speed":7,"sensor":"A4","time":106827383},
 {"event":"sensor","speed":7,"sensor":"C5","time":107609183},
@@ -325,8 +297,6 @@ Hello from the choochoos kernel!
 {"event":"sensor","speed":7,"sensor":"C14","time":113248978},
 {"event":"sensor","speed":7,"sensor":"A4","time":114093193},
 {"event":"sensor","speed":7,"sensor":"A4","time":114126363},
-// Done collecting! Sending the train to A3...
-// Stopping train
 {"event":"speed","val":6,"time":120908340},
 {"event":"sensor","speed":6,"sensor":"A4","time":121067745},
 {"event":"sensor","speed":6,"sensor":"C5","time":121943108},
@@ -361,8 +331,6 @@ Hello from the choochoos kernel!
 {"event":"sensor","speed":6,"sensor":"E8","time":126960984},
 {"event":"sensor","speed":6,"sensor":"C14","time":128522657},
 {"event":"sensor","speed":6,"sensor":"C14","time":128555880},
-// Done collecting! Sending the train to A3...
-// Stopping train
 {"event":"speed","val":5,"time":135899541},
 {"event":"sensor","speed":5,"sensor":"A4","time":136058960},
 {"event":"sensor","speed":5,"sensor":"C5","time":136903099},
@@ -394,8 +362,6 @@ Hello from the choochoos kernel!
 {"event":"sensor","speed":5,"sensor":"D8","time":142102010},
 {"event":"sensor","speed":5,"sensor":"E8","time":142883848},
 {"event":"sensor","speed":5,"sensor":"E8","time":142917031},
-// Done collecting! Sending the train to A3...
-// Stopping train
 {"event":"speed","val":4,"time":147047604},
 {"event":"sensor","speed":4,"sensor":"A4","time":147207023},
 {"event":"sensor","speed":4,"sensor":"C5","time":148082386},
@@ -427,8 +393,6 @@ Hello from the choochoos kernel!
 {"event":"sensor","speed":4,"sensor":"D10","time":152345780},
 {"event":"sensor","speed":4,"sensor":"D8","time":154531349},
 {"event":"sensor","speed":4,"sensor":"D8","time":154564532},
-// Done collecting! Sending the train to A3...
-// Stopping train
 {"event":"speed","val":3,"time":159131779},
 {"event":"sensor","speed":3,"sensor":"A4","time":159291198},
 {"event":"sensor","speed":3,"sensor":"C5","time":160041787},
@@ -467,8 +431,6 @@ Hello from the choochoos kernel!
 {"event":"sensor","speed":3,"sensor":"D10","time":165598202},
 {"event":"sensor","speed":3,"sensor":"D8","time":168470112},
 {"event":"sensor","speed":3,"sensor":"D8","time":168503295},
-// Done collecting! Sending the train to A3...
-// Stopping train
 {"event":"speed","val":2,"time":173257709},
 {"event":"sensor","speed":2,"sensor":"A4","time":173417115},
 {"event":"sensor","speed":2,"sensor":"C5","time":174261281},
@@ -503,16 +465,8 @@ Hello from the choochoos kernel!
 {"event":"sensor","speed":2,"sensor":"D12","time":179341470},
 {"event":"sensor","speed":2,"sensor":"E11","time":180965473},
 {"event":"sensor","speed":2,"sensor":"E11","time":180998695},
-// Done collecting! Sending the train to A3...
-// Stopping train
 {"event":"speed","val":1,"time":187000844},
 {"event":"sensor","speed":1,"sensor":"A4","time":187160263},
 {"event":"sensor","speed":1,"sensor":"C5","time":193806232},
-{"event":"sensor","speed":1,"sensor":"C5","time":193839402},
-// Done collecting! Sending the train to A3...
-// Stopping train
+{"event":"sensor","speed":1,"sensor":"C5","time":193839402}
 ]}
-Goodbye from choochoos kernel!
-
-Program completed with status 0
-RedBoot> 
