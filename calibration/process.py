@@ -7,7 +7,6 @@ from parse import parse
 import matplotlib.pyplot as plt
 import networkx as nx
 import statistics
-from jinja2 import Template
 
 TrainTrack = namedtuple("TrainTrack", ["train", "track"])
 
@@ -137,11 +136,9 @@ def codegen_header(median_speeds_by_train):
 #include "string.h" // memset
 
 #define CALIBRATION_NUM_TRAINS %d
-#define CALIBRATION_MAX_TRAIN %d
 """ % (
         " ".join(sys.argv),
         len(trains),
-        max(trains),
     )
     c += """
 struct speed_level_t {
@@ -156,9 +153,9 @@ struct train_data_t {
 
 struct calibration_data_t {
   struct train_data_t trains[CALIBRATION_NUM_TRAINS];
-  int index_of_train[CALIBRATION_MAX_TRAIN + 1];
 };
 
+int calibration_index_of_train(int train);
 void fill_calibration_data(struct calibration_data_t* c);
 
 """
@@ -175,12 +172,20 @@ def codegen_source(median_speeds_by_train):
 
 #include "calibration.h"
 
+int calibration_index_of_train(int train) {
+  switch (train) {
+""" % (
+        " ".join(sys.argv)
+    )
+    for i, train in enumerate(trains):
+        c += "    case {}: return {};\n".format(train, i)
+    c += """    default: return -1;
+  }
+}
+
 void fill_calibration_data(struct calibration_data_t* c) {
   memset(c, 0, sizeof(struct calibration_data_t));
 """
-
-    for i, train in enumerate(trains):
-        c += "  c->index_of_train[{}] = {};\n".format(train, i)
 
     for i, train in enumerate(trains):
         c += "  c->trains[{}].train = {};\n".format(i, train)

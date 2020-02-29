@@ -7,7 +7,6 @@
 #include "string.h" // memset
 
 #define CALIBRATION_NUM_TRAINS 6
-#define CALIBRATION_MAX_TRAIN 79
 
 struct speed_level_t {
   bool measured;
@@ -21,8 +20,8 @@ struct train_data_t {
 
 struct calibration_data_t {
   struct train_data_t trains[CALIBRATION_NUM_TRAINS];
-  int index_of_train[CALIBRATION_MAX_TRAIN + 1];
 };
 
+int calibration_index_of_train(int train);
 void fill_calibration_data(struct calibration_data_t* c);
 
