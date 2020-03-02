@@ -42,6 +42,8 @@ void fill_calibration_data(struct calibration_data_t* c) {
   c->trains[0].speeds[4].expected_velocity_mmps = 43;
   c->trains[0].speeds[4].measured = true;
   c->trains[1].train = 24;
+  c->trains[1].speeds[14].expected_velocity_mmps = 576;
+  c->trains[1].speeds[14].measured = true;
   c->trains[1].speeds[13].expected_velocity_mmps = 590;
   c->trains[1].speeds[13].measured = true;
   c->trains[1].speeds[12].expected_velocity_mmps = 507;
