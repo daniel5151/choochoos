@@ -84,7 +84,7 @@ bool bwgetnextsensor(sensor_t& s) {
     return false;
 }
 
-void speed_test(uint8_t tr, uint8_t start_speed) {
+void set_up_track(uint8_t tr) {
     bwprintf(COM2, "// Reset track (y/n): ");
     char reset[2];
     bwgetline(reset, 2);
@@ -96,11 +96,13 @@ void speed_test(uint8_t tr, uint8_t start_speed) {
         make_outer_loop();
     }
 
-    bwprintf(COM2,
-             "// Hit [ENTER] once train %hhu is"
-             " on the outer ring." ENDL,
+    bwprintf(COM2, "// Hit [ENTER] once train %hhu is on the outer ring." ENDL,
              tr);
     bwgetline(nullptr, 1);
+}
+
+void speed_test(uint8_t tr, uint8_t start_speed) {
+    set_up_track(tr);
 
     bwprintf(COM2, "// Starting speed test..." ENDL);
     bwprintf(COM2, R"#({ "train": %hhu, "events": [)#" ENDL, tr);
@@ -192,20 +194,83 @@ void setup_com1() {
     *high = buf;
 }
 
+void stopping_distance_test(uint8_t tr, uint8_t speed) {
+    set_up_track(tr);
+
+    char line[10] = {0};
+    MarklinAction act;
+    memset(&act, 0, sizeof(act));
+
+    act.tag = MarklinAction::Train;
+    act.train.no = tr;
+
+    bwprintf(COM2, R"#({ "train": %hhu, "events": [)#" ENDL, tr);
+    while (true) {
+        sensor_t s;
+        memset(&s, 0, sizeof(s));
+
+        act.train.state._.speed = speed & 0xf;
+        act.bwexec();
+        bwprintf(COM2, R"#({"event":"speed","val":%hhu,"time":%lu},)#" ENDL,
+                 speed, currtime());
+
+        while (!(s.group == 'E' && (s.idx == 11 || s.idx == 12))) {
+            while (!bwgetnextsensor(s)) {
+            }
+            bwprintf(
+                COM2,
+                R"#({"event":"sensor","speed":%hhu,"sensor":"%c%hhu","time":%lu},)#" ENDL,
+                speed, s.group, s.idx, currtime());
+        }
+
+        act.train.state._.speed = 0;
+        act.bwexec();
+        bwprintf(COM2, R"#({"event":"stop","time":%lu},)#" ENDL, currtime());
+        bwprintf(COM2, "// press any key once stopped");
+        bwgetc(COM2);
+        uint32_t stopped_time = currtime();
+
+        bwprintf(COM2, ENDL "// distance from E11/E12 (cm): ");
+        bwgetline(line, sizeof(line));
+        int distance;
+        sscanf(line, "%d", &distance);
+
+        bwprintf(COM2,
+                 R"#({"event":"stopped","distance_cm":%d,"time":%lu},)#" ENDL,
+                 distance, stopped_time);
+
+        bwputstr(COM2, "// another one? (y/n): ");
+        bwgetline(line, sizeof(line));
+        if (strcmp(line, "y") != 0) break;
+        bwprintf(COM2, "// speed (blank for %hhu): ", speed);
+        bwgetline(line, sizeof(line));
+        int spd = (int)speed;
+        sscanf(line, "%d", &spd);
+        speed = (uint8_t)spd;
+
+        // clear any read sensors
+        bwgetnextsensor(s);
+    }
+    bwprintf(COM2, "]}" ENDL);
+}
+
 void FirstUserTask() {
-    uint8_t tr;
-    uint8_t start_speed;
-    char buf[16];
+    int tr;
+    int start_speed;
+    char buf[16] = {0};
 
     setup_com1();
 
     bwprintf(COM2, "// Enter train to test: ");
     bwgetline(buf, 16);
-    sscanf(buf, "%hhu", &tr);
+    sscanf(buf, "%d", &tr);
+    //    bwprintf(COM2, "you entered %d (ret=%d)" ENDL, tr, ret);
 
     bwprintf(COM2, "// Enter start speed for data collection: ");
     bwgetline(buf, 16);
-    sscanf(buf, "%hhu", &start_speed);
+    sscanf(buf, "%d", &start_speed);
+    //   bwprintf(COM2, "you entered %d (ret=%d)" ENDL, start_speed, ret);
 
-    speed_test(tr, start_speed);
+    // speed_test(tr, start_speed);
+    stopping_distance_test((uint8_t)tr, (uint8_t)start_speed);
 }
