@@ -1,0 +1,172 @@
+load ARM/jdhagema/latest.elf; go
+Using default protocol (TFTP)
+Entry point: 0x01002e1c, address range: 0x01000000-0x01017f28
+Hello from the choochoos kernel!
+// Enter train to test: 74
+// Enter start speed for data collection: 14
+// Reset track (y/n): n
+// Hit [ENTER] once train 74 is on the outer ring.
+
+{ "train": 74, "events": [
+{"event":"speed","val":14,"time":4214401},
+{"event":"sensor","speed":14,"sensor":"E12","time":4246767},
+{"event":"stop","time":4375752},
+// press any key once stopped
+// distance from E11/E12 (cm): 0
+{"event":"stopped","distance_cm":0,"time":11864951},
+// another one? (y/n): y
+// speed (blank for 14): 
+{"event":"speed","val":14,"time":14228002},
+{"event":"sensor","speed":14,"sensor":"C16","time":15539318},
+{"event":"sensor","speed":14,"sensor":"C16","time":15572541},
+{"event":"sensor","speed":14,"sensor":"C16","time":15605763},
+{"event":"sensor","speed":14,"sensor":"C16","time":15638986},
+{"event":"sensor","speed":14,"sensor":"C6","time":15952952},
+{"event":"sensor","speed":14,"sensor":"C6","time":15986122},
+{"event":"sensor","speed":14,"sensor":"C6","time":16019278},
+{"event":"sensor","speed":14,"sensor":"B15","time":16426768},
+{"event":"sensor","speed":14,"sensor":"B15","time":16459990},
+{"event":"sensor","speed":14,"sensor":"B15","time":16493213},
+{"event":"sensor","speed":14,"sensor":"A3","time":16869518},
+{"event":"sensor","speed":14,"sensor":"A3","time":16902688},
+{"event":"sensor","speed":14,"sensor":"C13","time":17434927},
+{"event":"sensor","speed":14,"sensor":"C13","time":17468150},
+{"event":"sensor","speed":14,"sensor":"E7","time":18218792},
+{"event":"sensor","speed":14,"sensor":"E7","time":18251975},
+{"event":"sensor","speed":14,"sensor":"D7","time":18565887},
+{"event":"sensor","speed":14,"sensor":"D7","time":18599070},
+{"event":"sensor","speed":14,"sensor":"D9","time":19287291},
+{"event":"sensor","speed":14,"sensor":"D9","time":19320474},
+{"event":"sensor","speed":14,"sensor":"E12","time":19634388},
+{"event":"stop","time":19763416},
+// press any key once stopped
+// distance from E11/E12 (cm): 86
+{"event":"stopped","distance_cm":86,"time":21363641},
+// another one? (y/n): y
+// speed (blank for 14): 
+{"event":"speed","val":14,"time":35585127},
+{"event":"sensor","speed":14,"sensor":"C6","time":36615687},
+{"event":"sensor","speed":14,"sensor":"C6","time":36648857},
+{"event":"sensor","speed":14,"sensor":"C6","time":36682013},
+{"event":"sensor","speed":14,"sensor":"C6","time":36715183},
+{"event":"sensor","speed":14,"sensor":"C6","time":36748339},
+{"event":"sensor","speed":14,"sensor":"B15","time":37405363},
+{"event":"sensor","speed":14,"sensor":"B15","time":37438586},
+{"event":"sensor","speed":14,"sensor":"B15","time":37471808},
+{"event":"sensor","speed":14,"sensor":"A3","time":37848153},
+{"event":"sensor","speed":14,"sensor":"A3","time":37881323},
+{"event":"sensor","speed":14,"sensor":"C13","time":38382405},
+{"event":"sensor","speed":14,"sensor":"C13","time":38415628},
+{"event":"sensor","speed":14,"sensor":"E7","time":39135087},
+{"event":"sensor","speed":14,"sensor":"E7","time":39168270},
+{"event":"sensor","speed":14,"sensor":"E7","time":39201452},
+{"event":"sensor","speed":14,"sensor":"D7","time":39484181},
+{"event":"sensor","speed":14,"sensor":"D7","time":39517364},
+{"event":"sensor","speed":14,"sensor":"D9","time":40205572},
+{"event":"sensor","speed":14,"sensor":"D9","time":40238755},
+{"event":"sensor","speed":14,"sensor":"E12","time":40521525},
+{"event":"stop","time":40650553},
+// press any key once stopped
+// distance from E11/E12 (cm): 82
+{"event":"stopped","distance_cm":82,"time":42582594},
+// another one? (y/n): y
+// speed (blank for 14): 8
+{"event":"speed","val":8,"time":54167867},
+{"event":"sensor","speed":8,"sensor":"C6","time":55354358},
+{"event":"sensor","speed":8,"sensor":"C6","time":55387488},
+{"event":"sensor","speed":8,"sensor":"C6","time":55420604},
+{"event":"sensor","speed":8,"sensor":"C6","time":55453734},
+{"event":"sensor","speed":8,"sensor":"B15","time":56110718},
+{"event":"sensor","speed":8,"sensor":"B15","time":56143888},
+{"event":"sensor","speed":8,"sensor":"B15","time":56177044},
+{"event":"sensor","speed":8,"sensor":"A3","time":56709293},
+{"event":"sensor","speed":8,"sensor":"A3","time":56742423},
+{"event":"sensor","speed":8,"sensor":"A3","time":56775540},
+{"event":"sensor","speed":8,"sensor":"C13","time":57494906},
+{"event":"sensor","speed":8,"sensor":"C13","time":57528089},
+{"event":"sensor","speed":8,"sensor":"C13","time":57561272},
+{"event":"sensor","speed":8,"sensor":"E7","time":58655025},
+{"event":"sensor","speed":8,"sensor":"E7","time":58688155},
+{"event":"sensor","speed":8,"sensor":"E7","time":58721271},
+{"event":"sensor","speed":8,"sensor":"D7","time":59159904},
+{"event":"sensor","speed":8,"sensor":"D7","time":59193034},
+{"event":"sensor","speed":8,"sensor":"D7","time":59226164},
+{"event":"sensor","speed":8,"sensor":"D9","time":60226233},
+{"event":"sensor","speed":8,"sensor":"D9","time":60259363},
+{"event":"sensor","speed":8,"sensor":"D9","time":60292493},
+{"event":"sensor","speed":8,"sensor":"E12","time":60699918},
+{"event":"stop","time":60828902},
+// press any key once stopped
+// distance from E11/E12 (cm): 49
+{"event":"stopped","distance_cm":49,"time":62418220},
+// another one? (y/n): y
+// speed (blank for 8): 
+{"event":"speed","val":8,"time":73136964},
+{"event":"sensor","speed":8,"sensor":"C16","time":74448242},
+{"event":"sensor","speed":8,"sensor":"C16","time":74481425},
+{"event":"sensor","speed":8,"sensor":"C16","time":74514608},
+{"event":"sensor","speed":8,"sensor":"C6","time":74890914},
+{"event":"sensor","speed":8,"sensor":"C6","time":74924044},
+{"event":"sensor","speed":8,"sensor":"C6","time":74957160},
+{"event":"sensor","speed":8,"sensor":"B15","time":75551751},
+{"event":"sensor","speed":8,"sensor":"B15","time":75584921},
+{"event":"sensor","speed":8,"sensor":"B15","time":75618077},
+{"event":"sensor","speed":8,"sensor":"A3","time":76119142},
+{"event":"sensor","speed":8,"sensor":"A3","time":76152272},
+{"event":"sensor","speed":8,"sensor":"A3","time":76185402},
+{"event":"sensor","speed":8,"sensor":"C13","time":76904743},
+{"event":"sensor","speed":8,"sensor":"C13","time":76937925},
+{"event":"sensor","speed":8,"sensor":"C13","time":76971108},
+{"event":"sensor","speed":8,"sensor":"E7","time":78064861},
+{"event":"sensor","speed":8,"sensor":"E7","time":78097991},
+{"event":"sensor","speed":8,"sensor":"E7","time":78131108},
+{"event":"sensor","speed":8,"sensor":"D7","time":78600937},
+{"event":"sensor","speed":8,"sensor":"D7","time":78634067},
+{"event":"sensor","speed":8,"sensor":"D7","time":78667197},
+{"event":"sensor","speed":8,"sensor":"D9","time":79636069},
+{"event":"sensor","speed":8,"sensor":"D9","time":79669199},
+{"event":"sensor","speed":8,"sensor":"D9","time":79702316},
+{"event":"sensor","speed":8,"sensor":"E12","time":80140951},
+{"event":"stop","time":80269934},
+// press any key once stopped
+// distance from E11/E12 (cm): 51
+{"event":"stopped","distance_cm":51,"time":81851485},
+// another one? (y/n): y
+// speed (blank for 8): 
+{"event":"speed","val":8,"time":93111082},
+{"event":"sensor","speed":8,"sensor":"C16","time":94359926},
+{"event":"sensor","speed":8,"sensor":"C16","time":94393109},
+{"event":"sensor","speed":8,"sensor":"C16","time":94426292},
+{"event":"sensor","speed":8,"sensor":"C16","time":94459475},
+{"event":"sensor","speed":8,"sensor":"C6","time":94835781},
+{"event":"sensor","speed":8,"sensor":"C6","time":94868911},
+{"event":"sensor","speed":8,"sensor":"C6","time":94902041},
+{"event":"sensor","speed":8,"sensor":"B15","time":95496618},
+{"event":"sensor","speed":8,"sensor":"B15","time":95529788},
+{"event":"sensor","speed":8,"sensor":"B15","time":95562944},
+{"event":"sensor","speed":8,"sensor":"A3","time":96064076},
+{"event":"sensor","speed":8,"sensor":"A3","time":96097193},
+{"event":"sensor","speed":8,"sensor":"A3","time":96130323},
+{"event":"sensor","speed":8,"sensor":"C13","time":96849689},
+{"event":"sensor","speed":8,"sensor":"C13","time":96882872},
+{"event":"sensor","speed":8,"sensor":"C13","time":96916055},
+{"event":"sensor","speed":8,"sensor":"E7","time":98009821},
+{"event":"sensor","speed":8,"sensor":"E7","time":98042951},
+{"event":"sensor","speed":8,"sensor":"E7","time":98076081},
+{"event":"sensor","speed":8,"sensor":"D7","time":98545884},
+{"event":"sensor","speed":8,"sensor":"D7","time":98579014},
+{"event":"sensor","speed":8,"sensor":"D7","time":98612131},
+{"event":"sensor","speed":8,"sensor":"D9","time":99581069},
+{"event":"sensor","speed":8,"sensor":"D9","time":99614199},
+{"event":"sensor","speed":8,"sensor":"D9","time":99647329},
+{"event":"sensor","speed":8,"sensor":"E12","time":100085937},
+{"event":"stop","time":100214965},
+// press any key once stopped
+// distance from E11/E12 (cm): 50
+{"event":"stopped","distance_cm":50,"time":101625902},
+// another one? (y/n): n
+]}
+Goodbye from choochoos kernel!
+
+Program completed with status 0
+RedBoot> 
