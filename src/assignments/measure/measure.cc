@@ -271,6 +271,6 @@ void FirstUserTask() {
     sscanf(buf, "%d", &start_speed);
     //   bwprintf(COM2, "you entered %d (ret=%d)" ENDL, start_speed, ret);
 
-    // speed_test(tr, start_speed);
+    // speed_test((uint8_t)tr, (uint8_t)start_speed);
     stopping_distance_test((uint8_t)tr, (uint8_t)start_speed);
 }
