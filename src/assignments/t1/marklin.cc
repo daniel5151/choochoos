@@ -7,18 +7,24 @@
 
 namespace Marklin {
 
-void Controller::send_go() { Uart::Putc(uart, COM1, 0x60); }
-void Controller::send_stop() { Uart::Putc(uart, COM1, 0x61); }
+void Controller::send_go() const { Uart::Putc(uart, COM1, 0x60); }
+void Controller::send_stop() const { Uart::Putc(uart, COM1, 0x61); }
 
 void Controller::update_train(TrainState tr) const {
     Uart::Putc(uart, COM1, (char)tr.raw);
     Uart::Putc(uart, COM1, (char)tr.no);
 }
 
+void Controller::update_branch(uint8_t id, BranchDir dir) const {
+    Uart::Putc(uart, COM1, dir == BranchDir::Curved ? 0x22 : 0x21);
+    Uart::Putc(uart, COM1, (char)id);
+    Uart::Putc(uart, COM1, 0x20);
+}
+
 void Controller::update_branches(const BranchState* branches, size_t n) const {
     for (size_t i = 0; i < n; i++) {
         const BranchState& b = branches[i];
-        Uart::Putc(uart, COM1, b.dir == BranchState::Dir::Curved ? 0x22 : 0x21);
+        Uart::Putc(uart, COM1, b.dir == BranchDir::Curved ? 0x22 : 0x21);
         Uart::Putc(uart, COM1, (char)b.no);
     }
     Uart::Putc(uart, COM1, 0x20);

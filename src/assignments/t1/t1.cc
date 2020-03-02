@@ -1,3 +1,4 @@
+#include <cctype>
 #include <cstdio>
 #include <initializer_list>
 
@@ -9,58 +10,29 @@
 
 #include "marklin.h"
 #include "sysperf.h"
+#include "track_oracle.h"
 
-static void init_track(int uart, Marklin::Controller marklin) {
-    Uart::Printf(uart, COM2, "Initializing Track..." ENDL);
+static inline Marklin::Track query_user_for_track(int uart) {
+    while (true) {
+        Uart::Printf(uart, COM2, "Enter the track you'll be using (A or B): ");
+        char buf[2];
+        Uart::Getline(uart, COM2, buf, sizeof(buf));
 
-    // ensure the track is on
-    marklin.send_go();
-
-    Uart::Printf(uart, COM2, "Stopping all trains..." ENDL);
-    auto train = Marklin::TrainState(0);
-    train.set_speed(0);
-    train.set_light(false);
-    for (uint8_t id : Marklin::VALID_TRAINS) {
-        train.set_id(id);
-        marklin.update_train(train);
-        marklin.flush();
-    }
-
-    // set all the branches to curved
-    Marklin::BranchState branches[sizeof(Marklin::VALID_SWITCHES)];
-    for (size_t i = 0; auto& b : branches) {
-        const uint8_t id = Marklin::VALID_SWITCHES[i++];
-
-        b.set_id(id);
-        b.set_dir(Marklin::BranchState::Curved);
-
-        // ...but make outer-ring branches straight
-        for (size_t except_id : {6, 7, 8, 9, 14, 15}) {
-            if (id == except_id) {
-                b.set_dir(Marklin::BranchState::Straight);
-                break;
-            }
+        switch (tolower(buf[0])) {
+            case 'a':
+                return Marklin::Track::A;
+            case 'b':
+                return Marklin::Track::B;
+            default:
+                Uart::Printf(uart, COM2, "Invalid track value." ENDL);
         }
     }
-
-    Uart::Printf(uart, COM2, "Setting switch positions..." ENDL);
-    marklin.update_branches(branches, sizeof(Marklin::VALID_SWITCHES));
-    marklin.flush();
-
-    Uart::Printf(uart, COM2, "Track has been initialized!" ENDL);
 }
 
-static void t1_main(int clock, int uart) {
-    auto marklin = Marklin::Controller(uart);
-    (void)clock;
-
-    // reset the track
-    init_track(uart, marklin);
-
-    // determine which train to use
+static inline uint8_t query_user_for_train(int uart) {
     uint8_t train_id;
     while (true) {
-        Uart::Printf(uart, COM2, "Please Enter the train you'll be using: ");
+        Uart::Printf(uart, COM2, "Enter the train you'll be using: ");
         char buf[4];
         Uart::Getline(uart, COM2, buf, sizeof(buf));
 
@@ -79,20 +51,36 @@ static void t1_main(int clock, int uart) {
 
         Uart::Printf(uart, COM2, "Invalid train number." ENDL);
     }
+    return train_id;
+}
+
+static inline void wait_for_enter(int uart) {
+    char dummy;
+    Uart::Getline(uart, COM2, &dummy, sizeof(dummy));
+}
+
+static void t1_main(int clock, int uart) {
+    (void)clock;
+
+    // determine which track to use
+    Marklin::Track track_id = query_user_for_track(uart);
+
+    // create the track oracle (which also instantiates the track)
+    TrackOracle track_oracle = TrackOracle(track_id);
+
+    // determine which train to use
+    uint8_t train_id = query_user_for_train(uart);
 
     Uart::Printf(uart, COM2,
-                 "Press [ENTER] after ensuring that the train is somewhere on "
-                 "the outer loop." ENDL);
-    {
-        char dummy;
-        Uart::Getline(uart, COM2, &dummy, sizeof(dummy));
-    }
+                 "Press [ENTER] after placing the train somewhere on the train "
+                 "set. It's okay if the train is running, we'll send a stop "
+                 "command." ENDL);
+    wait_for_enter(uart);
 
-    Uart::Printf(uart, COM2, "Calibrating the track..." ENDL);
+    // register the train with the oracle
+    track_oracle.calibrate_train(train_id);
 
-    // let 'er rip at max speed
-    marklin.update_train(Marklin::TrainState(train_id, 14));
-
+    // TODO: enter the main application loop
 }
 
 void FirstUserTask() {

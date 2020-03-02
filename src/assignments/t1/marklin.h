@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 
 /// Classes for interacting with the Marklin digital train controller.
 namespace Marklin {
@@ -11,6 +12,49 @@ constexpr uint8_t VALID_SWITCHES[] = {1,  2,  3,   4,   5,   6,  7,  8,
                                       17, 18, 153, 154, 155, 156};
 constexpr uint8_t VALID_TRAINS[] = {1, 24, 58, 74, 78, 79};
 constexpr size_t NUM_SENSOR_GROUPS = 5;
+
+enum class Track { A, B };
+
+enum class BranchDir { Straight, Curved };
+
+/// Describes a particular track sensor
+struct sensor_t {
+    char group;
+    uint8_t idx;
+};
+
+/// Wrapper around raw sensor data
+struct SensorData {
+    char raw [2 * NUM_SENSOR_GROUPS];
+
+    std::optional<sensor_t> next_sensor() {
+        for (size_t bi = 0; bi < NUM_SENSOR_GROUPS * 2; bi++) {
+            char& byte = raw[bi];
+            for (size_t i = 1; i <= 8; i++) {
+                bool active = (byte >> (8 - i)) & 0x01;
+                // disable the bit
+                byte &= (char)(~(0x01 << (8 - i)));
+
+                if (active) {
+                    char group = (char)((int)'A' + (bi / 2));
+                    uint8_t idx = (uint8_t)(i + (8 * (bi % 2)));
+
+                    const sensor_t s = {.group = group, .idx = idx};
+                    return s;
+                }
+            }
+        }
+
+        return std::nullopt;
+    }
+};
+
+
+/// Describes a position on the track
+struct track_pos_t {
+    sensor_t sensor;
+    int offset;
+};
 
 /// Describes the state of a particular train (i.e: speed, lights, horn, etc...)
 class TrainState {
@@ -42,43 +86,42 @@ class TrainState {
 
 /// Describes the state of a particular branch (straight / curved)
 class BranchState {
-   public:
-    enum Dir { Straight, Curved };
-
    private:
     friend class Controller;
 
     uint8_t no;
-    Dir dir;
+    BranchDir dir;
 
    public:
     BranchState() = default;
-    BranchState(uint8_t id, Dir branch_dir) : no{id}, dir{branch_dir} {}
+    BranchState(uint8_t id, BranchDir branch_dir) : no{id}, dir{branch_dir} {}
 
     uint8_t get_branch() const { return no; }
-    Dir get_dir() const { return dir; }
+    BranchDir get_dir() const { return dir; }
 
     void set_id(uint8_t id) { no = id; }
-    void set_dir(Dir branch_dir) { dir = branch_dir; }
+    void set_dir(BranchDir branch_dir) { dir = branch_dir; }
 };
 
 /// High-level abstraction for interacting with the Marklin train controller
 /// via the UART controller.
 class Controller {
    private:
-    int uart;
+    const int uart;
 
    public:
     /// Construct a new MarklinUART.
     Controller(int uart_tid) : uart{uart_tid} {}
 
     /// Sends the Go command.
-    void send_go();
+    void send_go() const;
     /// Sends the Emergency Stop command.
-    void send_stop();
+    void send_stop() const;
 
     /// Sends the commands to update a particular train's state.
     void update_train(TrainState tr) const;
+    /// Sends the commands to update a particular branch.
+    void update_branch(uint8_t id, BranchDir dir) const;
     /// Sends the commands to update a set of branches.
     void update_branches(const BranchState* branches, size_t n) const;
 
