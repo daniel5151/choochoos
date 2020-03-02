@@ -60,7 +60,7 @@ def parse_track(fname):
     return graph
 
 
-def process(tt, track_graph):
+def process_avg_velocity(tt, track_graph):
     data = parse_train_data(datafile(tt))
     speed = None
     last_sensor_evt = None
@@ -103,6 +103,31 @@ def process(tt, track_graph):
     return sensors_by_speed
 
 
+def process_stopping_distances(tt, track_graph):
+    stopping_distances_by_speed = {}
+    fname = os.path.join(dirname, "raw/{}-{}-stop.json").format(tt.train, tt.track)
+    with open(fname) as fp:
+        data = json.load(fp)
+    assert data["train"] == tt.train
+
+    speed = None
+    stop_time = None
+    for evt in data["events"]:
+        if evt["event"] == "speed":
+            speed = evt["val"]
+            if not speed in stopping_distances_by_speed:
+                stopping_distances_by_speed[speed] = []
+        elif evt["event"] == "stop":
+            stop_time = evt["time"]
+        elif evt["event"] == "stopped":
+            stopping_distances_by_speed[speed].append({
+                "distance_cm": evt["distance_cm"],
+                "stop_time": stop_time,
+                "stopped_time": evt["time"],
+            })
+    return stopping_distances_by_speed
+
+
 def plot_train_speeds(tt, sensors_by_speed):
     for speed, data in sensors_by_speed.items():
         x = []
@@ -142,8 +167,11 @@ def codegen_header(median_speeds_by_train):
     )
     c += """
 struct speed_level_t {
-  bool measured;
+  bool measured_velocity;
   int expected_velocity_mmps;
+  bool measured_stop_distance;
+  int expected_stopping_distance_mm;
+  int max_stopping_distance_mm;
 };
 
 struct train_data_t {
@@ -162,7 +190,7 @@ void fill_calibration_data(struct calibration_data_t* c);
     return c
 
 
-def codegen_source(median_speeds_by_train):
+def codegen_source(median_speeds_by_train, stopping_distances_by_train):
     trains = list(median_speeds_by_train.keys())
     trains.sort()
 
@@ -188,19 +216,31 @@ void fill_calibration_data(struct calibration_data_t* c) {
 """
 
     for i, train in enumerate(trains):
+        stopping_distances_by_speed = stopping_distances_by_train[train]
         c += "  c->trains[{}].train = {};\n".format(i, train)
         for speed, median in median_speeds_by_train[train].items():
             c += "  c->trains[{}].speeds[{}].expected_velocity_mmps = {};\n".format(
                 i, speed, median
             )
-            c += "  c->trains[{}].speeds[{}].measured = true;\n".format(i, speed)
+            c += "  c->trains[{}].speeds[{}].measured_velocity = true;\n".format(i, speed)
+            if speed in stopping_distances_by_speed:
+                distances_mm = [
+                    data["distance_cm"] * 10
+                    for data in stopping_distances_by_speed[speed]
+                ]
+                expected_dist = round(statistics.mean(distances_mm))
+                max_dist = max(distances_mm)
+
+                c += "  c->trains[{}].speeds[{}].expected_stopping_distance_mm = {};\n".format(i, speed, expected_dist)
+                c += "  c->trains[{}].speeds[{}].max_stopping_distance_mm = {};\n".format(i, speed, max_dist)
+                c += "  c->trains[{}].speeds[{}].measured_stop_distance = true;\n".format(i, speed)
 
     c += """}
 """
     return c
 
 
-def log_median_speeds(tt, sensor_data):
+def generate_calibration_code(tt, sensor_data, stopping_distances):
     median_speeds_by_train = {}
     for train, sensors_by_speed in sensor_data.items():
         median_speeds_by_train[train] = {}
@@ -222,7 +262,7 @@ def log_median_speeds(tt, sensor_data):
     with open(header_file, "w") as f:
         f.write(code)
     print("{}:".format(source_file))
-    code = codegen_source(median_speeds_by_train)
+    code = codegen_source(median_speeds_by_train, stopping_distances)
     print(code)
     with open(source_file, "w") as f:
         f.write(code)
@@ -250,12 +290,15 @@ def main():
 
     trains = [1, 24, 58, 74, 78, 79]
     sensor_data = {}
+    stopping_distances = {}
     for train in trains:
         tt = TrainTrack(train, "a")
-        sensor_data[train] = process(tt, track_graph)
+        sensor_data[train] = process_avg_velocity(tt, track_graph)
+        stopping_distances[train] = process_stopping_distances(tt, track_graph)
         # plot_train_speeds(tt, sensors_by_speed)
 
-    log_median_speeds(tt, sensor_data)
+    pprint(stopping_distances)
+    generate_calibration_code(tt, sensor_data, stopping_distances)
 
     # for speed in [13, 8]:
     #     box_plot(tt, speed, sensor_data)

@@ -1,21 +1,4 @@
-load ARM/jdhagema/latest.elf; go
-Using default protocol (TFTP)
-Entry point: 0x01002e1c, address range: 0x01000000-0x01017f28
-Hello from the choochoos kernel!
-// Enter train to test: 1
-// Enter start speed for data collection: 14
-// Reset track (y/n): n
-// Hit [ENTER] once train 1 is on the outer ring.
-
-{ "train": 1, "events": [
-{"event":"speed","val":14,"time":2831422},
-{"event":"sensor","speed":14,"sensor":"E12","time":2863798},
-{"event":"stop","time":2992783},
-// press any key once stopped
-// distance from E11/E12 (cm): 0
-{"event":"stopped","distance_cm":0,"time":3790083},
-// another one? (y/n): y
-// speed (blank for 14): 
+{"train": 1, "events": [
 {"event":"speed","val":14,"time":6547751},
 {"event":"sensor","speed":14,"sensor":"C16","time":7079255},
 {"event":"sensor","speed":14,"sensor":"C16","time":7112438},
@@ -36,11 +19,7 @@ Hello from the choochoos kernel!
 {"event":"sensor","speed":14,"sensor":"D9","time":11041275},
 {"event":"sensor","speed":14,"sensor":"E12","time":11355190},
 {"event":"stop","time":11484218},
-// press any key once stopped
-// distance from E11/E12 (cm): 131
 {"event":"stopped","distance_cm":131,"time":13471948},
-// another one? (y/n): y
-// speed (blank for 14): 
 {"event":"speed","val":14,"time":24133796},
 {"event":"sensor","speed":14,"sensor":"B15","time":25164344},
 {"event":"sensor","speed":14,"sensor":"B15","time":25197566},
@@ -56,11 +35,7 @@ Hello from the choochoos kernel!
 {"event":"sensor","speed":14,"sensor":"D9","time":28118603},
 {"event":"sensor","speed":14,"sensor":"E12","time":28432557},
 {"event":"stop","time":28561585},
-// press any key once stopped
-// distance from E11/E12 (cm): 133
 {"event":"stopped","distance_cm":133,"time":30321503},
-// another one? (y/n): y
-// speed (blank for 14): 8
 {"event":"speed","val":8,"time":42151090},
 {"event":"sensor","speed":8,"sensor":"B15","time":43150427},
 {"event":"sensor","speed":8,"sensor":"B15","time":43183597},
@@ -85,11 +60,7 @@ Hello from the choochoos kernel!
 {"event":"sensor","speed":8,"sensor":"D9","time":50644347},
 {"event":"sensor","speed":8,"sensor":"E12","time":51488526},
 {"event":"stop","time":51617510},
-// press any key once stopped
-// distance from E11/E12 (cm): 24
 {"event":"stopped","distance_cm":24,"time":52301273},
-// another one? (y/n): y
-// speed (blank for 8): 
 {"event":"speed","val":8,"time":62531931},
 {"event":"sensor","speed":8,"sensor":"D11","time":63281734},
 {"event":"sensor","speed":8,"sensor":"D11","time":63314917},
@@ -123,12 +94,5 @@ Hello from the choochoos kernel!
 {"event":"sensor","speed":8,"sensor":"D9","time":73632203},
 {"event":"sensor","speed":8,"sensor":"E12","time":74476342},
 {"event":"stop","time":74605326},
-// press any key once stopped
-// distance from E11/E12 (cm): 24
-{"event":"stopped","distance_cm":24,"time":75379205},
-// another one? (y/n): n
+{"event":"stopped","distance_cm":24,"time":75379205}
 ]}
-Goodbye from choochoos kernel!
-
-Program completed with status 0
-RedBoot> 
