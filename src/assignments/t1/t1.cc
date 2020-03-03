@@ -36,7 +36,10 @@ static inline uint8_t query_user_for_train(int uart) {
         char buf[4];
         Uart::Getline(uart, COM2, buf, sizeof(buf));
 
-        int matches = sscanf(buf, "%hhu", &train_id);
+        int t = 0;
+        int matches = sscanf(buf, "%d", &t);
+        train_id = (uint8_t)t;
+
         if (matches == 1) {
             bool valid_train = false;
             for (uint8_t valid_id : Marklin::VALID_TRAINS) {
