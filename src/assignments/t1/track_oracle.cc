@@ -210,6 +210,13 @@ class TrackOracleImpl {
                     sensor.group, sensor.idx);
                 continue;
             }
+            if (Marklin::sensor_equal(sensor, td->pos.sensor)) {
+                // The sensor was triggered more than once - simply update
+                // pos_observed_at.
+                td->pos_observed_at = now;
+                continue;
+            }
+
             Marklin::track_pos_t new_pos = {
                 .sensor = sensor,
                 .offset_mm =

@@ -23,6 +23,10 @@ struct sensor_t {
     uint8_t idx;
 };
 
+inline bool sensor_equal(const sensor_t& a, const sensor_t& b) {
+    return a.group == b.group && a.idx == b.idx;
+}
+
 /// Wrapper around raw sensor data
 struct SensorData {
     char raw[2 * NUM_SENSOR_GROUPS];
