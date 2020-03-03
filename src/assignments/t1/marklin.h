@@ -13,7 +13,7 @@ constexpr uint8_t VALID_SWITCHES[] = {1,  2,  3,   4,   5,   6,  7,  8,
 constexpr uint8_t VALID_TRAINS[] = {1, 24, 58, 74, 78, 79};
 constexpr size_t NUM_SENSOR_GROUPS = 5;
 
-enum class Track { A, B };
+enum class Track : char { A = 'A', B = 'B' };
 
 enum class BranchDir { Straight, Curved };
 
@@ -64,8 +64,8 @@ class TrainState {
 
    public:
     TrainState() = delete;
-    TrainState(uint8_t id) : no{id} {}
-    TrainState(uint8_t id, uint8_t speed, bool light = false) : no{id} {
+    TrainState(uint8_t id) : no{id}, raw{0} {}
+    TrainState(uint8_t id, uint8_t speed, bool light = false) : no{id}, raw{0} {
         set_speed(speed);
         set_light(light);
     }

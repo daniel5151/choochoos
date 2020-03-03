@@ -1,4 +1,5 @@
 #include "track_oracle.h"
+#include "track_graph.h"
 
 #include <cstring>
 #include <initializer_list>
@@ -11,13 +12,15 @@
 
 static constexpr size_t MAX_TRAINS = 6;
 static constexpr int TICKS_PER_SEC = 100;
+static constexpr size_t BRANCHES_LEN = sizeof(Marklin::VALID_SWITCHES);
 
 class TrackOracleImpl {
    private:
-    const Marklin::Track track;
+    const TrackGraph track;
     const int uart;
     const int clock;
     const Marklin::Controller marklin;
+    Marklin::BranchState branches[BRANCHES_LEN];
 
     // TODO: enumerate state (i.e: train descriptors, which track we're on, etc)
     train_descriptor_t trains[MAX_TRAINS];
@@ -50,10 +53,9 @@ class TrackOracleImpl {
 
     int distance_between(const Marklin::track_pos_t& old_pos,
                          const Marklin::track_pos_t& new_pos) const {
-        // TODO use the track graph
-        (void)old_pos;
-        (void)new_pos;
-        return 200;
+        return track.distance_between(old_pos.sensor, new_pos.sensor,
+                                      this->branches, BRANCHES_LEN) +
+               (new_pos.offset_mm - old_pos.offset_mm);
     }
 
     // TODO this belongs in a Ui module
@@ -73,7 +75,7 @@ class TrackOracleImpl {
     TrackOracleImpl& operator=(TrackOracleImpl&&) = delete;
 
     TrackOracleImpl(int uart_tid, int clock_tid, Marklin::Track track_id)
-        : track{track_id}, uart{uart_tid}, clock{clock_tid}, marklin(uart_tid) {
+        : track(track_id), uart{uart_tid}, clock{clock_tid}, marklin(uart_tid) {
         memset(trains, 0, sizeof(train_descriptor_t) * MAX_TRAINS);
 
         // TODO: actually have different inits for different tracks
@@ -94,8 +96,7 @@ class TrackOracleImpl {
         marklin.flush();
 
         // set all the branches to curved
-        Marklin::BranchState branches[sizeof(Marklin::VALID_SWITCHES)];
-        for (size_t i = 0; auto& b : branches) {
+        for (size_t i = 0; auto& b : this->branches) {
             const uint8_t id = Marklin::VALID_SWITCHES[i++];
 
             b.set_id(id);
@@ -111,7 +112,8 @@ class TrackOracleImpl {
         }
 
         Uart::Printf(uart, COM2, "Setting switch positions..." ENDL);
-        marklin.update_branches(branches, sizeof(Marklin::VALID_SWITCHES));
+        marklin.update_branches(this->branches,
+                                sizeof(Marklin::VALID_SWITCHES));
         marklin.flush();
 
         Uart::Printf(uart, COM2, "Track has been initialized!" ENDL);
