@@ -16,6 +16,7 @@ struct train_descriptor_t {
     // Computed params
     int velocity;
     Marklin::track_pos_t pos;
+    int pos_observed_at;
 };
 
 /// Track Oracle. Responsible for maintaining a model of the current track state

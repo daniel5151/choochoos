@@ -25,7 +25,7 @@ struct sensor_t {
 
 /// Wrapper around raw sensor data
 struct SensorData {
-    char raw [2 * NUM_SENSOR_GROUPS];
+    char raw[2 * NUM_SENSOR_GROUPS];
 
     std::optional<sensor_t> next_sensor() {
         for (size_t bi = 0; bi < NUM_SENSOR_GROUPS * 2; bi++) {
@@ -49,11 +49,10 @@ struct SensorData {
     }
 };
 
-
 /// Describes a position on the track
 struct track_pos_t {
     sensor_t sensor;
-    int offset;
+    int offset_mm;
 };
 
 /// Describes the state of a particular train (i.e: speed, lights, horn, etc...)
@@ -132,4 +131,4 @@ class Controller {
     /// Block until the UART has finished sending any queued commands
     void flush() const;
 };
-}
+}  // namespace Marklin

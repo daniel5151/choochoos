@@ -80,7 +80,15 @@ static void t1_main(int clock, int uart) {
     // register the train with the oracle
     track_oracle.calibrate_train(train_id);
 
-    // TODO: enter the main application loop
+    // TODO: parse commands, including a new command to route to a specific
+    // position
+    Uart::Printf(uart, COM2, "Press [ENTER] to start the train" ENDL);
+    wait_for_enter(uart);
+
+    track_oracle.set_train_speed(train_id, 14);
+    while (true) {
+        track_oracle.update_sensors();
+    }
 }
 
 void FirstUserTask() {

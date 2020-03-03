@@ -9,6 +9,9 @@
 #include "user/tasks/clockserver.h"
 #include "user/tasks/uartserver.h"
 
+static constexpr size_t MAX_TRAINS = 6;
+static constexpr int TICKS_PER_SEC = 100;
+
 class TrackOracleImpl {
    private:
     const Marklin::Track track;
@@ -17,6 +20,49 @@ class TrackOracleImpl {
     const Marklin::Controller marklin;
 
     // TODO: enumerate state (i.e: train descriptors, which track we're on, etc)
+    train_descriptor_t trains[MAX_TRAINS];
+
+    train_descriptor_t* descriptor_for(uint8_t train) {
+        for (train_descriptor_t& t : trains) {
+            if (t.id == train) return &t;
+        }
+        return nullptr;
+    }
+
+    int stopping_distance_mm(uint8_t train, uint8_t speed) const {
+        // TODO use calibration data
+        (void)train;
+        (void)speed;
+
+        return 250;  // 25cm
+    }
+
+    train_descriptor_t* attribute_sensor(Marklin::sensor_t sensor) {
+        // TODO base this off of how far the sensor is from our prediction of
+        // where each train is
+        (void)sensor;
+
+        for (train_descriptor_t& t : trains) {
+            if (t.id != 0) return &t;
+        }
+        return nullptr;
+    }
+
+    int distance_between(const Marklin::track_pos_t& old_pos,
+                         const Marklin::track_pos_t& new_pos) const {
+        // TODO use the track graph
+        (void)old_pos;
+        (void)new_pos;
+        return 200;
+    }
+
+    // TODO this belongs in a Ui module
+    void render_train_descriptor(const train_descriptor_t& td) const {
+        Uart::Printf(uart, COM2,
+                     "train=%hhu spd=%d vel=%dmm/s pos=%c%hhu+%dmm" ENDL, td.id,
+                     td.speed, td.velocity, td.pos.sensor.group,
+                     td.pos.sensor.idx, td.pos.offset_mm);
+    }
 
    public:
     // disallow copying, moving, or default-constructing
@@ -28,6 +74,8 @@ class TrackOracleImpl {
 
     TrackOracleImpl(int uart_tid, int clock_tid, Marklin::Track track_id)
         : track{track_id}, uart{uart_tid}, clock{clock_tid}, marklin(uart_tid) {
+        memset(trains, 0, sizeof(train_descriptor_t) * MAX_TRAINS);
+
         // TODO: actually have different inits for different tracks
         Uart::Printf(uart, COM2, "Initializing Track A..." ENDL);
 
@@ -70,6 +118,16 @@ class TrackOracleImpl {
     }
 
     void calibrate_train(uint8_t id) {
+        train_descriptor_t* train = nullptr;
+        for (train_descriptor_t& t : trains) {
+            if (t.id == 0) {
+                train = &t;
+                break;
+            }
+        }
+        if (train == nullptr)
+            panic("Cannot track more than %u trains!", MAX_TRAINS);
+
         Uart::Printf(uart, COM2, "Stopping train %hhu..." ENDL, id);
         set_train_speed(id, 0);
         Clock::Delay(clock, 200);  // make sure it's slowed down
@@ -77,11 +135,12 @@ class TrackOracleImpl {
         Uart::Printf(uart, COM2, "Waiting for train to hit a sensor..." ENDL);
 
         // give it some gas
-        set_train_speed(id, 7);
+        set_train_speed(id, 8);
 
         // loop until a sensor is hit
         Marklin::SensorData sensor_data;
         marklin.query_sensors(sensor_data.raw);  // clear residual sensor data
+        Marklin::sensor_t sensor;
 
         while (true) {
             marklin.query_sensors(sensor_data.raw);
@@ -89,7 +148,7 @@ class TrackOracleImpl {
 
             auto sensor_opt = sensor_data.next_sensor();
             if (sensor_opt.has_value()) {
-                auto sensor = sensor_opt.value();
+                sensor = sensor_opt.value();
 
                 Uart::Printf(uart, COM2, "Train hit sensor %c%hhu!" ENDL,
                              sensor.group, sensor.idx);
@@ -98,19 +157,72 @@ class TrackOracleImpl {
         }
 
         set_train_speed(id, 0);  // stop the train
+        *train = {
+            .id = id,
+            .speed = 0,
+            .reversed = false,
+            .lights = false,
+            .velocity = 0,
+            .pos = {.sensor = sensor,
+                    .offset_mm = stopping_distance_mm(train->id, 8)},
+            .pos_observed_at = Clock::Time(clock),
+        };
 
         Uart::Printf(uart, COM2, "Done calibrating train %hhu..." ENDL, id);
+        render_train_descriptor(*train);
     }
 
     void set_train_speed(uint8_t id, uint8_t speed) {
-        // TODO: lookup train descriptor
         auto train = Marklin::TrainState(id);
         train.set_speed(speed);
         train.set_light(true);
         marklin.update_train(train);
+
+        train_descriptor_t* td = descriptor_for(id);
+        if (td == nullptr) return;
+        uint8_t old_speed = td->speed;
+        td->speed = speed;
+        td->lights = true;
+        // TODO form a guess for the trains velocity until it hits the next
+        // sensor
+        if (old_speed == 0 && speed > 0) {
+            td->pos_observed_at = Clock::Time(clock);
+        }
+        render_train_descriptor(*td);
     }
 
-    void update_sensors() { panic("unimplemented"); }
+    void update_sensors() {
+        Marklin::SensorData sensor_data;
+        marklin.query_sensors(sensor_data.raw);
+
+        int now = Clock::Time(clock);
+        while (true) {
+            auto sensor_opt = sensor_data.next_sensor();
+            if (!sensor_opt.has_value()) break;
+            Marklin::sensor_t sensor = sensor_opt.value();
+            train_descriptor_t* td = attribute_sensor(sensor);
+            if (td == nullptr) {
+                Uart::Printf(
+                    uart, COM2,
+                    "could not attribute sensor %c%hhu to any train" ENDL,
+                    sensor.group, sensor.idx);
+                continue;
+            }
+            Marklin::track_pos_t new_pos = {
+                .sensor = sensor,
+                .offset_mm =
+                    0 /* TODO account for velocity and expected sensor delay */
+            };
+            int distance_mm = distance_between(td->pos, new_pos);
+            int new_velocity_mmps =
+                (TICKS_PER_SEC * distance_mm) / (now - td->pos_observed_at);
+            td->velocity = new_velocity_mmps;  // TODO do an EWMA
+            td->pos = new_pos;
+            td->pos_observed_at = now;
+
+            render_train_descriptor(*td);
+        }
+    }
 };
 
 // ------------------------ TrackOracleTask Plumbing ------------------------ //
