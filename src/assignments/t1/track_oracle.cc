@@ -280,14 +280,13 @@ class TrackOracleImpl {
             }
 
             Ui::render_train_descriptor(uart, *td);
-            Uart::Printf(uart, COM2,
-                         VT_SAVE VT_UP(1) "\r"
-                         "observed train %d from %c%02hhu->%c%02hhu dx=%dmm "
-                         "dt=%d.%02ds dx/dt=%dmm/s" ENDL VT_RESTORE,
-                         td->id, old_pos.sensor.group, old_pos.sensor.idx,
-                         new_pos.sensor.group, new_pos.sensor.idx, distance_mm,
-                         dt_ticks / TICKS_PER_SEC, dt_ticks % TICKS_PER_SEC,
-                         new_velocity_mmps);
+            log_line(uart,
+                     "observed train %d from %c%02hhu->%c%02hhu dx=%dmm "
+                     "dt=%d.%02ds dx/dt=%dmm/s",
+                     td->id, old_pos.sensor.group, old_pos.sensor.idx,
+                     new_pos.sensor.group, new_pos.sensor.idx, distance_mm,
+                     dt_ticks / TICKS_PER_SEC, dt_ticks % TICKS_PER_SEC,
+                     new_velocity_mmps);
         }
     }
 };

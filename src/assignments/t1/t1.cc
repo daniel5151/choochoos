@@ -65,7 +65,7 @@ static inline void wait_for_enter(int uart) {
     Uart::Getline(uart, COM2, &dummy, sizeof(dummy));
 }
 
-static void process_cmd(int uart, const char* cmd) {
+static void process_cmd(int uart, int clock, const char* cmd) {
     if (strcmp(cmd, "q") == 0) {
         Uart::Putstr(uart, COM2, VT_RESET);
         Uart::Flush(uart, COM2);
@@ -74,20 +74,22 @@ static void process_cmd(int uart, const char* cmd) {
 
     // TODO parse and handle the command (this can block - if it does, the
     // prompt will say "..." until it returns)
-    Uart::Printf(uart, COM2, VT_SAVE VT_UP(1) "\r" "you wrote '%s'" ENDL VT_RESTORE,
-                 cmd);
+    log_line(uart, "you wrote '%s'", cmd);
+    Clock::Delay(clock, 100);
 }
 
-static void prompt() {
+static void Prompt() {
     int uart = WhoIs(Uart::SERVER_ID);
+    int clock = WhoIs(Clock::SERVER_ID);
     assert(uart >= 0);
+    assert(clock >= 0);
 
-    Uart::Putstr(uart, COM2, VT_ROWCOL(999, 1) "> ");
+    Uart::Putstr(uart, COM2, VT_ROWCOL(5, 1) "> ");
     char line[80];
     while (true) {
         Uart::Getline(uart, COM2, line, sizeof(line));
-        Uart::Printf(uart, COM2, "\r" VT_CLEARLN "... ");
-        process_cmd(uart, line);
+        Uart::Printf(uart, COM2, VT_UP(1) "\r" VT_CLEARLN "... ");
+        process_cmd(uart, clock, line);
         Uart::Putstr(uart, COM2, "\r" VT_CLEARLN "> ");
     }
 }
@@ -118,7 +120,7 @@ static void t1_main(int clock, int uart) {
     Uart::Printf(uart, COM2, "Press [ENTER] to start the train" ENDL);
     wait_for_enter(uart);
 
-    Create(0, prompt);
+    Create(0, Prompt);
 
     track_oracle.set_train_speed(train_id, 14);
     while (true) {
