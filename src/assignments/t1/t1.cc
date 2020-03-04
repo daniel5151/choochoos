@@ -1,8 +1,7 @@
 #include <cctype>
 #include <cstdio>
+#include <cstring>
 #include <initializer_list>
-
-#include <cstring>  // strcmp
 
 #include "common/vt_escapes.h"
 #include "user/debug.h"
@@ -31,6 +30,23 @@ static inline Marklin::Track query_user_for_track(int uart) {
                 log_line(uart, VT_RED "Invalid track value." VT_NOFMT);
         }
     }
+}
+
+static inline bool is_valid_train(uint8_t no) {
+    for (uint8_t valid_id : Marklin::VALID_TRAINS) {
+        if (no == valid_id) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static inline bool is_valid_sensor(const Marklin::sensor_t& sensor) {
+    if (sensor.group < 'A' || sensor.group > 'E') {
+        return false;
+    }
+    if (sensor.idx > 16) return false;
+    return true;
 }
 
 static inline uint8_t query_user_for_train(int uart) {
@@ -66,6 +82,41 @@ static inline void wait_for_enter(int uart) {
     Ui::prompt_user(uart, &dummy, sizeof(dummy));
 }
 
+static inline bool parse_route_cmd(char* line,
+                                   uint8_t& train,
+                                   Marklin::sensor_t& sensor,
+                                   int& offset) {
+    char* token;
+
+    size_t train_u;
+    char sensor_group;
+    size_t sensor_idx;
+
+    // "route"
+    token = strtok(line, " ");
+    if (!token || strcmp(token, "route") != 0) return false;
+
+    // "<tr>"
+    token = strtok(nullptr, " ");
+    if (!token || sscanf(token, "%u", &train_u) != 1) return false;
+
+    train = (uint8_t)train_u;
+
+    // "<sensor>"
+    token = strtok(nullptr, " ");
+    if (!token || sscanf(token, "%c%u", &sensor_group, &sensor_idx) != 2)
+        return false;
+
+    sensor.group = (char)toupper(sensor_group);
+    sensor.idx = (uint8_t)sensor_idx;
+
+    // "<offset>"
+    token = strtok(nullptr, " ");
+    if (!token || sscanf(token, "%d", &offset) != 1) return false;
+
+    return true;
+}
+
 static void CmdTask() {
     int uart = WhoIs(Uart::SERVER_ID);
     int clock = WhoIs(Clock::SERVER_ID);
@@ -78,14 +129,35 @@ static void CmdTask() {
     while (true) {
         Ui::prompt_user(uart, line, sizeof(line));
 
-        // TODO parse and handle the command (this can block)
         if (strcmp(line, "q") == 0) {
             Uart::Putstr(uart, COM2, VT_RESET);
             Uart::Flush(uart, COM2);
             Shutdown();
         }
 
-        log_line(uart, "you wrote '%s'", line);
+        // otherwise, only other command is `route <tr> <sensor> <offset>`
+        uint8_t train;
+        Marklin::sensor_t sensor;
+        int offset;
+
+        if (!parse_route_cmd(line, train, sensor, offset)) {
+            log_line(uart, VT_RED "Invalid command." VT_NOFMT);
+            continue;
+        }
+
+        if (!is_valid_train(train)) {
+            log_line(uart, VT_RED "Invalid train id." VT_NOFMT);
+            continue;
+        }
+
+        if (!is_valid_sensor(sensor)) {
+            log_line(uart, VT_RED "Invalid sensor." VT_NOFMT);
+            continue;
+        }
+
+        log_line(uart,
+                 VT_CYAN "Routing train %u to sensor %c%u + offset %d" VT_NOFMT,
+                 train, sensor.group, sensor.idx, offset);
         Clock::Delay(clock, 100);
     }
 }
@@ -106,8 +178,7 @@ static void t1_main(int clock, int uart) {
         uart, VT_YELLOW
         "Place the train somewhere on the track." VT_NOFMT ENDL
         "It's okay if the train is running, we'll send a stop command." ENDL
-            VT_GREEN "Press [ENTER] once the train is on the track."
-        );
+            VT_GREEN "Press [ENTER] once the train is on the track.");
     wait_for_enter(uart);
 
     // register the train with the oracle
