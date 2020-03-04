@@ -1,17 +1,16 @@
 #include "track_oracle.h"
 #include "track_graph.h"
 
-#include <cstring>
-#include <initializer_list>
-#include <optional>
+#include <cstring>  // memset
 
+#include "common/vt_escapes.h"
+#include "ui.h"
 #include "user/debug.h"
 #include "user/syscalls.h"
 #include "user/tasks/clockserver.h"
 #include "user/tasks/uartserver.h"
 
 static constexpr size_t MAX_TRAINS = 6;
-static constexpr int TICKS_PER_SEC = 100;
 static constexpr size_t BRANCHES_LEN = sizeof(Marklin::VALID_SWITCHES);
 
 // EWMA with alpha = 1/4
@@ -61,34 +60,6 @@ class TrackOracleImpl {
         return track.distance_between(old_pos.sensor, new_pos.sensor,
                                       this->branches, BRANCHES_LEN) +
                (new_pos.offset_mm - old_pos.offset_mm);
-    }
-
-    // TODO this belongs in a Ui module
-    void render_train_descriptor(const train_descriptor_t& td) const {
-        char line[256] = {0};
-        size_t n =
-            snprintf(line, sizeof(line),
-                     "[%d] train=%hhu spd=%d vel=%dmm/s pos=%c%hhu+%dmm",
-                     td.pos_observed_at, td.id, td.speed, td.velocity,
-                     td.pos.sensor.group, td.pos.sensor.idx, td.pos.offset_mm);
-        if (td.has_next_sensor) {
-            auto sensor = td.next_sensor;
-            int time = td.next_sensor_time;
-            n += snprintf(line + n, sizeof(line) - n, " next=(%c%hhu at t=%d)",
-                          sensor.group, sensor.idx, time);
-        }
-        if (td.has_error) {
-            char sign = td.time_error < 0 ? '-' : '+';
-            int error_sec = std::abs(td.time_error) / TICKS_PER_SEC;
-            int error_dec = std::abs(td.time_error) % TICKS_PER_SEC;
-
-            n += snprintf(line + n, sizeof(line) - n,
-                          " error=%c%d.%02ds/%c%dmm", sign, error_sec,
-                          error_dec, sign, std::abs(td.distance_error));
-        }
-        n += snprintf(line + n, sizeof(line) - n, ENDL);
-
-        Uart::Putstr(uart, COM2, line);
     }
 
    public:
@@ -171,7 +142,6 @@ class TrackOracleImpl {
 
         while (true) {
             marklin.query_sensors(sensor_data.raw);
-            Clock::Delay(clock, 25);
 
             auto sensor_opt = sensor_data.next_sensor();
             if (sensor_opt.has_value()) {
@@ -208,7 +178,7 @@ class TrackOracleImpl {
         };
 
         Uart::Printf(uart, COM2, "Done calibrating train %hhu..." ENDL, id);
-        render_train_descriptor(*train);
+        Ui::render_train_descriptor(uart, *train);
     }
 
     void set_train_speed(uint8_t id, uint8_t speed) {
@@ -231,7 +201,7 @@ class TrackOracleImpl {
         if (old_speed != speed) {
             td->speed_changed_at = now;
         }
-        render_train_descriptor(*td);
+        Ui::render_train_descriptor(uart, *td);
     }
 
     void update_sensors() {
@@ -258,14 +228,16 @@ class TrackOracleImpl {
                 continue;
             }
 
-            Marklin::track_pos_t new_pos = {
+            const Marklin::track_pos_t old_pos = td->pos;
+            const Marklin::track_pos_t new_pos = {
                 .sensor = sensor,
                 .offset_mm =
                     0 /* TODO account for velocity and expected sensor delay */
             };
-            int distance_mm = distance_between(td->pos, new_pos);
-            int new_velocity_mmps =
-                (TICKS_PER_SEC * distance_mm) / (now - td->pos_observed_at);
+            int distance_mm = distance_between(old_pos, new_pos);
+            int dt_ticks = now - td->pos_observed_at;
+            if (dt_ticks <= 0) continue;
+            int new_velocity_mmps = (TICKS_PER_SEC * distance_mm) / dt_ticks;
 
             if (now - td->speed_changed_at < 4 * TICKS_PER_SEC) {
                 // For the first 4 seconds after a speed change the train could
@@ -307,7 +279,15 @@ class TrackOracleImpl {
                 td->has_next_sensor = false;
             }
 
-            render_train_descriptor(*td);
+            Ui::render_train_descriptor(uart, *td);
+            Uart::Printf(uart, COM2,
+                         VT_SAVE VT_UP(1) "\r"
+                         "observed train %d from %c%02hhu->%c%02hhu dx=%dmm "
+                         "dt=%d.%02ds dx/dt=%dmm/s" ENDL VT_RESTORE,
+                         td->id, old_pos.sensor.group, old_pos.sensor.idx,
+                         new_pos.sensor.group, new_pos.sensor.idx, distance_mm,
+                         dt_ticks / TICKS_PER_SEC, dt_ticks % TICKS_PER_SEC,
+                         new_velocity_mmps);
         }
     }
 };

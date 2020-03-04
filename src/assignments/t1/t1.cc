@@ -2,6 +2,8 @@
 #include <cstdio>
 #include <initializer_list>
 
+#include <cstring>  // strcmp
+
 #include "common/vt_escapes.h"
 #include "user/debug.h"
 #include "user/syscalls.h"
@@ -11,6 +13,7 @@
 #include "marklin.h"
 #include "sysperf.h"
 #include "track_oracle.h"
+#include "ui.h"
 
 static inline Marklin::Track query_user_for_track(int uart) {
     while (true) {
@@ -62,6 +65,33 @@ static inline void wait_for_enter(int uart) {
     Uart::Getline(uart, COM2, &dummy, sizeof(dummy));
 }
 
+static void process_cmd(int uart, const char* cmd) {
+    if (strcmp(cmd, "q") == 0) {
+        Uart::Putstr(uart, COM2, VT_RESET);
+        Uart::Flush(uart, COM2);
+        Shutdown();
+    }
+
+    // TODO parse and handle the command (this can block - if it does, the
+    // prompt will say "..." until it returns)
+    Uart::Printf(uart, COM2, VT_SAVE VT_UP(1) "\r" "you wrote '%s'" ENDL VT_RESTORE,
+                 cmd);
+}
+
+static void prompt() {
+    int uart = WhoIs(Uart::SERVER_ID);
+    assert(uart >= 0);
+
+    Uart::Putstr(uart, COM2, VT_ROWCOL(999, 1) "> ");
+    char line[80];
+    while (true) {
+        Uart::Getline(uart, COM2, line, sizeof(line));
+        Uart::Printf(uart, COM2, "\r" VT_CLEARLN "... ");
+        process_cmd(uart, line);
+        Uart::Putstr(uart, COM2, "\r" VT_CLEARLN "> ");
+    }
+}
+
 static void t1_main(int clock, int uart) {
     (void)clock;
 
@@ -87,6 +117,8 @@ static void t1_main(int clock, int uart) {
     // position
     Uart::Printf(uart, COM2, "Press [ENTER] to start the train" ENDL);
     wait_for_enter(uart);
+
+    Create(0, prompt);
 
     track_oracle.set_train_speed(train_id, 14);
     while (true) {
@@ -114,6 +146,8 @@ void FirstUserTask() {
         },
         [](void* d, const char* s) { Uart::Putstr(*(int*)d, COM2, s); });
     assert(term_size.success);
+
+    Ui::render_initial_screen(uart, term_size);
 
     // spawn the perf task
     {

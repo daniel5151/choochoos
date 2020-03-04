@@ -6,6 +6,8 @@
 
 #include "marklin.h"
 
+#define TICKS_PER_SEC 100
+
 struct sensor_time_t {
     Marklin::sensor_t sensor;
     int time;
