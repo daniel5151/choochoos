@@ -23,7 +23,7 @@ struct sensor_t {
     uint8_t idx;
 };
 
-inline bool sensor_equal(const sensor_t& a, const sensor_t& b) {
+inline bool sensor_eq(const sensor_t& a, const sensor_t& b) {
     return a.group == b.group && a.idx == b.idx;
 }
 

@@ -2,8 +2,14 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 
 #include "marklin.h"
+
+struct sensor_time_t {
+    Marklin::sensor_t sensor;
+    int time;
+};
 
 /// Aggregate type describing a particular train's current state
 struct train_descriptor_t {
@@ -17,6 +23,15 @@ struct train_descriptor_t {
     int velocity;
     Marklin::track_pos_t pos;
     int pos_observed_at;
+    int speed_changed_at;
+
+    bool has_next_sensor;
+    Marklin::sensor_t next_sensor;
+    int next_sensor_time;
+
+    bool has_error;
+    int time_error;
+    int distance_error;
 };
 
 /// Track Oracle. Responsible for maintaining a model of the current track state

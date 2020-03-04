@@ -23,6 +23,12 @@ inline static bool node_is_sensor(const track_node& node,
            node.num == (sensor.group - 'A') * 16 + (sensor.idx - 1);
 }
 
+// precondition: node.type == NODE_SENSOR
+inline static Marklin::sensor_t sensor_of_node(const track_node& node) {
+    return {.group = (char)('A' + (node.num / 16)),
+            .idx = (uint8_t)(node.num % 16 + 1)};
+}
+
 // precondition: branch.type == NODE_BRANCH
 inline static Marklin::BranchDir branch_dir(
     const track_node& branch,
@@ -34,6 +40,49 @@ inline static Marklin::BranchDir branch_dir(
         }
     }
     panic("TrackGraph::branch_dir: unkown direction for branch %d", branch.num);
+}
+
+inline static const track_edge* next_edge(const track_node& node,
+                                          const Marklin::BranchState* branches,
+                                          size_t branches_len) {
+    switch (node.type) {
+        case NODE_NONE:
+        case NODE_EXIT:
+            return nullptr;
+        case NODE_BRANCH:
+            switch (branch_dir(node, branches, branches_len)) {
+                case Marklin::BranchDir::Straight:
+                    return &node.edge[0];
+                case Marklin::BranchDir::Curved:
+                    return &node.edge[1];
+                default:
+                    assert(false);
+            }
+        default:
+            auto edge = &node.edge[0];
+            assert(edge != 0);
+            return edge;
+    }
+}
+
+std::optional<std::pair<Marklin::sensor_t, int>> TrackGraph::next_sensor(
+    const Marklin::sensor_t& sensor,
+    const Marklin::BranchState* branches,
+    size_t branches_len) const {
+    const track_node* curr = nullptr;
+    for (auto& node : track) {
+        if (node_is_sensor(node, sensor)) curr = &node;
+    }
+    if (curr == nullptr) return std::nullopt;
+    int distance = 0;
+    while (true) {
+        auto edge = next_edge(*curr, branches, branches_len);
+        if (edge == nullptr) return std::nullopt;
+        distance += edge->dist;
+        curr = edge->dest;
+        if (curr->type == NODE_SENSOR)
+            return std::make_pair(sensor_of_node(*curr), distance);
+    }
 }
 
 int TrackGraph::distance_between(const Marklin::sensor_t& old_sensor,
@@ -57,24 +106,7 @@ int TrackGraph::distance_between(const Marklin::sensor_t& old_sensor,
     const track_node* curr = start;
     for (size_t i = 0; curr != end; i++) {
         if (i > MAX_ITERS) panic("no route after %u hops", MAX_ITERS);
-        const track_edge* edge = nullptr;
-        switch (curr->type) {
-            case NODE_BRANCH:
-                switch (branch_dir(*curr, branches, branches_len)) {
-                    case Marklin::BranchDir::Straight:
-                        edge = &curr->edge[0];
-                        break;
-                    case Marklin::BranchDir::Curved:
-                        edge = &curr->edge[1];
-                        break;
-                    default:
-                        assert(false);
-                }
-                break;
-            default:
-                edge = &curr->edge[0];
-                break;
-        }
+        const track_edge* edge = next_edge(*curr, branches, branches_len);
         assert(edge != nullptr);
         debug("  %s->%s: %dmm", curr->name, edge->dest->name, edge->dist);
         curr = edge->dest;

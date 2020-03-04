@@ -14,6 +14,11 @@ static constexpr size_t MAX_TRAINS = 6;
 static constexpr int TICKS_PER_SEC = 100;
 static constexpr size_t BRANCHES_LEN = sizeof(Marklin::VALID_SWITCHES);
 
+// EWMA with alpha = 1/4
+inline static int ewma4(int curr, int obs) {
+    return (3 * curr + obs) >> 2 /* division by 4 */;
+}
+
 class TrackOracleImpl {
    private:
     const TrackGraph track;
@@ -60,10 +65,30 @@ class TrackOracleImpl {
 
     // TODO this belongs in a Ui module
     void render_train_descriptor(const train_descriptor_t& td) const {
-        Uart::Printf(uart, COM2,
-                     "train=%hhu spd=%d vel=%dmm/s pos=%c%hhu+%dmm" ENDL, td.id,
-                     td.speed, td.velocity, td.pos.sensor.group,
-                     td.pos.sensor.idx, td.pos.offset_mm);
+        char line[256] = {0};
+        size_t n =
+            snprintf(line, sizeof(line),
+                     "[%d] train=%hhu spd=%d vel=%dmm/s pos=%c%hhu+%dmm",
+                     td.pos_observed_at, td.id, td.speed, td.velocity,
+                     td.pos.sensor.group, td.pos.sensor.idx, td.pos.offset_mm);
+        if (td.has_next_sensor) {
+            auto sensor = td.next_sensor;
+            int time = td.next_sensor_time;
+            n += snprintf(line + n, sizeof(line) - n, " next=(%c%hhu at t=%d)",
+                          sensor.group, sensor.idx, time);
+        }
+        if (td.has_error) {
+            char sign = td.time_error < 0 ? '-' : '+';
+            int error_sec = std::abs(td.time_error) / TICKS_PER_SEC;
+            int error_dec = std::abs(td.time_error) % TICKS_PER_SEC;
+
+            n += snprintf(line + n, sizeof(line) - n,
+                          " error=%c%d.%02ds/%c%dmm", sign, error_sec,
+                          error_dec, sign, std::abs(td.distance_error));
+        }
+        n += snprintf(line + n, sizeof(line) - n, ENDL);
+
+        Uart::Putstr(uart, COM2, line);
     }
 
    public:
@@ -159,6 +184,8 @@ class TrackOracleImpl {
         }
 
         set_train_speed(id, 0);  // stop the train
+        int now = Clock::Time(clock);
+
         *train = {
             .id = id,
             .speed = 0,
@@ -167,7 +194,17 @@ class TrackOracleImpl {
             .velocity = 0,
             .pos = {.sensor = sensor,
                     .offset_mm = stopping_distance_mm(train->id, 8)},
-            .pos_observed_at = Clock::Time(clock),
+            .pos_observed_at = now,
+            .speed_changed_at = now,
+            // we can't predict when we will hit the next sensor since our speed
+            // is 0
+            .has_next_sensor = false,
+            .next_sensor = sensor,
+            .next_sensor_time = -1,
+
+            .has_error = false,
+            .time_error = 0,
+            .distance_error = 0,
         };
 
         Uart::Printf(uart, COM2, "Done calibrating train %hhu..." ENDL, id);
@@ -187,8 +224,12 @@ class TrackOracleImpl {
         td->lights = true;
         // TODO form a guess for the trains velocity until it hits the next
         // sensor
+        int now = Clock::Time(clock);
         if (old_speed == 0 && speed > 0) {
-            td->pos_observed_at = Clock::Time(clock);
+            td->pos_observed_at = now;
+        }
+        if (old_speed != speed) {
+            td->speed_changed_at = now;
         }
         render_train_descriptor(*td);
     }
@@ -210,7 +251,7 @@ class TrackOracleImpl {
                     sensor.group, sensor.idx);
                 continue;
             }
-            if (Marklin::sensor_equal(sensor, td->pos.sensor)) {
+            if (Marklin::sensor_eq(sensor, td->pos.sensor)) {
                 // The sensor was triggered more than once - simply update
                 // pos_observed_at.
                 td->pos_observed_at = now;
@@ -225,9 +266,46 @@ class TrackOracleImpl {
             int distance_mm = distance_between(td->pos, new_pos);
             int new_velocity_mmps =
                 (TICKS_PER_SEC * distance_mm) / (now - td->pos_observed_at);
-            td->velocity = new_velocity_mmps;  // TODO do an EWMA
+
+            if (now - td->speed_changed_at < 4 * TICKS_PER_SEC) {
+                // For the first 4 seconds after a speed change the train could
+                // be accelerating. As such, we expect to observe rapidly
+                // changing velocities, so we set our velocity to the ovserved
+                // velocity directly.
+                td->velocity = new_velocity_mmps;
+            } else {
+                // Once a train has been cruising at the same speed level for a
+                // time, we assume the train's velocity is close to constant. So
+                // we use an exponentially weighted moving average to update our
+                // velocity, smoothing out inconsitencies.
+                td->velocity = ewma4(td->velocity, new_velocity_mmps);
+            }
             td->pos = new_pos;
             td->pos_observed_at = now;
+
+            if (td->has_next_sensor &&
+                Marklin::sensor_eq(sensor, td->next_sensor)) {
+                td->has_error = true;
+                td->time_error = now - td->next_sensor_time;
+                td->distance_error =
+                    td->velocity * td->time_error / TICKS_PER_SEC;
+            } else {
+                // TODO if we miss a sensor, we could probably still extrapolate
+                // this error
+                td->has_error = false;
+            }
+
+            auto next_sensor_opt =
+                track.next_sensor(sensor, branches, BRANCHES_LEN);
+            if (next_sensor_opt.has_value()) {
+                auto [sensor, distance] = next_sensor_opt.value();
+                td->has_next_sensor = true;
+                td->next_sensor = sensor;
+                td->next_sensor_time =
+                    now + ((TICKS_PER_SEC * distance) / td->velocity);
+            } else {
+                td->has_next_sensor = false;
+            }
 
             render_train_descriptor(*td);
         }
