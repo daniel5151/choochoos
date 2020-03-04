@@ -1,10 +1,15 @@
 #include "sysperf.h"
 
+#include <cstdio>
+#include <cstring>
+
 #include "common/vt_escapes.h"
 #include "user/debug.h"
 #include "user/syscalls.h"
 #include "user/tasks/clockserver.h"
 #include "user/tasks/uartserver.h"
+
+static const char BLOCK_CHARS[6][4] = {"▁", "▂", "▃", "▅", "▆", "▇"};
 
 void SysPerf::Task() {
     int tid;
@@ -19,12 +24,29 @@ void SysPerf::Task() {
     assert(clock >= 0);
     assert(uart >= 0);
 
+    uint8_t past_perf[cfg.term_size.width - 16];
+    memset(past_perf, 0, sizeof(past_perf));
+
+    char outbuf[cfg.term_size.width * 3];
+    memset(outbuf, 0, sizeof(outbuf));
+
     perf_t perf;
     for (;;) {
         Perf(&perf);
+
+        memmove(past_perf, past_perf + 1, sizeof(past_perf) - 1);
+        past_perf[sizeof(past_perf) - 1] =
+            (uint8_t)((100 - perf.idle_time_pct) / 18);
+
+        size_t i = 0;
+        for (uint8_t p : past_perf) {
+            i += sprintf(outbuf + i, "%s", BLOCK_CHARS[p]);
+        }
+
         Uart::Printf(uart, COM2,
-                     VT_SAVE VT_ROWCOL_FMT "[Idle Time %02lu%%]" VT_RESTORE, 1,
-                     cfg.term_size.width - 14, perf.idle_time_pct);
+                     VT_SAVE VT_TOPLEFT "Idle Time (%02lu%%) %s" VT_RESTORE,
+                     perf.idle_time_pct, outbuf);
+
         Clock::Delay(clock, (int)25);
     }
 }
