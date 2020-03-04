@@ -84,13 +84,12 @@ static void Prompt() {
     assert(uart >= 0);
     assert(clock >= 0);
 
-    Uart::Putstr(uart, COM2, VT_ROWCOL(5, 1) "> ");
     char line[80];
     while (true) {
+        Uart::Putstr(uart, COM2, VT_ROWCOL(5, 1) VT_CLEARLN "> ");
         Uart::Getline(uart, COM2, line, sizeof(line));
-        Uart::Printf(uart, COM2, VT_UP(1) "\r" VT_CLEARLN "... ");
+        Uart::Printf(uart, COM2, VT_ROWCOL(5, 1) VT_CLEARLN "... ");
         process_cmd(uart, clock, line);
-        Uart::Putstr(uart, COM2, "\r" VT_CLEARLN "> ");
     }
 }
 

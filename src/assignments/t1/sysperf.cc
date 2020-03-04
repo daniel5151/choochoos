@@ -44,8 +44,8 @@ void SysPerf::Task() {
         }
 
         Uart::Printf(uart, COM2,
-                     VT_SAVE VT_TOPLEFT "Idle Time (%02lu%%) %s" VT_RESTORE,
-                     perf.idle_time_pct, outbuf);
+                     VT_SAVE VT_TOPLEFT "CPU Usage (%02lu%%) %s" VT_RESTORE,
+                     (100 - perf.idle_time_pct), outbuf);
 
         Clock::Delay(clock, (int)25);
     }
