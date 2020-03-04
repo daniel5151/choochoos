@@ -43,10 +43,10 @@ void SysPerf::Task() {
             i += sprintf(outbuf + i, "%s", BLOCK_CHARS[p]);
         }
 
-        Uart::Printf(uart, COM2,
-                     VT_SAVE VT_TOPLEFT "CPU Usage (%02lu%%) %s" VT_RESTORE,
+        Uart::Printf(uart, COM2, VT_SAVE VT_TOPLEFT VT_HIDECUR
+                     "CPU Usage (%02lu%%) %s" VT_SHOWCUR VT_RESTORE,
                      (100 - perf.idle_time_pct), outbuf);
 
-        Clock::Delay(clock, (int)25);
+        Clock::Delay(clock, (int)100);
     }
 }

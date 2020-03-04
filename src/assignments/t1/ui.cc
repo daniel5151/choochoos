@@ -58,4 +58,12 @@ void render_train_descriptor(int uart, const train_descriptor_t& td) {
     Uart::Putstr(uart, COM2, line);
 }
 
+
+void prompt_user(int uart, char* buf, size_t len) {
+    Uart::Drain(uart, COM2); // clear any input entered while prompt was busy
+    Uart::Putstr(uart, COM2, VT_ROWCOL(5, 1) VT_CLEARLN "> ");
+    Uart::Getline(uart, COM2, buf, len);
+    Uart::Printf(uart, COM2, VT_ROWCOL(5, 1) VT_CLEARLN "Processing...");
+}
+
 }  // namespace Ui

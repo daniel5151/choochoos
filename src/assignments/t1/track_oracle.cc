@@ -75,12 +75,12 @@ class TrackOracleImpl {
         memset(trains, 0, sizeof(train_descriptor_t) * MAX_TRAINS);
 
         // TODO: actually have different inits for different tracks
-        Uart::Printf(uart, COM2, "Initializing Track A..." ENDL);
+        log_line(uart, "Initializing Track A...");
 
         // ensure the track is on
         marklin.send_go();
 
-        Uart::Printf(uart, COM2, "Stopping all trains..." ENDL);
+        log_line(uart, "Stopping all trains...");
         auto train = Marklin::TrainState(0);
         train.set_speed(0);
         train.set_light(false);
@@ -107,12 +107,12 @@ class TrackOracleImpl {
             }
         }
 
-        Uart::Printf(uart, COM2, "Setting switch positions..." ENDL);
+        log_line(uart, "Setting switch positions...");
         marklin.update_branches(this->branches,
                                 sizeof(Marklin::VALID_SWITCHES));
         marklin.flush();
 
-        Uart::Printf(uart, COM2, "Track has been initialized!" ENDL);
+        log_line(uart, "Track has been initialized!");
     }
 
     void calibrate_train(uint8_t id) {
@@ -126,11 +126,11 @@ class TrackOracleImpl {
         if (train == nullptr)
             panic("Cannot track more than %u trains!", MAX_TRAINS);
 
-        Uart::Printf(uart, COM2, "Stopping train %hhu..." ENDL, id);
+        log_line(uart, "Stopping train %hhu...", id);
         set_train_speed(id, 0);
         Clock::Delay(clock, 200);  // make sure it's slowed down
 
-        Uart::Printf(uart, COM2, "Waiting for train to hit a sensor..." ENDL);
+        log_line(uart, "Waiting for train to hit a sensor...");
 
         // give it some gas
         set_train_speed(id, 8);
@@ -147,8 +147,8 @@ class TrackOracleImpl {
             if (sensor_opt.has_value()) {
                 sensor = sensor_opt.value();
 
-                Uart::Printf(uart, COM2, "Train hit sensor %c%hhu!" ENDL,
-                             sensor.group, sensor.idx);
+                log_line(uart, "Train hit sensor %c%hhu!", sensor.group,
+                         sensor.idx);
                 break;
             }
         }
@@ -177,7 +177,7 @@ class TrackOracleImpl {
             .distance_error = 0,
         };
 
-        Uart::Printf(uart, COM2, "Done calibrating train %hhu..." ENDL, id);
+        log_line(uart, "Done calibrating train %hhu...", id);
         Ui::render_train_descriptor(uart, *train);
     }
 
@@ -215,10 +215,9 @@ class TrackOracleImpl {
             Marklin::sensor_t sensor = sensor_opt.value();
             train_descriptor_t* td = attribute_sensor(sensor);
             if (td == nullptr) {
-                Uart::Printf(
-                    uart, COM2,
-                    "could not attribute sensor %c%hhu to any train" ENDL,
-                    sensor.group, sensor.idx);
+                log_line(uart,
+                         "could not attribute sensor %c%hhu to any train",
+                         sensor.group, sensor.idx);
                 continue;
             }
             if (Marklin::sensor_eq(sensor, td->pos.sensor)) {
@@ -270,7 +269,7 @@ class TrackOracleImpl {
             auto next_sensor_opt =
                 track.next_sensor(sensor, branches, BRANCHES_LEN);
             if (next_sensor_opt.has_value()) {
-                auto [sensor, distance] = next_sensor_opt.value();
+                auto[sensor, distance] = next_sensor_opt.value();
                 td->has_next_sensor = true;
                 td->next_sensor = sensor;
                 td->next_sensor_time =
@@ -350,7 +349,7 @@ void TrackOracleTask() {
     assert(clock >= 0);
     assert(uart >= 0);
 
-    Uart::Printf(uart, COM2, "Spawned TrackOracleTask!" ENDL);
+    log_line(uart, "Spawned TrackOracleTask!");
 
     int tid;
     Req req;

@@ -17,9 +17,10 @@
 
 static inline Marklin::Track query_user_for_track(int uart) {
     while (true) {
-        Uart::Printf(uart, COM2, "Enter the track you'll be using (A or B): ");
+        log_line(uart,
+                 VT_GREEN "Enter the track you'll be using (A or B)" VT_NOFMT);
         char buf[2];
-        Uart::Getline(uart, COM2, buf, sizeof(buf));
+        Ui::prompt_user(uart, buf, sizeof(buf));
 
         switch (tolower(buf[0])) {
             case 'a':
@@ -27,7 +28,7 @@ static inline Marklin::Track query_user_for_track(int uart) {
             case 'b':
                 return Marklin::Track::B;
             default:
-                Uart::Printf(uart, COM2, "Invalid track value." ENDL);
+                log_line(uart, VT_RED "Invalid track value." VT_NOFMT);
         }
     }
 }
@@ -35,9 +36,9 @@ static inline Marklin::Track query_user_for_track(int uart) {
 static inline uint8_t query_user_for_train(int uart) {
     uint8_t train_id;
     while (true) {
-        Uart::Printf(uart, COM2, "Enter the train you'll be using: ");
+        log_line(uart, VT_GREEN "Enter the train you'll be using" VT_NOFMT);
         char buf[4];
-        Uart::Getline(uart, COM2, buf, sizeof(buf));
+        Ui::prompt_user(uart, buf, sizeof(buf));
 
         int t = 0;
         int matches = sscanf(buf, "%d", &t);
@@ -55,41 +56,37 @@ static inline uint8_t query_user_for_train(int uart) {
             }
         }
 
-        Uart::Printf(uart, COM2, "Invalid train number." ENDL);
+        log_line(uart, VT_RED "Invalid train number." VT_NOFMT);
     }
     return train_id;
 }
 
 static inline void wait_for_enter(int uart) {
     char dummy;
-    Uart::Getline(uart, COM2, &dummy, sizeof(dummy));
+    Ui::prompt_user(uart, &dummy, sizeof(dummy));
 }
 
-static void process_cmd(int uart, int clock, const char* cmd) {
-    if (strcmp(cmd, "q") == 0) {
-        Uart::Putstr(uart, COM2, VT_RESET);
-        Uart::Flush(uart, COM2);
-        Shutdown();
-    }
-
-    // TODO parse and handle the command (this can block - if it does, the
-    // prompt will say "..." until it returns)
-    log_line(uart, "you wrote '%s'", cmd);
-    Clock::Delay(clock, 100);
-}
-
-static void Prompt() {
+static void CmdTask() {
     int uart = WhoIs(Uart::SERVER_ID);
     int clock = WhoIs(Clock::SERVER_ID);
     assert(uart >= 0);
     assert(clock >= 0);
 
+    log_line(uart, VT_YELLOW "Ready to accept commands!" VT_NOFMT);
+
     char line[80];
     while (true) {
-        Uart::Putstr(uart, COM2, VT_ROWCOL(5, 1) VT_CLEARLN "> ");
-        Uart::Getline(uart, COM2, line, sizeof(line));
-        Uart::Printf(uart, COM2, VT_ROWCOL(5, 1) VT_CLEARLN "... ");
-        process_cmd(uart, clock, line);
+        Ui::prompt_user(uart, line, sizeof(line));
+
+        // TODO parse and handle the command (this can block)
+        if (strcmp(line, "q") == 0) {
+            Uart::Putstr(uart, COM2, VT_RESET);
+            Uart::Flush(uart, COM2);
+            Shutdown();
+        }
+
+        log_line(uart, "you wrote '%s'", line);
+        Clock::Delay(clock, 100);
     }
 }
 
@@ -105,10 +102,12 @@ static void t1_main(int clock, int uart) {
     // determine which train to use
     uint8_t train_id = query_user_for_train(uart);
 
-    Uart::Printf(uart, COM2,
-                 "Press [ENTER] after placing the train somewhere on the train "
-                 "set. It's okay if the train is running, we'll send a stop "
-                 "command." ENDL);
+    log_line(
+        uart, VT_YELLOW
+        "Place the train somewhere on the track." VT_NOFMT ENDL
+        "It's okay if the train is running, we'll send a stop command." ENDL
+            VT_GREEN "Press [ENTER] once the train is on the track."
+        );
     wait_for_enter(uart);
 
     // register the train with the oracle
@@ -116,10 +115,10 @@ static void t1_main(int clock, int uart) {
 
     // TODO: parse commands, including a new command to route to a specific
     // position
-    Uart::Printf(uart, COM2, "Press [ENTER] to start the train" ENDL);
+    log_line(uart, VT_GREEN "Press [ENTER] to start the train");
     wait_for_enter(uart);
 
-    Create(0, Prompt);
+    Create(0, CmdTask);
 
     track_oracle.set_train_speed(train_id, 14);
     while (true) {
