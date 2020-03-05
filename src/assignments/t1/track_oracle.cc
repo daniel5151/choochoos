@@ -129,7 +129,7 @@ class TrackOracleImpl {
                 track.next_sensor(t.next_sensor, branches, BRANCHES_LEN);
 
             if (next_sensor_opt.has_value()) {
-                auto [next_sensor, _] =  next_sensor_opt.value();
+                auto [next_sensor, _] = next_sensor_opt.value();
                 if (Marklin::sensor_eq(sensor, next_sensor)) {
                     return &t;
                 }
@@ -196,13 +196,11 @@ class TrackOracleImpl {
 
             log_line(
                 uart,
-                "train %d distance_travelled_mm=%d distance_to_target_mm=%d "
-                "(%c%u@%d->%c%u@%d) "
-                "ticks_until_target=%d",
-                td.id, distance_travelled_mm, distance_to_target_mm,
-                new_pos.sensor.group, new_pos.sensor.idx, new_pos.offset_mm,
-                wake.pos.sensor.group, wake.pos.sensor.idx, wake.pos.offset_mm,
-                ticks_until_target);
+                "train %d velocity=%dmm/s distance to target=%dmm "
+                "(%c%u@%d->%c%u@%d) ticks_until_target=%d",
+                td.id, td.velocity, distance_to_target_mm, new_pos.sensor.group,
+                new_pos.sensor.idx, new_pos.offset_mm, wake.pos.sensor.group,
+                wake.pos.sensor.idx, wake.pos.offset_mm, ticks_until_target);
 
             // If we won't tick again until after the deadline, delay until the
             // exact moment that we wish to respond.
