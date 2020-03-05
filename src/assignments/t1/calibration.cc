@@ -13,8 +13,8 @@ namespace Calibration {
 static const StaticCalibrationData calibration;
 
 int expected_velocity(uint8_t train, uint8_t speed) {
-    int idx = calibration_index_of_train(train);
-    assert(idx >= 0);
+    int idx = calibration_index_of_train((int)train);
+    if (idx < 0) panic("no index for train %u", train);
     if (speed == 0) return 0;
 
     const speed_level_t& speed_data =
@@ -26,8 +26,8 @@ int expected_velocity(uint8_t train, uint8_t speed) {
 }
 
 int stopping_distance(uint8_t train, uint8_t speed) {
-    int idx = calibration_index_of_train(train);
-    assert(idx >= 0);
+    int idx = calibration_index_of_train((int)train);
+    if (idx < 0) panic("no index for train %u", train);
     if (speed == 0) return 0;
 
     const speed_level_t& speed_data =
@@ -43,6 +43,13 @@ int stopping_time(uint8_t train, uint8_t speed) {
     (void)train;
     (void)speed;
     return 300;  // 3 seconds
+}
+
+int acceleration_time(uint8_t train, uint8_t target_speed) {
+    // TODO measure this?
+    (void)train;
+    (void)target_speed;
+    return 400;  // 4 seconds
 }
 
 }  // namespace Calibration

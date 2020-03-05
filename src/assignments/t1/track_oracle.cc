@@ -99,14 +99,6 @@ class TrackOracleImpl {
         return nullptr;
     }
 
-    int stopping_distance_mm(uint8_t train, uint8_t speed) const {
-        // TODO use calibration data
-        (void)train;
-        (void)speed;
-
-        return 250;  // 25cm
-    }
-
     train_descriptor_t* attribute_sensor(Marklin::sensor_t sensor) {
         // TODO base this off of how far the sensor is from our prediction of
         // where each train is
@@ -123,6 +115,56 @@ class TrackOracleImpl {
         return track.distance_between(old_pos.sensor, new_pos.sensor,
                                       this->branches, BRANCHES_LEN) +
                (new_pos.offset_mm - old_pos.offset_mm);
+    }
+
+    void check_scheduled_wakeups() {
+        if (blocked_task.has_value()) {
+            // TODO: multiple task support
+            wakeup_t& wake = blocked_task.value();
+
+            // look up associated train descriptor
+            const train_descriptor_t* td_opt = descriptor_for(wake.train);
+            assert(td_opt != nullptr);
+            const train_descriptor_t& td = *td_opt;
+
+            // use td.pos, td.pos_observed_at + Clock::Time, and td.velocity to
+            // extrapolate the train's current position
+
+            int dt = Clock::Time(clock) - td.pos_observed_at;
+            assert(dt >= 0);
+
+            int distance_travelled_mm = td.velocity * dt / TICKS_PER_SEC;
+
+            Marklin::track_pos_t new_pos = td.pos;
+            new_pos.offset_mm += distance_travelled_mm;
+            // FIXME: implement offset normalization
+            // (i.e: if offset is > next sensor)
+            // required to be robust against broken sensors!
+
+            int distance_to_target_mm = distance_between(new_pos, wake.pos);
+            int ticks_until_target =
+                (TICKS_PER_SEC * distance_to_target_mm) / td.velocity;
+
+            log_line(
+                uart,
+                "train %d distance_travelled_mm=%d distance_to_target_mm=%d "
+                "(%c%u@%d->%c%u@%d) "
+                "ticks_until_target=%d",
+                td.id, distance_travelled_mm, distance_to_target_mm,
+                new_pos.sensor.group, new_pos.sensor.idx, new_pos.offset_mm,
+                wake.pos.sensor.group, wake.pos.sensor.idx, wake.pos.offset_mm,
+                ticks_until_target);
+
+            if (ticks_until_target <= 7) {
+                if (ticks_until_target > 0)
+                    Clock::Delay(clock, ticks_until_target);
+
+                // wake up the task, and remove it from the blocked list
+                Res res = {.tag = MsgTag::WakeAtPos, .wake_at_pos = {}};
+                Reply(wake.tid, (char*)&res, sizeof(res));
+                blocked_task = std::nullopt;
+            }
+        }
     }
 
    public:
@@ -226,7 +268,7 @@ class TrackOracleImpl {
             .lights = false,
             .velocity = 0,
             .pos = {.sensor = sensor,
-                    .offset_mm = stopping_distance_mm(train->id, 8)},
+                    .offset_mm = Calibration::stopping_distance(id, 8)},
             .pos_observed_at = now,
             .speed_changed_at = now,
             // we can't predict when we will hit the next sensor since our speed
@@ -276,6 +318,10 @@ class TrackOracleImpl {
     }
 
     void update_sensors() {
+        // TODO maybe we just run this from some sort of tick() function that
+        // runs well, every tick.
+        check_scheduled_wakeups();
+
         Marklin::SensorData sensor_data;
         marklin.query_sensors(sensor_data.raw);
 
@@ -311,11 +357,11 @@ class TrackOracleImpl {
             if (dt_ticks <= 0) continue;
             int new_velocity_mmps = (TICKS_PER_SEC * distance_mm) / dt_ticks;
 
-            if (now - td.speed_changed_at < 4 * TICKS_PER_SEC) {
-                // For the first 4 seconds after a speed change the train could
-                // be accelerating. As such, we expect to observe rapidly
-                // changing velocities, so we set our velocity to the ovserved
-                // velocity directly.
+            if (now - td.speed_changed_at <
+                Calibration::acceleration_time(td.id, td.speed)) {
+                // If the train is accelerating, we are super uncertain of its
+                // velocity, so we set our velocity to the ovserved velocity
+                // directly.
                 td.velocity = new_velocity_mmps;
             } else {
                 // Once a train has been cruising at the same speed level for a
@@ -358,57 +404,6 @@ class TrackOracleImpl {
                      new_pos.sensor.group, new_pos.sensor.idx, distance_mm,
                      dt_ticks / TICKS_PER_SEC, dt_ticks % TICKS_PER_SEC,
                      new_velocity_mmps);
-        }
-
-        // check to see if any tasks need to be woken up
-        // TODO: this might need to be in it's own, separate, periodic task
-        // (i.e: not bundled with sensor updates).
-        if (blocked_task.has_value()) {
-            // TODO: multiple task support
-            wakeup_t& wake = blocked_task.value();
-
-            // look up associated train descriptor
-            const train_descriptor_t* td_opt = descriptor_for(wake.train);
-            assert(td_opt != nullptr);
-            const train_descriptor_t& td = *td_opt;
-
-            // use td.pos, td.pos_observed_at + Clock::Time, and td.velocity to
-            // extrapolate the train's current position
-
-            int dt = Clock::Time(clock) - td.pos_observed_at;
-            assert(dt >= 0);
-
-            int distance_travelled_mm = td.velocity * dt / TICKS_PER_SEC;
-
-            Marklin::track_pos_t new_pos = td.pos;
-            new_pos.offset_mm += distance_travelled_mm;
-            // FIXME: implement offset normalization
-            // (i.e: if offset is > next sensor)
-            // required to be robust against broken sensors!
-
-            int distance_to_target_mm = distance_between(new_pos, wake.pos);
-            int ticks_until_target =
-                (TICKS_PER_SEC * distance_to_target_mm) / td.velocity;
-
-            log_line(
-                uart,
-                "train %d distance_travelled_mm=%d distance_to_target_mm=%d "
-                "(%c%u@%d->%c%u@%d) "
-                "ticks_until_target=%d",
-                td.id, distance_travelled_mm, distance_to_target_mm,
-                new_pos.sensor.group, new_pos.sensor.idx, new_pos.offset_mm,
-                wake.pos.sensor.group, wake.pos.sensor.idx, wake.pos.offset_mm,
-                ticks_until_target);
-
-            if (ticks_until_target <= 7) {
-                if (ticks_until_target > 0)
-                    Clock::Delay(clock, ticks_until_target);
-
-                // wake up the task, and remove it from the blocked list
-                Res res = {.tag = MsgTag::WakeAtPos, .wake_at_pos = {}};
-                Reply(wake.tid, (char*)&res, sizeof(res));
-                blocked_task = std::nullopt;
-            }
         }
     }
 
