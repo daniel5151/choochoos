@@ -17,19 +17,19 @@
 #include "ui.h"
 
 static inline void print_help(const int uart) {
-    // clang-fmt off
+    // clang-format off
     log_line(uart,
         "t1 commands:" ENDL
         "  addtr <train-id>                - register a train with the track" ENDL
         "  route <train> <sensor> <offset> - route train to sensor with given offset" ENDL
-        "  q                               - quit"
-        "" ENDL
+        "  q                               - quit" ENDL
+        ENDL
         "debug commands:" ENDL
         "  tr <train> <speed> - set a train to a certain speed" ENDL
         "  sw <branch> <c|s>  - set a branch to be (c)urved or (s)traight" ENDL
         "  rv <train>         - reverse a train (MUST BE AT SPEED ZERO!)" ENDL
     );
-    // clang-fmt on
+    // clang-format on
 }
 
 static inline Marklin::Track query_user_for_track(const int uart) {
@@ -86,17 +86,20 @@ static void do_route_cmd(const int uart,
     int stop_at_offset = offset - Calibration::stopping_distance(train, 8);
     Marklin::track_pos_t send_stop_at_pos = {.sensor = sensor,
                                              .offset_mm = stop_at_offset};
-    log_line(uart, VT_CYAN
+    log_line(uart,
+             VT_CYAN
              "Waiting for train %u to reach sensor %c%u%c%dmm ..." VT_NOFMT,
              train, sensor.group, sensor.idx, stop_at_offset < 0 ? '-' : '+',
              std::abs(stop_at_offset));
     if (!track_oracle.wake_at_pos(train, send_stop_at_pos)) {
-        log_line(uart, VT_RED "Routing failed :'(" VT_NOFMT
-                              " stopping train %d in place.",
+        log_line(uart,
+                 VT_RED "Routing failed :'(" VT_NOFMT
+                        " stopping train %d in place.",
                  train);
         track_oracle.set_train_speed(train, 0);
     }
-    log_line(uart, VT_CYAN
+    log_line(uart,
+             VT_CYAN
              "Sending speed=0 to train %u. Waiting for train to "
              "stop..." VT_NOFMT,
              train);
@@ -115,6 +118,7 @@ static void CmdTask() {
     TrackOracle track_oracle = TrackOracle();
 
     log_line(uart, VT_YELLOW "Ready to accept commands!" VT_NOFMT);
+    print_help(uart);
 
     char line[80];
     while (true) {
@@ -147,7 +151,8 @@ static void CmdTask() {
                 // register the train with the oracle
                 track_oracle.calibrate_train(train);
 
-                log_line(uart, VT_GREEN "Press [ENTER] to start the train" VT_NOFMT);
+                log_line(uart,
+                         VT_GREEN "Press [ENTER] to start the train" VT_NOFMT);
                 wait_for_enter(uart);
 
                 track_oracle.set_train_speed(train, 14);
@@ -225,7 +230,9 @@ static void t1_main(int clock, int uart) {
     // create the track oracle (which also instantiates the track)
     TrackOracle track_oracle = TrackOracle(track_id);
 
-    Create(0, CmdTask);
+    // CmdTask has higher priority than t1_main so that oracle commands it sends
+    // trump sensor queries.
+    Create(1, CmdTask);
 
     // This task is now the update_sensors task
     while (true) {

@@ -94,6 +94,11 @@ class TrackOracleImpl {
     // TODO: support more than one blocked task
     std::optional<wakeup_t> blocked_task;
 
+    int last_ticked_at;
+    int max_tick_delay;
+
+    // -------------------------- private methods -----------------------------
+
     train_descriptor_t* descriptor_for(uint8_t train) {
         for (train_descriptor_t& t : trains) {
             if (t.id == train) return &t;
@@ -199,7 +204,9 @@ class TrackOracleImpl {
                 wake.pos.sensor.group, wake.pos.sensor.idx, wake.pos.offset_mm,
                 ticks_until_target);
 
-            if (ticks_until_target <= 7) {
+            // If we won't tick again until after the deadline, delay until the
+            // exact moment that we wish to respond.
+            if (ticks_until_target <= max_tick_delay) {
                 if (ticks_until_target > 0)
                     Clock::Delay(clock, ticks_until_target);
 
@@ -262,7 +269,12 @@ class TrackOracleImpl {
     TrackOracleImpl& operator=(TrackOracleImpl&&) = delete;
 
     TrackOracleImpl(int uart_tid, int clock_tid, Marklin::Track track_id)
-        : track(track_id), uart{uart_tid}, clock{clock_tid}, marklin(uart_tid) {
+        : track(track_id),
+          uart{uart_tid},
+          clock{clock_tid},
+          marklin(uart_tid),
+          last_ticked_at{-1},
+          max_tick_delay{0} {
         memset(trains, 0, sizeof(train_descriptor_t) * MAX_TRAINS);
 
         // TODO: actually have different inits for different tracks
@@ -525,6 +537,7 @@ class TrackOracleImpl {
                      dt_ticks / TICKS_PER_SEC, dt_ticks % TICKS_PER_SEC,
                      new_velocity_mmps);
         }
+        tick();
     }
 
     void wake_at_pos(int tid, uint8_t train, Marklin::track_pos_t pos) {
@@ -548,6 +561,17 @@ class TrackOracleImpl {
 
     void tick() {
         int now = Clock::Time(clock);
+        if (last_ticked_at == -1) {
+            last_ticked_at = now;
+        } else {
+            int delay = now - last_ticked_at;
+            if (delay > max_tick_delay && delay < 100) {
+                max_tick_delay = delay;
+                log_line(uart, "max tick delay updated to %d ticks", delay);
+            }
+            last_ticked_at = now;
+        }
+
         interpolate_acceleration(now);
         check_scheduled_wakeups();
     }
