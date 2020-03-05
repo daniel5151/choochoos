@@ -9,6 +9,7 @@
 #include "user/tasks/clockserver.h"
 #include "user/tasks/uartserver.h"
 
+#include "calibration.h"
 #include "marklin.h"
 #include "sysperf.h"
 #include "track_oracle.h"
@@ -117,20 +118,6 @@ static inline bool parse_route_cmd(char* line,
     return true;
 }
 
-static int stopping_distance(uint8_t train, uint8_t speed) {
-    // TODO use our calibration data
-    (void)train;
-    (void)speed;
-    return 250;  // 25 cm
-}
-
-static int stopping_time(uint8_t train, uint8_t speed) {
-    // TODO use our calibration data
-    (void)train;
-    (void)speed;
-    return 300;  // 3 seconds
-}
-
 static void CmdTask() {
     int uart = WhoIs(Uart::SERVER_ID);
     int clock = WhoIs(Clock::SERVER_ID);
@@ -177,7 +164,7 @@ static void CmdTask() {
                  train, sensor.group, sensor.idx, offset);
 
         track_oracle.set_train_speed(train, 8);
-        int stop_at_offset = offset - stopping_distance(train, 8);
+        int stop_at_offset = offset - Calibration::stopping_distance(train, 8);
         Marklin::track_pos_t send_stop_at_pos = {.sensor = sensor,
                                                  .offset_mm = stop_at_offset};
         log_line(uart,
@@ -192,7 +179,7 @@ static void CmdTask() {
                  "stop..." VT_NOFMT,
                  train);
         track_oracle.set_train_speed(train, 0);
-        Clock::Delay(clock, stopping_time(train, 8));
+        Clock::Delay(clock, Calibration::stopping_time(train, 8));
         log_line(uart, VT_CYAN "Stopped! (hopefully)" VT_NOFMT);
     }
 }

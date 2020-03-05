@@ -5,25 +5,13 @@
 #include <optional>
 
 #include "common/vt_escapes.h"
-#include "ui.h"
 #include "user/debug.h"
 #include "user/syscalls.h"
 #include "user/tasks/clockserver.h"
 #include "user/tasks/uartserver.h"
 
-static int expected_velocity(uint8_t train, uint8_t speed) {
-    if (speed == 0) return 0;
-    // TODO use calibration data
-    (void)train;
-    switch (speed) {
-        case 8:
-            return 200;
-        case 14:
-            return 600;
-        default:
-            panic("no expected velocity for train=%u speed=%u", train, speed);
-    }
-}
+#include "calibration.h"
+#include "ui.h"
 
 // ------------------------ TrackOracleTask Plumbing ------------------------ //
 
@@ -272,7 +260,8 @@ class TrackOracleImpl {
 
         // "guess" the train's velocity to be halfway between it's current
         // velocity and the expected steady-state velocity at this speed level.
-        td.velocity = (td.velocity + expected_velocity(td.id, speed)) / 2;
+        td.velocity =
+            (td.velocity + Calibration::expected_velocity(td.id, speed)) / 2;
         // TODO after some acceleration time, we should probably set the
         // velocity directly to the expected velocity.
 
