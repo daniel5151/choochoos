@@ -121,3 +121,13 @@ std::optional<int> TrackGraph::distance_between(
           old_sensor.idx, new_sensor.group, new_sensor.idx, distance);
     return distance;
 }
+
+Marklin::sensor_t TrackGraph::invert_sensor(
+    const Marklin::sensor_t& sensor) const {
+    const track_node* node = nullptr;
+    for (auto& n : track) {
+        if (node_is_sensor(n, sensor)) node = &n;
+    }
+    if (node == nullptr) panic("unknown sensor %c%u", sensor.group, sensor.idx);
+    return sensor_of_node(*node->reverse);
+}

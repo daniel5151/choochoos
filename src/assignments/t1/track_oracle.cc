@@ -194,7 +194,15 @@ class TrackOracleImpl {
             if (td.id <= 0) continue;
             if (!td.accelerating) continue;
 
-            assert(td.old_speed != td.speed);
+            if (td.old_speed == td.speed) {
+                log_line(uart,
+                         VT_YELLOW "WARNING" VT_NOFMT
+                                   " interpolate_acceleration: "
+                                   "old_speed=new_speed=%u for train %u",
+                         td.speed, td.id);
+                td.accelerating = false;
+                continue;
+            }
 
             int old_velocity =
                 Calibration::expected_velocity(td.id, td.old_speed);
@@ -380,6 +388,10 @@ class TrackOracleImpl {
         train_descriptor_t& td = *td_opt;
 
         assert(td.speed == 0);
+        Marklin::track_pos_t old_pos = td.pos;
+        td.pos.sensor = track.invert_sensor(old_pos.sensor);
+        td.pos.offset_mm = -old_pos.offset_mm;
+        Ui::render_train_descriptor(uart, td);
     }
 
     void set_branch_dir(uint8_t id, Marklin::BranchDir dir) {
@@ -427,7 +439,8 @@ class TrackOracleImpl {
             };
             auto distance_opt = distance_between(old_pos, new_pos);
             if (!distance_opt.has_value()) {
-                log_line(uart, VT_YELLOW
+                log_line(uart,
+                         VT_YELLOW
                          "WARNING" VT_NOFMT
                          " cannot calculate distance between %c%u@%d and "
                          "%c%u@%d despite being attributed to train %d",
@@ -471,7 +484,7 @@ class TrackOracleImpl {
             auto next_sensor_opt =
                 track.next_sensor(sensor, branches, BRANCHES_LEN);
             if (next_sensor_opt.has_value()) {
-                auto[sensor, distance] = next_sensor_opt.value();
+                auto [sensor, distance] = next_sensor_opt.value();
                 td.has_next_sensor = true;
                 td.next_sensor = sensor;
                 td.next_sensor_time =
@@ -497,8 +510,9 @@ class TrackOracleImpl {
         }
 
         if (descriptor_for(train) == nullptr) {
-            log_line(uart, VT_YELLOW "WARNING" VT_NOFMT
-                                     " wake_at_pos: uncalibrated train %u",
+            log_line(uart,
+                     VT_YELLOW "WARNING" VT_NOFMT
+                               " wake_at_pos: uncalibrated train %u",
                      train);
             Res res = {.tag = MsgTag::WakeAtPos,
                        .wake_at_pos = {.success = false}};

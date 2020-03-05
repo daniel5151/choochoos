@@ -21,4 +21,5 @@ class TrackGraph {
     next_sensor(const Marklin::sensor_t& sensor,
                 const Marklin::BranchState* branches,
                 size_t branches_len) const;
+    Marklin::sensor_t invert_sensor(const Marklin::sensor_t& sensor) const;
 };
