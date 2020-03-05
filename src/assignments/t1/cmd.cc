@@ -58,9 +58,12 @@ std::optional<Command> Command::from_string(char* input) {
         if (input[5] != ' ') return std::nullopt;
         cmd.route.sensor_group = (char)toupper(cmd.route.sensor_group);
         cmd.kind = Command::ROUTE;
-    } else if (sscanf(input, "addtr%u%n", &cmd.addtr.no,&chars_read) == 1) {
+    } else if (sscanf(input, "addtr%u%n", &cmd.addtr.no, &chars_read) == 1) {
         if (input[5] != ' ') return std::nullopt;
         cmd.kind = Command::ADDTR;
+    } else if (strcmp("help", input) == 0) {
+        chars_read = 4;
+        cmd.kind = Command::HELP;
     } else if (strcmp("q", input) == 0) {
         cmd.kind = Command::Q;
     } else if (strcmp("s", input) == 0) {

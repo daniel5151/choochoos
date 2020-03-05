@@ -16,6 +16,22 @@
 #include "track_oracle.h"
 #include "ui.h"
 
+static inline void print_help(const int uart) {
+    // clang-fmt off
+    log_line(uart,
+        "t1 commands:" ENDL
+        "  addtr <train-id>                - register a train with the track" ENDL
+        "  route <train> <sensor> <offset> - route train to sensor with given offset" ENDL
+        "  q                               - quit"
+        "" ENDL
+        "debug commands:" ENDL
+        "  tr <train> <speed> - set a train to a certain speed" ENDL
+        "  sw <branch> <c|s>  - set a branch to be (c)urved or (s)traight" ENDL
+        "  rv <train>         - reverse a train (MUST BE AT SPEED ZERO!)" ENDL
+    );
+    // clang-fmt on
+}
+
 static inline Marklin::Track query_user_for_track(const int uart) {
     while (true) {
         log_line(uart,
@@ -135,6 +151,9 @@ static void CmdTask() {
                 wait_for_enter(uart);
 
                 track_oracle.set_train_speed(train, 14);
+            } break;
+            case Command::HELP: {
+                print_help(uart);
             } break;
             case Command::GO: {
                 // IMPROVEMENT: actually implement go command

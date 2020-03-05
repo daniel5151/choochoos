@@ -9,6 +9,7 @@ struct Command {
     enum {
         ADDTR,
         GO,
+        HELP,
         LIGHT,
         Q,
         ROUTE,
@@ -23,6 +24,8 @@ struct Command {
         } addtr;
         struct {
         } go;
+        struct {
+        } help;
         struct {
             size_t no;
         } light;
