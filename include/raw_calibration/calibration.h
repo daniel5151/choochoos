@@ -6,6 +6,10 @@
 #include "stdbool.h"
 #include "string.h" // memset
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define CALIBRATION_NUM_TRAINS 6
 
 struct speed_level_t {
@@ -27,4 +31,8 @@ struct calibration_data_t {
 
 int calibration_index_of_train(int train);
 void fill_calibration_data(struct calibration_data_t* c);
+
+#ifdef __cplusplus
+}
+#endif
 
