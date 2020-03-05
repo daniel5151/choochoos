@@ -22,7 +22,7 @@ enum class MsgTag {
     QueryBranch,
     QueryTrain,
     ReverseTrain,
-    SetBranch,
+    SetBranchDir,
     SetTrainLight,
     SetTrainSpeed,
     WakeAtPos,
@@ -337,6 +337,31 @@ class TrackOracleImpl {
         Ui::render_train_descriptor(uart, td);
     }
 
+    void reverse_train(uint8_t id) {
+        auto train = Marklin::TrainState(id);
+        train.set_speed(15);
+        train.set_light(true);
+        marklin.update_train(train);
+
+        train_descriptor_t* td_opt = descriptor_for(id);
+        if (td_opt == nullptr) return;  // TODO: make this an assertion fail?
+        train_descriptor_t& td = *td_opt;
+
+        assert(td.speed == 0);
+    }
+
+    void set_branch_dir(uint8_t id, Marklin::BranchDir dir) {
+        for (auto& b : this->branches) {
+            if (b.get_id() == id) {
+                b.set_dir(dir);
+                marklin.update_branch(id, dir);
+                return;
+            }
+        }
+
+        panic("called set_branch_dir with invalid branch id");
+    }
+
     void update_sensors() {
         // TODO maybe we just run this from some sort of tick() function that
         // runs well, every tick.
@@ -374,8 +399,7 @@ class TrackOracleImpl {
             };
             auto distance_opt = distance_between(old_pos, new_pos);
             if (!distance_opt.has_value()) {
-                log_line(uart,
-                         VT_YELLOW
+                log_line(uart, VT_YELLOW
                          "WARNING" VT_NOFMT
                          " cannot calculate distance between %c%u@%d and "
                          "%c%u@%d despite being attributed to train %d",
@@ -419,7 +443,7 @@ class TrackOracleImpl {
             auto next_sensor_opt =
                 track.next_sensor(sensor, branches, BRANCHES_LEN);
             if (next_sensor_opt.has_value()) {
-                auto [sensor, distance] = next_sensor_opt.value();
+                auto[sensor, distance] = next_sensor_opt.value();
                 td.has_next_sensor = true;
                 td.next_sensor = sensor;
                 td.next_sensor_time =
@@ -445,9 +469,8 @@ class TrackOracleImpl {
         }
 
         if (descriptor_for(train) == nullptr) {
-            log_line(uart,
-                     VT_YELLOW "WARNING" VT_NOFMT
-                               " wake_at_pos: uncalibrated train %u",
+            log_line(uart, VT_YELLOW "WARNING" VT_NOFMT
+                                     " wake_at_pos: uncalibrated train %u",
                      train);
             Res res = {.tag = MsgTag::WakeAtPos,
                        .wake_at_pos = {.success = false}};
@@ -516,10 +539,11 @@ void TrackOracleTask() {
                 panic("TrackOracle: SetTrainLight message unimplemented");
             } break;
             case MsgTag::ReverseTrain: {
-                panic("TrackOracle: ReverseTrain message unimplemented");
+                oracle.reverse_train(req.reverse_train.id);
             } break;
-            case MsgTag::SetBranch: {
-                panic("TrackOracle: SetBranch message unimplemented");
+            case MsgTag::SetBranchDir: {
+                oracle.set_branch_dir(req.set_branch_dir.id,
+                                      req.set_branch_dir.dir);
             } break;
             case MsgTag::QueryTrain: {
                 panic("TrackOracle: QueryTrain message unimplemented");
@@ -595,7 +619,7 @@ void TrackOracle::reverse_train(uint8_t id) {
 
 /// Update a branch's direction
 void TrackOracle::set_branch_dir(uint8_t id, Marklin::BranchDir dir) {
-    Req req = {.tag = MsgTag::SetBranch,
+    Req req = {.tag = MsgTag::SetBranchDir,
                .set_branch_dir = {.id = id, .dir = dir}};
     send_with_assert_empty_response(this->tid, req);
 }

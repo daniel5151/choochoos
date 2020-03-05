@@ -99,7 +99,7 @@ class BranchState {
     BranchState() = default;
     BranchState(uint8_t id, BranchDir branch_dir) : no{id}, dir{branch_dir} {}
 
-    uint8_t get_branch() const { return no; }
+    uint8_t get_id() const { return no; }
     BranchDir get_dir() const { return dir; }
 
     void set_id(uint8_t id) { no = id; }

@@ -35,7 +35,7 @@ inline static Marklin::BranchDir branch_dir(
     const Marklin::BranchState* branches,
     size_t branches_len) {
     for (size_t i = 0; i < branches_len; i++) {
-        if (branches[i].get_branch() == branch.num) {
+        if (branches[i].get_id() == branch.num) {
             return branches[i].get_dir();
         }
     }
