@@ -49,6 +49,11 @@ class TrackOracle {
     /// track's branches to a preset state.
     TrackOracle(Marklin::Track track);
 
+    // Look up the existing track oracle task via the nameserver - callers must
+    // ensure that the task-spawning constructor above has already been called
+    // once.
+    TrackOracle();
+
     /// Called whenever a new train is placed on the track. Sets the train speed
     /// to zero, waits a bit, sets the speed to something fairly low, and waits
     /// for it to hit a sensor (thereby determining it's position and direction)

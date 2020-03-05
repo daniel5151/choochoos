@@ -11,7 +11,6 @@
 #include "user/tasks/clockserver.h"
 #include "user/tasks/uartserver.h"
 
-
 // ------------------------ TrackOracleTask Plumbing ------------------------ //
 
 enum class MsgTag {
@@ -64,9 +63,9 @@ struct Res {
     };
 };
 
-
 static constexpr size_t MAX_TRAINS = 6;
 static constexpr size_t BRANCHES_LEN = sizeof(Marklin::VALID_SWITCHES);
+static const char* TRACK_ORACLE_TASK_ID = "TRACK_ORACLE";
 
 // EWMA with alpha = 1/4
 inline static int ewma4(int curr, int obs) { return (3 * curr + obs) / 4; }
@@ -250,7 +249,7 @@ class TrackOracleImpl {
         marklin.update_train(train);
 
         train_descriptor_t* td_opt = descriptor_for(id);
-        if (td_opt == nullptr) return; // TODO: make this an assertion fail?
+        if (td_opt == nullptr) return;  // TODO: make this an assertion fail?
         train_descriptor_t& td = *td_opt;
 
         uint8_t old_speed = td.speed;
@@ -324,8 +323,7 @@ class TrackOracleImpl {
                 Marklin::sensor_eq(sensor, td.next_sensor)) {
                 td.has_error = true;
                 td.time_error = now - td.next_sensor_time;
-                td.distance_error =
-                    td.velocity * td.time_error / TICKS_PER_SEC;
+                td.distance_error = td.velocity * td.time_error / TICKS_PER_SEC;
             } else {
                 // TODO if we miss a sensor, we could probably still extrapolate
                 // this error
@@ -335,7 +333,7 @@ class TrackOracleImpl {
             auto next_sensor_opt =
                 track.next_sensor(sensor, branches, BRANCHES_LEN);
             if (next_sensor_opt.has_value()) {
-                auto[sensor, distance] = next_sensor_opt.value();
+                auto [sensor, distance] = next_sensor_opt.value();
                 td.has_next_sensor = true;
                 td.next_sensor = sensor;
                 td.next_sensor_time =
@@ -380,11 +378,11 @@ class TrackOracleImpl {
             // (i.e: if offset is > next sensor)
             // required to be robust against broken sensors!
 
-                // XXX: jams pls do better math. 70 is a bogus random value ahh
-            if (wake.pos.offset_mm - new_pos.offset_mm < 70) { // ?????????
+            // XXX: jams pls do better math. 70 is a bogus random value ahh
+            if (wake.pos.offset_mm - new_pos.offset_mm < 70) {  // ?????????
 
                 // wake up the task, and remove it from the blocked list
-                Res res = {.tag = MsgTag::WakeAtPos, .wake_at_pos={}};
+                Res res = {.tag = MsgTag::WakeAtPos, .wake_at_pos = {}};
                 Reply(wake.tid, (char*)&res, sizeof(res));
                 blocked_task = std::nullopt;
             }
@@ -400,6 +398,9 @@ class TrackOracleImpl {
 };
 
 void TrackOracleTask() {
+    int nsres = RegisterAs(TRACK_ORACLE_TASK_ID);
+    assert(nsres >= 0);
+
     int clock = WhoIs(Clock::SERVER_ID);
     int uart = WhoIs(Uart::SERVER_ID);
 
@@ -489,6 +490,18 @@ TrackOracle::TrackOracle(Marklin::Track track) {
     this->tid = Create(1000, TrackOracleTask);
     Req req = {.tag = MsgTag::InitTrack, .init = {.track = track}};
     send_with_assert_empty_response(this->tid, req);
+}
+
+TrackOracle::TrackOracle() {
+    int tid = WhoIs(TRACK_ORACLE_TASK_ID);
+    if (tid < 0) {
+        panic(
+            "TrackOracle::TrackOracle - oracle task not running (WhoIs "
+            "returned %d). Did you forget to use the task spawning constructor "
+            "first?",
+            tid);
+    }
+    this->tid = tid;
 }
 
 /// Called whenever a new train is placed on the track. Sets the train speed

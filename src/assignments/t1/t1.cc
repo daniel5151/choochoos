@@ -117,11 +117,28 @@ static inline bool parse_route_cmd(char* line,
     return true;
 }
 
+static int stopping_distance(uint8_t train, uint8_t speed) {
+    // TODO use our calibration data
+    (void)train;
+    (void)speed;
+    return 250;  // 25 cm
+}
+
+static int stopping_time(uint8_t train, uint8_t speed) {
+    // TODO use our calibration data
+    (void)train;
+    (void)speed;
+    return 300;  // 3 seconds
+}
+
 static void CmdTask() {
     int uart = WhoIs(Uart::SERVER_ID);
     int clock = WhoIs(Clock::SERVER_ID);
     assert(uart >= 0);
     assert(clock >= 0);
+
+    // This looks up the oracle task in the nameserver.
+    TrackOracle track_oracle = TrackOracle();
 
     log_line(uart, VT_YELLOW "Ready to accept commands!" VT_NOFMT);
 
@@ -158,7 +175,21 @@ static void CmdTask() {
         log_line(uart,
                  VT_CYAN "Routing train %u to sensor %c%u + offset %d" VT_NOFMT,
                  train, sensor.group, sensor.idx, offset);
-        Clock::Delay(clock, 100);
+
+        track_oracle.set_train_speed(train, 8);
+        int stop_at_offset = offset - stopping_distance(train, 8);
+        Marklin::track_pos_t send_stop_at_pos = {.sensor = sensor,
+                                                 .offset_mm = stop_at_offset};
+        log_line(uart, "Waiting for train %u to reach sensor %c%u%c%dmm ...",
+                 train, sensor.group, sensor.idx,
+                 stop_at_offset < 0 ? '-' : '+', std::abs(stop_at_offset));
+        track_oracle.wake_at_pos(train, send_stop_at_pos);
+        log_line(uart,
+                 "Sending speed=0 to train %u. Waiting for train to stop...",
+                 train);
+        track_oracle.set_train_speed(train, 0);
+        Clock::Delay(clock, stopping_time(train, 8));
+        log_line(uart, "Stopped! (hopefully)");
     }
 }
 
