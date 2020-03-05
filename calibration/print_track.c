@@ -1,5 +1,7 @@
+// compile with
+// gcc -o print_track print_track.c ../src/assignments/t1/track_data_new.c
+#include "../src/assignments/t1/track_data_new.h"
 #include "stdio.h"
-#include "track_data/track_data_new.h"
 
 void print_edge(const track_edge* e) {
     printf("EDGE src=%s dest=%s dist=%d\n", e->src->name, e->dest->name,
