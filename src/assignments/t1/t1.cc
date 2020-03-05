@@ -180,16 +180,20 @@ static void CmdTask() {
         int stop_at_offset = offset - stopping_distance(train, 8);
         Marklin::track_pos_t send_stop_at_pos = {.sensor = sensor,
                                                  .offset_mm = stop_at_offset};
-        log_line(uart, "Waiting for train %u to reach sensor %c%u%c%dmm ...",
+        log_line(uart,
+                 VT_CYAN
+                 "Waiting for train %u to reach sensor %c%u%c%dmm ..." VT_NOFMT,
                  train, sensor.group, sensor.idx,
                  stop_at_offset < 0 ? '-' : '+', std::abs(stop_at_offset));
         track_oracle.wake_at_pos(train, send_stop_at_pos);
         log_line(uart,
-                 "Sending speed=0 to train %u. Waiting for train to stop...",
+                 VT_CYAN
+                 "Sending speed=0 to train %u. Waiting for train to "
+                 "stop..." VT_NOFMT,
                  train);
         track_oracle.set_train_speed(train, 0);
         Clock::Delay(clock, stopping_time(train, 8));
-        log_line(uart, "Stopped! (hopefully)");
+        log_line(uart, VT_CYAN "Stopped! (hopefully)" VT_NOFMT);
     }
 }
 

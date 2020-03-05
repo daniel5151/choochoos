@@ -11,6 +11,20 @@
 #include "user/tasks/clockserver.h"
 #include "user/tasks/uartserver.h"
 
+static int expected_velocity(uint8_t train, uint8_t speed) {
+    if (speed == 0) return 0;
+    // TODO use calibration data
+    (void)train;
+    switch (speed) {
+        case 8:
+            return 200;
+        case 14:
+            return 600;
+        default:
+            panic("no expected velocity for train=%u speed=%u", train, speed);
+    }
+}
+
 // ------------------------ TrackOracleTask Plumbing ------------------------ //
 
 enum class MsgTag {
@@ -255,8 +269,13 @@ class TrackOracleImpl {
         uint8_t old_speed = td.speed;
         td.speed = speed;
         td.lights = true;
-        // TODO form a guess for the trains velocity until it hits the next
-        // sensor
+
+        // "guess" the train's velocity to be halfway between it's current
+        // velocity and the expected steady-state velocity at this speed level.
+        td.velocity = (td.velocity + expected_velocity(td.id, speed)) / 2;
+        // TODO after some acceleration time, we should probably set the
+        // velocity directly to the expected velocity.
+
         int now = Clock::Time(clock);
         if (old_speed == 0 && speed > 0) {
             td.pos_observed_at = now;
@@ -370,16 +389,31 @@ class TrackOracleImpl {
             int dt = Clock::Time(clock) - td.pos_observed_at;
             assert(dt >= 0);
 
-            int distance_traveled = td.velocity * dt;
+            int distance_travelled_mm = td.velocity * dt / TICKS_PER_SEC;
 
             Marklin::track_pos_t new_pos = td.pos;
-            new_pos.offset_mm += distance_traveled;
+            new_pos.offset_mm += distance_travelled_mm;
             // FIXME: implement offset normalization
             // (i.e: if offset is > next sensor)
             // required to be robust against broken sensors!
 
-            // XXX: jams pls do better math. 70 is a bogus random value ahh
-            if (wake.pos.offset_mm - new_pos.offset_mm < 70) {  // ?????????
+            int distance_to_target_mm = distance_between(new_pos, wake.pos);
+            int ticks_until_target =
+                (TICKS_PER_SEC * distance_to_target_mm) / td.velocity;
+
+            log_line(
+                uart,
+                "train %d distance_travelled_mm=%d distance_to_target_mm=%d "
+                "(%c%u@%d->%c%u@%d) "
+                "ticks_until_target=%d",
+                td.id, distance_travelled_mm, distance_to_target_mm,
+                new_pos.sensor.group, new_pos.sensor.idx, new_pos.offset_mm,
+                wake.pos.sensor.group, wake.pos.sensor.idx, wake.pos.offset_mm,
+                ticks_until_target);
+
+            if (ticks_until_target <= 7) {
+                if (ticks_until_target > 0)
+                    Clock::Delay(clock, ticks_until_target);
 
                 // wake up the task, and remove it from the blocked list
                 Res res = {.tag = MsgTag::WakeAtPos, .wake_at_pos = {}};
