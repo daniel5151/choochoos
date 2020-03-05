@@ -1,7 +1,8 @@
 #include "track_oracle.h"
 #include "track_graph.h"
 
-#include <cstring>  // memset
+#include <cstring>
+#include <optional>
 
 #include "common/vt_escapes.h"
 #include "ui.h"
@@ -10,13 +11,72 @@
 #include "user/tasks/clockserver.h"
 #include "user/tasks/uartserver.h"
 
+
+// ------------------------ TrackOracleTask Plumbing ------------------------ //
+
+enum class MsgTag {
+    CalibrateTrain,
+    UpdateSensors,
+    InitTrack,
+    QueryBranch,
+    QueryTrain,
+    ReverseTrain,
+    SetBranch,
+    SetTrainLight,
+    SetTrainSpeed,
+    WakeAtPos,
+};
+
+struct Req {
+    MsgTag tag;
+    union {
+        // clang-format off
+        struct { Marklin::Track track; }                 init;
+        struct { uint8_t id; }                           calibrate_train;
+        struct { uint8_t id; Marklin::track_pos_t pos; } wake_at_pos;
+        struct { uint8_t id; uint8_t speed; }            set_train_speed;
+        struct { uint8_t id; bool active; }              set_train_light;
+        struct { uint8_t id; }                           reverse_train;
+        struct { uint8_t id; Marklin::BranchDir dir; }   set_branch_dir;
+        struct { uint8_t id; }                           query_train;
+        struct { uint8_t id; }                           query_branch;
+        struct {}                                        update_sensors;
+        // clang-format on
+    };
+};
+
+struct Res {
+    MsgTag tag;
+    union {
+        // clang-format off
+        struct {} init;
+        struct {} calibrate_train;
+        struct {} wake_at_pos;
+        struct {} set_train_speed;
+        struct {} set_train_light;
+        struct {} reverse_train;
+        struct {} set_branch_dir;
+        struct {} update_sensors;
+
+        struct { train_descriptor_t desc; } query_train;
+        struct { Marklin::BranchDir dir; } query_branch;
+        // clang-format on
+    };
+};
+
+
 static constexpr size_t MAX_TRAINS = 6;
 static constexpr size_t BRANCHES_LEN = sizeof(Marklin::VALID_SWITCHES);
 
 // EWMA with alpha = 1/4
-inline static int ewma4(int curr, int obs) {
-    return (3 * curr + obs) >> 2 /* division by 4 */;
-}
+inline static int ewma4(int curr, int obs) { return (3 * curr + obs) / 4; }
+
+/// Associates a tid with a position on the track that it should be woken up at
+struct wakeup_t {
+    int tid;
+    uint8_t train;
+    Marklin::track_pos_t pos;
+};
 
 class TrackOracleImpl {
    private:
@@ -24,10 +84,12 @@ class TrackOracleImpl {
     const int uart;
     const int clock;
     const Marklin::Controller marklin;
-    Marklin::BranchState branches[BRANCHES_LEN];
 
-    // TODO: enumerate state (i.e: train descriptors, which track we're on, etc)
+    Marklin::BranchState branches[BRANCHES_LEN];
     train_descriptor_t trains[MAX_TRAINS];
+
+    // TODO: support more than one blocked task
+    std::optional<wakeup_t> blocked_task;
 
     train_descriptor_t* descriptor_for(uint8_t train) {
         for (train_descriptor_t& t : trains) {
@@ -187,21 +249,23 @@ class TrackOracleImpl {
         train.set_light(true);
         marklin.update_train(train);
 
-        train_descriptor_t* td = descriptor_for(id);
-        if (td == nullptr) return;
-        uint8_t old_speed = td->speed;
-        td->speed = speed;
-        td->lights = true;
+        train_descriptor_t* td_opt = descriptor_for(id);
+        if (td_opt == nullptr) return; // TODO: make this an assertion fail?
+        train_descriptor_t& td = *td_opt;
+
+        uint8_t old_speed = td.speed;
+        td.speed = speed;
+        td.lights = true;
         // TODO form a guess for the trains velocity until it hits the next
         // sensor
         int now = Clock::Time(clock);
         if (old_speed == 0 && speed > 0) {
-            td->pos_observed_at = now;
+            td.pos_observed_at = now;
         }
         if (old_speed != speed) {
-            td->speed_changed_at = now;
+            td.speed_changed_at = now;
         }
-        Ui::render_train_descriptor(uart, *td);
+        Ui::render_train_descriptor(uart, td);
     }
 
     void update_sensors() {
@@ -209,137 +273,130 @@ class TrackOracleImpl {
         marklin.query_sensors(sensor_data.raw);
 
         int now = Clock::Time(clock);
-        while (true) {
-            auto sensor_opt = sensor_data.next_sensor();
-            if (!sensor_opt.has_value()) break;
+        while (auto sensor_opt = sensor_data.next_sensor()) {
             Marklin::sensor_t sensor = sensor_opt.value();
-            train_descriptor_t* td = attribute_sensor(sensor);
-            if (td == nullptr) {
+
+            train_descriptor_t* td_opt = attribute_sensor(sensor);
+            if (td_opt == nullptr) {
                 log_line(uart,
-                         "could not attribute sensor %c%hhu to any train",
+                         "could not attribute sensor %c%hhu to any train, "
+                         "treating as spurious.",
                          sensor.group, sensor.idx);
                 continue;
             }
-            if (Marklin::sensor_eq(sensor, td->pos.sensor)) {
+            train_descriptor_t& td = *td_opt;
+
+            if (Marklin::sensor_eq(sensor, td.pos.sensor)) {
                 // The sensor was triggered more than once - simply update
                 // pos_observed_at.
-                td->pos_observed_at = now;
+                td.pos_observed_at = now;
                 continue;
             }
 
-            const Marklin::track_pos_t old_pos = td->pos;
+            const Marklin::track_pos_t old_pos = td.pos;
             const Marklin::track_pos_t new_pos = {
                 .sensor = sensor,
                 .offset_mm =
                     0 /* TODO account for velocity and expected sensor delay */
             };
             int distance_mm = distance_between(old_pos, new_pos);
-            int dt_ticks = now - td->pos_observed_at;
+            int dt_ticks = now - td.pos_observed_at;
             if (dt_ticks <= 0) continue;
             int new_velocity_mmps = (TICKS_PER_SEC * distance_mm) / dt_ticks;
 
-            if (now - td->speed_changed_at < 4 * TICKS_PER_SEC) {
+            if (now - td.speed_changed_at < 4 * TICKS_PER_SEC) {
                 // For the first 4 seconds after a speed change the train could
                 // be accelerating. As such, we expect to observe rapidly
                 // changing velocities, so we set our velocity to the ovserved
                 // velocity directly.
-                td->velocity = new_velocity_mmps;
+                td.velocity = new_velocity_mmps;
             } else {
                 // Once a train has been cruising at the same speed level for a
                 // time, we assume the train's velocity is close to constant. So
                 // we use an exponentially weighted moving average to update our
                 // velocity, smoothing out inconsitencies.
-                td->velocity = ewma4(td->velocity, new_velocity_mmps);
+                td.velocity = ewma4(td.velocity, new_velocity_mmps);
             }
-            td->pos = new_pos;
-            td->pos_observed_at = now;
+            td.pos = new_pos;
+            td.pos_observed_at = now;
 
-            if (td->has_next_sensor &&
-                Marklin::sensor_eq(sensor, td->next_sensor)) {
-                td->has_error = true;
-                td->time_error = now - td->next_sensor_time;
-                td->distance_error =
-                    td->velocity * td->time_error / TICKS_PER_SEC;
+            if (td.has_next_sensor &&
+                Marklin::sensor_eq(sensor, td.next_sensor)) {
+                td.has_error = true;
+                td.time_error = now - td.next_sensor_time;
+                td.distance_error =
+                    td.velocity * td.time_error / TICKS_PER_SEC;
             } else {
                 // TODO if we miss a sensor, we could probably still extrapolate
                 // this error
-                td->has_error = false;
+                td.has_error = false;
             }
 
             auto next_sensor_opt =
                 track.next_sensor(sensor, branches, BRANCHES_LEN);
             if (next_sensor_opt.has_value()) {
                 auto[sensor, distance] = next_sensor_opt.value();
-                td->has_next_sensor = true;
-                td->next_sensor = sensor;
-                td->next_sensor_time =
-                    now + ((TICKS_PER_SEC * distance) / td->velocity);
+                td.has_next_sensor = true;
+                td.next_sensor = sensor;
+                td.next_sensor_time =
+                    now + ((TICKS_PER_SEC * distance) / td.velocity);
             } else {
-                td->has_next_sensor = false;
+                td.has_next_sensor = false;
             }
 
-            Ui::render_train_descriptor(uart, *td);
+            Ui::render_train_descriptor(uart, td);
             log_line(uart,
                      "observed train %d from %c%02hhu->%c%02hhu dx=%dmm "
                      "dt=%d.%02ds dx/dt=%dmm/s",
-                     td->id, old_pos.sensor.group, old_pos.sensor.idx,
+                     td.id, old_pos.sensor.group, old_pos.sensor.idx,
                      new_pos.sensor.group, new_pos.sensor.idx, distance_mm,
                      dt_ticks / TICKS_PER_SEC, dt_ticks % TICKS_PER_SEC,
                      new_velocity_mmps);
         }
+
+        // check to see if any tasks need to be woken up
+        // TODO: this might need to be in it's own, separate, periodic task
+        // (i.e: not bundled with sensor updates).
+        if (blocked_task.has_value()) {
+            // TODO: multiple task support
+            wakeup_t& wake = blocked_task.value();
+
+            // look up associated train descriptor
+            const train_descriptor_t* td_opt = descriptor_for(wake.train);
+            assert(td_opt != nullptr);
+            const train_descriptor_t& td = *td_opt;
+
+            // use td.pos, td.pos_observed_at + Clock::Time, and td.velocity to
+            // extrapolate the train's current position
+
+            int dt = Clock::Time(clock) - td.pos_observed_at;
+            assert(dt >= 0);
+
+            int distance_traveled = td.velocity * dt;
+
+            Marklin::track_pos_t new_pos = td.pos;
+            new_pos.offset_mm += distance_traveled;
+            // FIXME: implement offset normalization
+            // (i.e: if offset is > next sensor)
+            // required to be robust against broken sensors!
+
+                // XXX: jams pls do better math. 70 is a bogus random value ahh
+            if (wake.pos.offset_mm - new_pos.offset_mm < 70) { // ?????????
+
+                // wake up the task, and remove it from the blocked list
+                Res res = {.tag = MsgTag::WakeAtPos, .wake_at_pos={}};
+                Reply(wake.tid, (char*)&res, sizeof(res));
+                blocked_task = std::nullopt;
+            }
+        }
     }
-};
 
-// ------------------------ TrackOracleTask Plumbing ------------------------ //
-
-enum class MsgTag {
-    CalibrateTrain,
-    UpdateSensors,
-    InitTrack,
-    QueryBranch,
-    QueryTrain,
-    ReverseTrain,
-    SetBranch,
-    SetTrainLight,
-    SetTrainSpeed,
-    WakeAtPos,
-};
-
-struct Req {
-    MsgTag tag;
-    union {
-        // clang-format off
-        struct { Marklin::Track track; }                 init;
-        struct { uint8_t id; }                           calibrate_train;
-        struct { uint8_t id; Marklin::track_pos_t pos; } wake_at_pos;
-        struct { uint8_t id; uint8_t speed; }            set_train_speed;
-        struct { uint8_t id; bool active; }              set_train_light;
-        struct { uint8_t id; }                           reverse_train;
-        struct { uint8_t id; Marklin::BranchDir dir; }   set_branch_dir;
-        struct { uint8_t id; }                           query_train;
-        struct { uint8_t id; }                           query_branch;
-        struct {}                                        update_sensors;
-        // clang-format on
-    };
-};
-
-struct Res {
-    MsgTag tag;
-    union {
-        // clang-format off
-        struct {} init;
-        struct {} calibrate_train;
-        struct {} wake_at_pos;
-        struct {} set_train_speed;
-        struct {} set_train_light;
-        struct {} reverse_train;
-        struct {} set_branch_dir;
-        struct {} update_sensors;
-
-        struct { train_descriptor_t desc; } query_train;
-        struct { Marklin::BranchDir dir; } query_branch;
-        // clang-format on
-    };
+    void wake_at_pos(int tid, uint8_t train, Marklin::track_pos_t pos) {
+        if (blocked_task.has_value()) {
+            panic("only one task can block on a train (at the moment)");
+        }
+        blocked_task = {.tid = tid, .train = train, .pos = pos};
+    }
 };
 
 void TrackOracleTask() {
@@ -384,7 +441,9 @@ void TrackOracleTask() {
                 oracle.calibrate_train(req.calibrate_train.id);
             } break;
             case MsgTag::WakeAtPos: {
-                panic("TrackOracle: WakeAtPos message unimplemented");
+                oracle.wake_at_pos(tid, req.wake_at_pos.id,
+                                   req.wake_at_pos.pos);
+                continue;  // IMPORTANT! MUST NOT IMMEDIATELY RESPOND TO TASK!
             } break;
             case MsgTag::SetTrainSpeed: {
                 oracle.set_train_speed(req.set_train_speed.id,
