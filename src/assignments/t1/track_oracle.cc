@@ -52,7 +52,7 @@ struct Res {
         // clang-format off
         struct {} init;
         struct {} calibrate_train;
-        struct {} wake_at_pos;
+        struct { bool success; } wake_at_pos;
         struct {} set_train_speed;
         struct {} set_train_light;
         struct {} reverse_train;
@@ -110,11 +110,13 @@ class TrackOracleImpl {
         return nullptr;
     }
 
-    int distance_between(const Marklin::track_pos_t& old_pos,
-                         const Marklin::track_pos_t& new_pos) const {
-        return track.distance_between(old_pos.sensor, new_pos.sensor,
-                                      this->branches, BRANCHES_LEN) +
-               (new_pos.offset_mm - old_pos.offset_mm);
+    std::optional<int> distance_between(
+        const Marklin::track_pos_t& old_pos,
+        const Marklin::track_pos_t& new_pos) const {
+        auto distance_opt = track.distance_between(
+            old_pos.sensor, new_pos.sensor, this->branches, BRANCHES_LEN);
+        if (!distance_opt.has_value()) return std::nullopt;
+        return distance_opt.value() + (new_pos.offset_mm - old_pos.offset_mm);
     }
 
     void check_scheduled_wakeups() {
@@ -141,7 +143,17 @@ class TrackOracleImpl {
             // (i.e: if offset is > next sensor)
             // required to be robust against broken sensors!
 
-            int distance_to_target_mm = distance_between(new_pos, wake.pos);
+            auto distance_to_target_opt = distance_between(new_pos, wake.pos);
+            if (!distance_to_target_opt.has_value()) {
+                // wake up the task, and remove it from the blocked list
+                Res res = {.tag = MsgTag::WakeAtPos,
+                           .wake_at_pos = {.success = false}};
+                Reply(wake.tid, (char*)&res, sizeof(res));
+                blocked_task = std::nullopt;
+                return;
+            }
+
+            int distance_to_target_mm = distance_to_target_opt.value();
             int ticks_until_target =
                 (TICKS_PER_SEC * distance_to_target_mm) / td.velocity;
 
@@ -160,7 +172,8 @@ class TrackOracleImpl {
                     Clock::Delay(clock, ticks_until_target);
 
                 // wake up the task, and remove it from the blocked list
-                Res res = {.tag = MsgTag::WakeAtPos, .wake_at_pos = {}};
+                Res res = {.tag = MsgTag::WakeAtPos,
+                           .wake_at_pos = {.success = true}};
                 Reply(wake.tid, (char*)&res, sizeof(res));
                 blocked_task = std::nullopt;
             }
@@ -352,7 +365,19 @@ class TrackOracleImpl {
                 .offset_mm =
                     0 /* TODO account for velocity and expected sensor delay */
             };
-            int distance_mm = distance_between(old_pos, new_pos);
+            auto distance_opt = distance_between(old_pos, new_pos);
+            if (!distance_opt.has_value()) {
+                log_line(uart,
+                         VT_YELLOW
+                         "WARNING" VT_NOFMT
+                         " cannot calculate distance between %c%u@%d and "
+                         "%c%u@%d despite being attributed to train %d",
+                         old_pos.sensor.group, old_pos.sensor.idx,
+                         old_pos.offset_mm, new_pos.sensor.group,
+                         new_pos.sensor.idx, new_pos.offset_mm, td.id);
+                continue;
+            }
+            int distance_mm = distance_opt.value();
             int dt_ticks = now - td.pos_observed_at;
             if (dt_ticks <= 0) continue;
             int new_velocity_mmps = (TICKS_PER_SEC * distance_mm) / dt_ticks;
@@ -583,8 +608,12 @@ Marklin::BranchDir TrackOracle::query_branch(uint8_t id) {
 
 /// Unblock the calling task once the specified train is at the specified
 /// position on the track
-void TrackOracle::wake_at_pos(uint8_t train_id, Marklin::track_pos_t pos) {
+bool TrackOracle::wake_at_pos(uint8_t train_id, Marklin::track_pos_t pos) {
     Req req = {.tag = MsgTag::WakeAtPos,
                .wake_at_pos = {.id = train_id, .pos = pos}};
-    send_with_assert_empty_response(this->tid, req);
+    Res res;
+    int n = Send(tid, (char*)&req, sizeof(req), (char*)&res, sizeof(res));
+    if (n != sizeof(res)) panic("truncated response");
+    if (res.tag != req.tag) panic("mismatched response kind");
+    return res.wake_at_pos.success;
 }

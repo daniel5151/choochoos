@@ -172,7 +172,10 @@ static void CmdTask() {
                  "Waiting for train %u to reach sensor %c%u%c%dmm ..." VT_NOFMT,
                  train, sensor.group, sensor.idx,
                  stop_at_offset < 0 ? '-' : '+', std::abs(stop_at_offset));
-        track_oracle.wake_at_pos(train, send_stop_at_pos);
+        if (!track_oracle.wake_at_pos(train, send_stop_at_pos)) {
+            log_line(uart, "Routing failed :'(");
+            continue;
+        }
         log_line(uart,
                  VT_CYAN
                  "Sending speed=0 to train %u. Waiting for train to "

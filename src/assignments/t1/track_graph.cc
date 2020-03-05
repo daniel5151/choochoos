@@ -2,7 +2,7 @@
 
 #include "user/debug.h"
 
-static constexpr size_t MAX_ITERS = 20;
+static constexpr size_t MAX_ITERS = 40;
 
 TrackGraph::TrackGraph(Marklin::Track t) {
     switch (t) {
@@ -85,10 +85,11 @@ std::optional<std::pair<Marklin::sensor_t, int>> TrackGraph::next_sensor(
     }
 }
 
-int TrackGraph::distance_between(const Marklin::sensor_t& old_sensor,
-                                 const Marklin::sensor_t& new_sensor,
-                                 const Marklin::BranchState* branches,
-                                 size_t branches_len) const {
+std::optional<int> TrackGraph::distance_between(
+    const Marklin::sensor_t& old_sensor,
+    const Marklin::sensor_t& new_sensor,
+    const Marklin::BranchState* branches,
+    size_t branches_len) const {
     debug("distance_between(%c%hhu %c%hhu)", old_sensor.group, old_sensor.idx,
           new_sensor.group, new_sensor.idx);
     const track_node* start = nullptr;
@@ -105,7 +106,7 @@ int TrackGraph::distance_between(const Marklin::sensor_t& old_sensor,
     int distance = 0;
     const track_node* curr = start;
     for (size_t i = 0; curr != end; i++) {
-        if (i > MAX_ITERS) panic("no route after %u hops", MAX_ITERS);
+        if (i > MAX_ITERS) return std::nullopt;
         const track_edge* edge = next_edge(*curr, branches, branches_len);
         assert(edge != nullptr);
         debug("  %s->%s: %dmm", curr->name, edge->dest->name, edge->dist);
@@ -113,11 +114,7 @@ int TrackGraph::distance_between(const Marklin::sensor_t& old_sensor,
         distance += edge->dist;
 
         if (curr == start) {
-            panic(
-                "TrackGraph::distance_between: no route from %c%hhu to %c%hhu "
-                "(route returned to start)",
-                old_sensor.group, old_sensor.idx, new_sensor.group,
-                new_sensor.idx);
+            return std::nullopt;
         }
     }
     debug("distance_between(%c%hhu %c%hhu) = %dmm", old_sensor.group,

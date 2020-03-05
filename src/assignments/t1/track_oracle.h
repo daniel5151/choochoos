@@ -79,6 +79,6 @@ class TrackOracle {
     Marklin::BranchDir query_branch(uint8_t branch_id);
 
     /// Unblock the calling task once the specified train is at the specified
-    /// position on the track.
-    void wake_at_pos(uint8_t train_id, Marklin::track_pos_t pos);
+    /// position on the track. Returns false on error (no route to position)
+    [[nodiscard]] bool wake_at_pos(uint8_t train_id, Marklin::track_pos_t pos);
 };
