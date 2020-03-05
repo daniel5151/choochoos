@@ -16,7 +16,7 @@ static uint32_t handle_uart_interrupt(uint32_t uart_base, uint32_t irq_no) {
     UARTIntIDIntClr u_int_id = {.raw = (uint32_t)ret};
     UARTCtrl u_ctlr = {.raw = *ctlr};
 
-    kdebug("kernel: irq %d: u_int_id=0x%08lx u_ctlr=0x%08lx" ENDL, irq_no,
+    kdebug("kernel: irq %lu: u_int_id=0x%08lx u_ctlr=0x%08lx" ENDL, irq_no,
            u_int_id.raw, u_ctlr.raw);
     (void)irq_no;
 

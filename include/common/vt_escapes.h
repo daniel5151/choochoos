@@ -34,6 +34,9 @@
 #define VT_CYAN    VT_ESC "36m"
 #define VT_WHITE   VT_ESC "37m"
 
+#define VT_HIDECUR VT_ESC "?25l"
+#define VT_SHOWCUR VT_ESC "?25h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif

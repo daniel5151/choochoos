@@ -8,29 +8,35 @@
 #include "common/queue.h"
 #include "common/ts7200.h"
 #include "user/debug.h"
+#include "user/tasks/clockserver.h"
 
 namespace Uart {
 const char* SERVER_ID = "UartServer";
 #define IOBUF_SIZE 4096
 #define MAX_GETN_SIZE 10
+#define COM1_WAITING_FOR_DOWN_TIMEOUT 25  // 250ms
 
 using Iobuf = Queue<char, IOBUF_SIZE>;
-static Iobuf com1_out;
-static Iobuf com2_out;
 
-Iobuf& outbuf(int channel) {
-    switch (channel) {
-        case COM1:
-            return com1_out;
-        case COM2:
-            return com2_out;
-        default:
-            panic("outbuf: unknown channel %d", channel);
-    }
-}
+struct CTSState {
+    enum {
+        WAITING_FOR_DOWN = 'd',
+        WAITING_FOR_UP = 'u',
+        ACTUALLY_CTS = 'c'
+    } tag;
+    union {
+        struct {
+            int since;
+        } waiting_for_down;
+        struct {
+        } waiting_for_up;
+        struct {
+        } actually_cts;
+    };
+};
 
 struct Request {
-    enum { Notify, Putstr, Getn, Drain } tag;
+    enum { Notify, Putstr, Getn, Drain, Flush } tag;
     union {
         struct {
             int channel;
@@ -40,8 +46,8 @@ struct Request {
         struct {
             int channel;
             size_t len;
-            // must be the last element in this struct, may not be completely
-            // copied.
+            // must be the last element in this struct, may not be
+            // completely copied.
             char buf[IOBUF_SIZE];
         } putstr;
         struct {
@@ -51,14 +57,17 @@ struct Request {
         struct {
             int channel;
         } drain;
+        struct {
+            int channel;
+        } flush;
     };
 };
 
-// Request.putstr.buf is very large, and it would be wasteful to copy the whole
-// buf every time we want to write a string. Instead, tasks that send a Putstr
-// request can truncate the request, only sending the tag, headers and first
-// `len` bytes of `buf`. This only works because `buf` is the last member of
-// Request.
+// Request.putstr.buf is very large, and it would be wasteful to copy the
+// whole buf every time we want to write a string. Instead, tasks that send
+// a Putstr request can truncate the request, only sending the tag, headers
+// and first `len` bytes of `buf`. This only works because `buf` is the last
+// member of Request.
 static inline size_t putstr_request_size(const Request& req) {
     return offsetof(Request, putstr.buf) + req.putstr.len;
 }
@@ -90,8 +99,8 @@ static void Notifier(int channel, int eventid) {
         debug("Notifier: AwaitEvent(%d)", eventid);
         req.notify.data.raw = (uint32_t)AwaitEvent(eventid);
 
-        // TODO sizeof(req) will be really big because of the Putstr buf
-        //  we should have a generic sizeof function that switches on the tag.
+        // TODO sizeof(req) will be really big because of the Putstr buf we
+        // should have a generic sizeof function that switches on the tag.
         debug("Notifier: received channel=%d data=0x%lx", channel,
               req.notify.data.raw);
         int n = Send(myparent, (char*)&req, sizeof(req), (char*)&shutdown,
@@ -118,10 +127,10 @@ static void set_up_uarts() {
     *high = buf;
 }
 
-void COM1Notifier() { Notifier(COM1, 52); }
-void COM2Notifier() { Notifier(COM2, 54); }
+static void COM1Notifier() { Notifier(COM1, 52); }
+static void COM2Notifier() { Notifier(COM2, 54); }
 
-static volatile uint32_t* flags_for(int channel) {
+static const volatile uint32_t* flags_for(int channel) {
     switch (channel) {
         case COM1:
             return (volatile uint32_t*)(UART1_BASE + UART_FLAG_OFFSET);
@@ -159,13 +168,57 @@ static void enable_tx_interrupts(int channel) {
     UARTCtrl uart_ctlr = {.raw = *ctlr};
     uint32_t old_ctlr = uart_ctlr.raw;
 
-    // TODO I think we need to enable the modem interrupts on COM1 in order to
-    // get CTS changed interrupts
-    uart_ctlr._.enable_int_tx = 1;
+    switch (channel) {
+        case COM1:
+            uart_ctlr._.enable_int_modem = 1;
+            break;
+        case COM2:
+            uart_ctlr._.enable_int_tx = 1;
+            break;
+        default:
+            panic("bad channel %d", channel);
+    }
     debug("enable_tx_interrupts: channel=%d new_ctlr=0x%lx old_ctlr=0x%lx",
           channel, uart_ctlr.raw, old_ctlr);
-    (void)old_ctlr;
-    *ctlr = uart_ctlr.raw;
+
+    if (uart_ctlr.raw != old_ctlr) {
+        *ctlr = uart_ctlr.raw;
+    }
+}
+
+static bool clear_to_send(int channel, CTSState& com1_cts, int clock) {
+    uint32_t flags = *flags_for(channel);
+    switch (channel) {
+        case COM1: {
+            bool tx = !(flags & TXFF_MASK);
+            bool cts = (flags & CTS_MASK);
+            if (!(tx && cts)) return false;
+            switch (com1_cts.tag) {
+                case CTSState::ACTUALLY_CTS:
+                    com1_cts = {
+                        .tag = CTSState::WAITING_FOR_DOWN,
+                        .waiting_for_down = {.since = Clock::Time(clock)}};
+                    return true;
+                case CTSState::WAITING_FOR_DOWN:
+                    if (Clock::Time(clock) >
+                        com1_cts.waiting_for_down.since +
+                            COM1_WAITING_FOR_DOWN_TIMEOUT) {
+                        com1_cts = {
+                            .tag = CTSState::WAITING_FOR_DOWN,
+                            .waiting_for_down = {.since = Clock::Time(clock)}};
+                        return true;
+                    }
+                    return false;
+                case CTSState::WAITING_FOR_UP:
+                    return false;
+            }
+            return false;
+        }
+        case COM2:
+            return !(flags & TXFF_MASK);
+        default:
+            panic("bad channel %d", channel);
+    }
 }
 
 static void enable_rx_interrupts(int channel) {
@@ -178,11 +231,32 @@ static void enable_rx_interrupts(int channel) {
     *ctlr = uart_ctlr.raw;
 }
 
-struct blocked_task_t {
+struct rx_blocked_task_t {
     int tid;
     size_t written;
     Response getn_res;
 };
+
+struct flush_blocked_task_t {
+    int tid;
+    size_t bytes_remaining;
+};
+
+inline static void record_byte_sent(std::optional<flush_blocked_task_t>& t) {
+    if (t.has_value()) {
+        flush_blocked_task_t& task = t.value();
+        task.bytes_remaining--;
+        if (task.bytes_remaining == 0) {
+            Reply(task.tid, nullptr, 0);
+            t = std::nullopt;
+        }
+    }
+}
+
+inline static void check_channel(int channel) {
+    if (channel == COM1 || channel == COM2) return;
+    panic("bad channel %d", channel);
+}
 
 void Server() {
     set_up_uarts();
@@ -193,14 +267,19 @@ void Server() {
     Create(INT_MAX, COM2Notifier);
 
     RegisterAs(SERVER_ID);
+    int clock = WhoIs(Clock::SERVER_ID);
+    assert(clock >= 0);
 
+    CTSState com1_cts = {.tag = CTSState::ACTUALLY_CTS, .actually_cts = {}};
     int tid;
     Request req;
     Response res;
     memset((char*)&res, 0, sizeof(res));
 
     // one for each channel
-    std::optional<blocked_task_t> blocked_tids[2] = {std::nullopt};
+    Iobuf tx_buffers[2] = {Iobuf(), Iobuf()};
+    std::optional<rx_blocked_task_t> rx_blocked_tids[2] = {std::nullopt};
+    std::optional<flush_blocked_task_t> flush_blocked_tids[2] = {std::nullopt};
 
     while (true) {
         int reqlen = Receive(&tid, (char*)&req, sizeof(req));
@@ -208,20 +287,49 @@ void Server() {
             panic("Uart::Server: bad request length %d", reqlen);
         switch (req.tag) {
             case Request::Notify: {
+                // Reply to the notifier so it can start to AwaitEvent()
+                // again.
+                {
+                    bool shutdown = false;
+                    debug("Uart::Server: replying to notifier (tid %d)", tid);
+                    Reply(tid, (char*)&shutdown, sizeof(shutdown));
+                }
+
                 int channel = req.notify.channel;
-                Iobuf& buf = outbuf(channel);
-                volatile uint32_t* flags = flags_for(channel);
+                check_channel(channel);
+                Iobuf& buf = tx_buffers[channel];
+                const volatile uint32_t* flags = flags_for(channel);
                 volatile char* data = data_for(channel);
 
                 debug("Server: received notify: channel=%d data=0x%lx", channel,
                       req.notify.data.raw);
 
-                if (req.notify.data._.tx) {
+                // TX
+                if (req.notify.data._.tx || req.notify.data._.modem) {
+                    if (channel == COM1 && req.notify.data._.modem) {
+                        // only change to WAITING_FOR_UP once we observe it
+                        // down
+                        if ((*flags & CTS_MASK)) {
+                            if (com1_cts.tag == CTSState::WAITING_FOR_UP)
+                                com1_cts = {.tag = CTSState::ACTUALLY_CTS,
+                                            .actually_cts = {}};
+                        } else {
+                            // cts went down, so now we wait for up
+                            com1_cts = {.tag = CTSState::WAITING_FOR_UP,
+                                        .waiting_for_up = {}};
+                            enable_tx_interrupts(channel);
+                        }
+                    }
+
                     int bytes_written = 0;
-                    // TODO check the CTS flag for COM1
-                    while (!buf.is_empty() && !(*flags & TXFF_MASK)) {
+                    while (!buf.is_empty() &&
+                           clear_to_send(channel, com1_cts, clock)) {
                         char c = buf.pop_front().value();
+                        if (channel == COM1) {
+                            enable_tx_interrupts(channel);
+                        }
                         *data = (uint32_t)c;
+                        record_byte_sent(flush_blocked_tids[channel]);
                         bytes_written++;
                     }
                     debug(
@@ -235,9 +343,11 @@ void Server() {
                     }
                 }
 
-                if (blocked_tids[channel].has_value() &&
+                // RX
+                if (rx_blocked_tids[channel].has_value() &&
                     (req.notify.data._.rx || req.notify.data._.rx_timeout)) {
-                    blocked_task_t& blocked = blocked_tids[channel].value();
+                    rx_blocked_task_t& blocked =
+                        rx_blocked_tids[channel].value();
                     while (blocked.written < blocked.getn_res.getn.n &&
                            !(*flags & RXFE_MASK)) {
                         char c = *data;
@@ -254,47 +364,43 @@ void Server() {
                             blocked.getn_res.getn.bytes);
                         Reply(blocked.tid, (char*)&blocked.getn_res,
                               sizeof(blocked.getn_res));
-                        blocked_tids[channel] = std::nullopt;
+                        rx_blocked_tids[channel] = std::nullopt;
                     } else {
                         enable_rx_interrupts(channel);
                     }
                 }
-
-                // Reply to the notifier so it can start to AwaitEvent() again.
-                bool shutdown = false;
-                debug("Uart::Server: replying to notifier (tid %d)", tid);
-                Reply(tid, (char*)&shutdown, sizeof(shutdown));
                 break;
             }
             case Request::Putstr: {
                 const int len = (int)req.putstr.len;
                 int i = 0;
                 int channel = req.putstr.channel;
+                check_channel(channel);
                 char* msg = req.putstr.buf;
 
-                Iobuf& buf = outbuf(channel);
-                volatile uint32_t* flags = flags_for(channel);
+                Iobuf& buf = tx_buffers[channel];
                 volatile char* data = data_for(channel);
 
                 if (buf.is_empty()) {
+                    assert(!flush_blocked_tids[channel].has_value());
+
                     // try writing directly to the wire
-                    // TODO check the CTS flag for COM1
-                    for (; i < len && !(*flags & TXFF_MASK); i++) {
+                    for (; i < len && clear_to_send(channel, com1_cts, clock);
+                         i++) {
+                        if (channel == COM1) enable_tx_interrupts(channel);
                         *data = msg[i];
                     }
 
                     if (i < len) {
-                        // we couldn't write the whole message, so buffer the
-                        // rest and enable interrupts.
+                        // we couldn't write the whole message, so buffer
+                        // the rest and enable interrupts.
                         for (; i < len; i++) {
                             auto err = buf.push_back(msg[i]);
                             if (err == QueueErr::FULL) {
                                 panic(
                                     "Uart::Server: output buffer full for "
-                                    "channel "
-                                    "%d "
-                                    "(trying to accept %d-byte write from tid "
-                                    "%d)",
+                                    "channel %d (trying to accept %d-byte "
+                                    "write from tid %d)",
                                     channel, len, tid);
                             }
                         }
@@ -308,8 +414,8 @@ void Server() {
                         if (err == QueueErr::FULL) {
                             panic(
                                 "Uart::Server: output buffer full for channel "
-                                "%d "
-                                "(trying to accept %d-byte write from tid %d)",
+                                "%d (trying to accept %d-byte write from tid "
+                                "%d)",
                                 channel, len, tid);
                         }
                     }
@@ -317,7 +423,8 @@ void Server() {
 
                 res = {.tag = Response::Putstr,
                        .putstr = {.success = true, .bytes_written = len}};
-                Reply(tid, (char*)&res, sizeof(res));
+                int ret = Reply(tid, (char*)&res, sizeof(res));
+                assert(ret >= 0);
                 break;
             }
             case Request::Getn: {
@@ -325,7 +432,7 @@ void Server() {
                 size_t n = req.getn.n;
                 assert(n > 0);
                 assert(n <= MAX_GETN_SIZE);
-                volatile uint32_t* flags = flags_for(channel);
+                const volatile uint32_t* flags = flags_for(channel);
                 volatile char* data = data_for(channel);
 
                 res = {.tag = Response::Getn,
@@ -333,19 +440,20 @@ void Server() {
 
                 debug("received Getn from tid %d channel=%d n=%u" ENDL, tid,
                       channel, n);
-                if (blocked_tids[channel].has_value()) {
+                if (rx_blocked_tids[channel].has_value()) {
                     panic(
-                        "multiple tids trying to read from channel %d (%d and "
+                        "multiple tids trying to read from channel %d (%d "
+                        "and "
                         "%d)",
-                        channel, blocked_tids[channel].value().tid, tid);
+                        channel, rx_blocked_tids[channel].value().tid, tid);
                     Reply(tid, (char*)&res, sizeof(res));
                     break;
                 }
 
                 res.getn.success = true;
-                blocked_tids[channel] = {
+                rx_blocked_tids[channel] = {
                     .tid = tid, .written = 0, .getn_res = res};
-                blocked_task_t& blocked = blocked_tids[channel].value();
+                rx_blocked_task_t& blocked = rx_blocked_tids[channel].value();
 
                 while (!(*flags & RXFE_MASK) && blocked.written < n) {
                     char c = (char)*data;
@@ -360,7 +468,7 @@ void Server() {
                         blocked.getn_res.getn.bytes);
                     Reply(tid, (char*)&blocked.getn_res,
                           sizeof(blocked.getn_res));
-                    blocked_tids[channel] = std::nullopt;
+                    rx_blocked_tids[channel] = std::nullopt;
                     break;
                 }
 
@@ -369,7 +477,7 @@ void Server() {
             }
             case Request::Drain: {
                 int channel = req.drain.channel;
-                volatile uint32_t* flags = flags_for(channel);
+                const volatile uint32_t* flags = flags_for(channel);
                 volatile char* data = data_for(channel);
 
                 while (!(*flags & RXFE_MASK)) {
@@ -378,12 +486,29 @@ void Server() {
 
                 // If any task was blocked on a Getn with an incomplete
                 // response, clear the response.
-                if (blocked_tids[channel].has_value()) {
-                    blocked_task_t& blocked = blocked_tids[channel].value();
+                if (rx_blocked_tids[channel].has_value()) {
+                    rx_blocked_task_t& blocked =
+                        rx_blocked_tids[channel].value();
                     blocked.written = 0;
                 }
 
                 Reply(tid, nullptr, 0);
+                break;
+            }
+            case Request::Flush: {
+                int channel = req.flush.channel;
+                check_channel(channel);
+                Iobuf& buf = tx_buffers[channel];
+                if (buf.is_empty()) {
+                    Reply(tid, nullptr, 0);
+                    break;
+                }
+                if (flush_blocked_tids[channel].has_value()) {
+                    panic("concurrent Flush unsupported (channel=%d)", channel);
+                }
+                flush_blocked_tids[channel] = {.tid = tid,
+                                               .bytes_remaining = buf.size()};
+
                 break;
             }
         }
@@ -485,6 +610,11 @@ void Getline(int tid, int channel, char* line, size_t len) {
 
 void Drain(int tid, int channel) {
     Request req = {.tag = Request::Drain, .drain = {.channel = channel}};
+    Send(tid, (char*)&req, sizeof(req), nullptr, 0);
+}
+
+void Flush(int tid, int channel) {
+    Request req = {.tag = Request::Flush, .flush = {.channel = channel}};
     Send(tid, (char*)&req, sizeof(req), nullptr, 0);
 }
 

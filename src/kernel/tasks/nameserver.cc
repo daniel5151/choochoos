@@ -169,10 +169,10 @@ int RegisterAs(const char* name) {
 
     if (Send(NameServer::TID, (char*)&req, sizeof(req), (char*)&res,
              sizeof(res)) != sizeof(res)) {
-        return -1;
+        return INVALID_TID;
     }
     assert(res.kind == MessageKind::RegisterAs);
-    return res.register_as.success ? 0 : -2;
+    return res.register_as.success ? 0 : UNKNOWN_NAME;
 }
 
 int WhoIs(const char* name) {
@@ -187,7 +187,7 @@ int WhoIs(const char* name) {
     const int res_len = Send(NameServer::TID, (char*)&req, sizeof(req),
                              (char*)&res, sizeof(res));
     if (res_len != sizeof(res)) {
-        return -1;
+        return INVALID_TID;
     }
     assert(res.kind == MessageKind::WhoIs);
     return res.who_is.success ? res.who_is.tid : -2;
