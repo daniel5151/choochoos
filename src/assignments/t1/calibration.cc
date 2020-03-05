@@ -49,7 +49,7 @@ int acceleration_time(uint8_t train, uint8_t target_speed) {
     // TODO measure this?
     (void)train;
     (void)target_speed;
-    return 400;  // 4 seconds
+    return 300;  // 3 seconds
 }
 
 }  // namespace Calibration

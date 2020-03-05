@@ -26,6 +26,8 @@ struct train_descriptor_t {
     Marklin::track_pos_t pos;
     int pos_observed_at;
     int speed_changed_at;
+    bool accelerating;
+    uint8_t old_speed;
 
     bool has_next_sensor;
     Marklin::sensor_t next_sensor;

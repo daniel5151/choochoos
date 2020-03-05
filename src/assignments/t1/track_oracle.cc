@@ -26,6 +26,7 @@ enum class MsgTag {
     SetTrainLight,
     SetTrainSpeed,
     WakeAtPos,
+    Tick,
 };
 
 struct Req {
@@ -42,6 +43,7 @@ struct Req {
         struct { uint8_t id; }                           query_train;
         struct { uint8_t id; }                           query_branch;
         struct {}                                        update_sensors;
+        struct {}                                        tick;
         // clang-format on
     };
 };
@@ -187,6 +189,39 @@ class TrackOracleImpl {
         }
     }
 
+    void interpolate_acceleration(int now) {
+        for (train_descriptor_t& td : trains) {
+            if (td.id <= 0) continue;
+            if (!td.accelerating) continue;
+
+            assert(td.old_speed != td.speed);
+
+            int old_velocity =
+                Calibration::expected_velocity(td.id, td.old_speed);
+            int steady_state_velocity =
+                Calibration::expected_velocity(td.id, td.speed);
+            int how_long_ive_been_accelerating = now - td.speed_changed_at;
+            int how_long_it_takes_to_accelerate =
+                Calibration::acceleration_time(td.id, td.speed);
+
+            assert(how_long_ive_been_accelerating >= 0);
+
+            if (how_long_ive_been_accelerating >=
+                how_long_it_takes_to_accelerate) {
+                td.velocity = steady_state_velocity;
+                td.accelerating = false;
+                log_line(uart, "train %u finished accelerating", td.id);
+            } else {
+                // TODO maybe still do an ewma?
+                td.velocity =
+                    old_velocity + (how_long_ive_been_accelerating *
+                                    (steady_state_velocity - old_velocity)) /
+                                       how_long_it_takes_to_accelerate;
+            }
+            Ui::render_train_descriptor(uart, td);
+        }
+    }
+
    public:
     // disallow copying, moving, or default-constructing
     TrackOracleImpl() = delete;
@@ -291,6 +326,8 @@ class TrackOracleImpl {
                     .offset_mm = Calibration::stopping_distance(id, 8)},
             .pos_observed_at = now,
             .speed_changed_at = now,
+            .accelerating = false,
+            .old_speed = 0,
             // we can't predict when we will hit the next sensor since our speed
             // is 0
             .has_next_sensor = false,
@@ -318,20 +355,15 @@ class TrackOracleImpl {
 
         uint8_t old_speed = td.speed;
         td.speed = speed;
+        td.old_speed = old_speed;
         td.lights = true;
-
-        // "guess" the train's velocity to be halfway between it's current
-        // velocity and the expected steady-state velocity at this speed level.
-        td.velocity =
-            (td.velocity + Calibration::expected_velocity(td.id, speed)) / 2;
-        // TODO after some acceleration time, we should probably set the
-        // velocity directly to the expected velocity.
 
         int now = Clock::Time(clock);
         if (old_speed == 0 && speed > 0) {
             td.pos_observed_at = now;
         }
         if (old_speed != speed) {
+            td.accelerating = true;
             td.speed_changed_at = now;
         }
         Ui::render_train_descriptor(uart, td);
@@ -363,10 +395,6 @@ class TrackOracleImpl {
     }
 
     void update_sensors() {
-        // TODO maybe we just run this from some sort of tick() function that
-        // runs well, every tick.
-        check_scheduled_wakeups();
-
         Marklin::SensorData sensor_data;
         marklin.query_sensors(sensor_data.raw);
 
@@ -480,9 +508,28 @@ class TrackOracleImpl {
 
         blocked_task = {.tid = tid, .train = train, .pos = pos};
     }
+
+    void tick() {
+        int now = Clock::Time(clock);
+        interpolate_acceleration(now);
+        check_scheduled_wakeups();
+    }
 };
 
+void TrackOracleTickerTask() {
+    int tid = MyParentTid();
+    assert(tid >= 0);
+    int clock = WhoIs(Clock::SERVER_ID);
+    assert(clock >= 0);
+    const Req req = {.tag = MsgTag::Tick, .tick = {}};
+    while (true) {
+        Send(tid, (char*)&req, sizeof(req), nullptr, 0);
+        Clock::Delay(clock, 1);
+    }
+}
+
 void TrackOracleTask() {
+    Create(0, TrackOracleTickerTask);
     int nsres = RegisterAs(TRACK_ORACLE_TASK_ID);
     assert(nsres >= 0);
 
@@ -554,6 +601,9 @@ void TrackOracleTask() {
             case MsgTag::UpdateSensors: {
                 oracle.update_sensors();
             } break;
+            case MsgTag::Tick: {
+                oracle.tick();
+            } break;
             default:
                 panic("TrackOracle: unexpected request tag: %d", (int)req.tag);
         }
@@ -611,6 +661,7 @@ void TrackOracle::set_train_light(uint8_t id, bool active) {
                .set_train_light = {.id = id, .active = active}};
     send_with_assert_empty_response(this->tid, req);
 }
+
 /// Reverse a train's direction (via speed 15)
 void TrackOracle::reverse_train(uint8_t id) {
     Req req = {.tag = MsgTag::ReverseTrain, .reverse_train = {.id = id}};
