@@ -107,7 +107,30 @@ class TrackOracleImpl {
         (void)sensor;
 
         for (train_descriptor_t& t : trains) {
-            if (t.id != 0) return &t;
+            if (t.id == 0) continue;
+
+            // check to see if the train's last sensor was this sensor
+            if (Marklin::sensor_eq(t.pos.sensor, sensor)) {
+                return &t;
+            }
+
+            // check to see if the next sensor is this sensor
+            if (Marklin::sensor_eq(t.next_sensor, sensor)) {
+                return &t;
+            }
+
+            // wait, maybe we missed a sensor!
+            auto next_sensor_opt =
+                track.next_sensor(t.next_sensor, branches, BRANCHES_LEN);
+
+            if (next_sensor_opt.has_value()) {
+                auto [next_sensor, _] =  next_sensor_opt.value();
+                if (Marklin::sensor_eq(sensor, next_sensor)) {
+                    return &t;
+                }
+            }
+
+            // otherwise, it's not this one...
         }
         return nullptr;
     }
