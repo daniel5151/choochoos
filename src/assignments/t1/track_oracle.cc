@@ -146,6 +146,13 @@ class TrackOracleImpl {
             auto distance_to_target_opt = distance_between(new_pos, wake.pos);
             if (!distance_to_target_opt.has_value()) {
                 // wake up the task, and remove it from the blocked list
+                log_line(uart,
+                         VT_YELLOW "WARNING" VT_NOFMT
+                                   " wake_at_pos: no route from %c%u@%d to "
+                                   "%c%u@%d for train %u",
+                         new_pos.sensor.group, new_pos.sensor.idx,
+                         new_pos.offset_mm, wake.pos.sensor.group,
+                         wake.pos.sensor.idx, wake.pos.offset_mm, td.id);
                 Res res = {.tag = MsgTag::WakeAtPos,
                            .wake_at_pos = {.success = false}};
                 Reply(wake.tid, (char*)&res, sizeof(res));
@@ -436,6 +443,18 @@ class TrackOracleImpl {
         if (blocked_task.has_value()) {
             panic("only one task can block on a train (at the moment)");
         }
+
+        if (descriptor_for(train) == nullptr) {
+            log_line(uart,
+                     VT_YELLOW "WARNING" VT_NOFMT
+                               " wake_at_pos: uncalibrated train %u",
+                     train);
+            Res res = {.tag = MsgTag::WakeAtPos,
+                       .wake_at_pos = {.success = false}};
+            Reply(tid, (char*)&res, sizeof(res));
+            return;
+        }
+
         blocked_task = {.tid = tid, .train = train, .pos = pos};
     }
 };

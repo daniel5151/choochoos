@@ -173,7 +173,11 @@ static void CmdTask() {
                  train, sensor.group, sensor.idx,
                  stop_at_offset < 0 ? '-' : '+', std::abs(stop_at_offset));
         if (!track_oracle.wake_at_pos(train, send_stop_at_pos)) {
-            log_line(uart, "Routing failed :'(");
+            log_line(uart,
+                     VT_RED "Routing failed :'(" VT_NOFMT
+                            " stopping train %d in place.",
+                     train);
+            track_oracle.set_train_speed(train, 0);
             continue;
         }
         log_line(uart,
