@@ -26,6 +26,7 @@ struct Command {
         SW,
         TR,
         NORMALIZE,
+        PATH,
     } kind;
     union {
         struct {
@@ -59,6 +60,10 @@ struct Command {
             size_t sensor_idx;
             int offset;
         } normalize;
+        struct {
+            Marklin::sensor_t source;
+            Marklin::sensor_t dest;
+        } path;
     };
 
     /// Tries to parse a valid command from the given string

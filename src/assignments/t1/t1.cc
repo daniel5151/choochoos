@@ -93,18 +93,9 @@ static void do_route_cmd(const int uart,
         return;
     }
 
-    // TODO use this lol
-    (void)track_graph;
-
     log_line(uart,
              VT_CYAN "Routing train %u to sensor %c%u + offset %d" VT_NOFMT,
              train, sensor.group, sensor.idx, cmd.offset);
-
-    if (cmd.dry_run) {
-        log_line(uart, VT_YELLOW
-                 "Found --dry-run flag, not actually routing..." VT_NOFMT);
-        return;
-    }
 
     auto td_opt = track_oracle.query_train(train);
     if (!td_opt.has_value()) {
@@ -113,6 +104,36 @@ static void do_route_cmd(const int uart,
             VT_RED
             "train %u is not calibrated. Please run 'addtr %u' first." VT_NOFMT,
             train, train);
+        return;
+    }
+    const train_descriptor_t td = td_opt.value();
+    Marklin::track_pos_t target_pos = {
+        .sensor = {.group = cmd.sensor_group, .idx = (uint8_t)cmd.sensor_idx},
+        .offset_mm = cmd.offset};
+
+    const track_node* path[TRACK_MAX];
+    size_t distance = 0;
+    int path_len = track_graph.shortest_path(td.pos.sensor, target_pos.sensor,
+                                             path, TRACK_MAX, distance);
+    if (path_len < 0) {
+        log_line(uart, VT_RED "No route from %c%u to %c%u" VT_NOFMT,
+                 td.pos.sensor.group, td.pos.sensor.idx,
+                 target_pos.sensor.group, target_pos.sensor.idx);
+        return;
+    } else {
+        char line[1024] = {'\0'};
+        size_t n = snprintf(line, sizeof(line),
+                            VT_CYAN "Path found (len=%d, dist=%u):", path_len,
+                            distance);
+        for (int i = 0; i < path_len; i++) {
+            n += snprintf(line, sizeof(line) - n, " %s", path[i]->name);
+        }
+        log_line(uart, "%s" VT_NOFMT, line);
+    }
+
+    if (cmd.dry_run) {
+        log_line(uart, VT_YELLOW
+                 "Found --dry-run flag, not actually routing..." VT_NOFMT);
         return;
     }
 
@@ -260,6 +281,29 @@ static void CmdTask() {
                 log_line(uart,
                          VT_CYAN "Manually set train %u to speed %u" VT_NOFMT,
                          cmd.tr.no, cmd.tr.speed);
+            } break;
+            case Command::PATH: {
+                size_t distance = 0;
+                const track_node* path[TRACK_MAX];
+                int path_len = track_graph.shortest_path(
+                    cmd.path.source, cmd.path.dest, path, TRACK_MAX, distance);
+                if (path_len < 0) {
+                    log_line(uart, VT_RED "No route from %c%u to %c%u" VT_NOFMT,
+                             cmd.path.source.group, cmd.path.source.idx,
+                             cmd.path.dest.group, cmd.path.dest.idx);
+                    break;
+                } else {
+                    char line[1024] = {'\0'};
+                    size_t n = snprintf(line, sizeof(line),
+                                        VT_CYAN "Path found (len=%d, dist=%u):",
+                                        path_len, distance);
+                    for (int i = 0; i < path_len; i++) {
+                        assert(path[i] != nullptr);
+                        n += snprintf(line + n, sizeof(line) - n, " %s",
+                                      path[i]->name);
+                    }
+                    log_line(uart, "%s" VT_NOFMT, line);
+                }
             } break;
             default:
                 panic("somehow parsed an invalid command!");

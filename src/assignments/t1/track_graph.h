@@ -31,4 +31,10 @@ class TrackGraph {
                                    const Marklin::BranchState* branches,
                                    size_t branches_len) const;
     Marklin::sensor_t invert_sensor(const Marklin::sensor_t& sensor) const;
+
+    [[nodiscard]] int shortest_path(const Marklin::sensor_t& start,
+                                    const Marklin::sensor_t& end,
+                                    const track_node* path[],
+                                    size_t max_path_len,
+                                    size_t& distance) const;
 };

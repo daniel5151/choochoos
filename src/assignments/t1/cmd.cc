@@ -74,6 +74,12 @@ std::optional<Command> Command::from_string(char* input) {
                       &chars_read) == 3) {
         cmd.kind = Command::NORMALIZE;
         cmd.normalize.sensor_group = (char)toupper(cmd.normalize.sensor_group);
+    } else if (sscanf(input, "path %c%hhu %c%hhu%n", &cmd.path.source.group,
+                      &cmd.path.source.idx, &cmd.path.dest.group,
+                      &cmd.path.dest.idx, &chars_read) == 4) {
+        cmd.path.source.group = (char)toupper(cmd.path.source.group);
+        cmd.path.dest.group = (char)toupper(cmd.path.dest.group);
+        cmd.kind = Command::PATH;
     } else if (strcmp("help", input) == 0) {
         chars_read = 4;
         cmd.kind = Command::HELP;
