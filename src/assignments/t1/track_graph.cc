@@ -185,6 +185,8 @@ static inline size_t index_of(const track_node* node,
     return (node - track);
 }
 
+// Run Dijkstra's Algorithm on the track graph, based on this implementation:
+// https://en.wikipedia.org/wiki/Dijkstra%27s_algorithm#Pseudocode
 int TrackGraph::shortest_path(const Marklin::sensor_t& start,
                               const Marklin::sensor_t& end,
                               const track_node* path[],
