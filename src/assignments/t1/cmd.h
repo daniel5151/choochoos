@@ -6,6 +6,14 @@
 
 /// Tagged-union of the various commands
 struct Command {
+    struct route_t {
+        size_t train;
+        char sensor_group;
+        size_t sensor_idx;
+        int offset;
+        bool dry_run;
+    };
+
     enum {
         ADDTR,
         GO,
@@ -45,12 +53,7 @@ struct Command {
             size_t no;
             size_t speed;
         } tr;
-        struct {
-            size_t train;
-            char sensor_group;
-            size_t sensor_idx;
-            int offset;
-        } route;
+        route_t route;
         struct {
             char sensor_group;
             size_t sensor_idx;

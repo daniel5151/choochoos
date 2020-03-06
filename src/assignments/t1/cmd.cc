@@ -56,6 +56,14 @@ std::optional<Command> Command::from_string(char* input) {
                       &cmd.route.sensor_group, &cmd.route.sensor_idx,
                       &cmd.route.offset, &chars_read) == 4) {
         if (input[5] != ' ') return std::nullopt;
+
+        if (strcmp(" --dry-run", input + chars_read) == 0) {
+            cmd.route.dry_run = true;
+            chars_read += 10;
+        } else {
+            cmd.route.dry_run = false;
+        }
+
         cmd.route.sensor_group = (char)toupper(cmd.route.sensor_group);
         cmd.kind = Command::ROUTE;
     } else if (sscanf(input, "addtr%u%n", &cmd.addtr.no, &chars_read) == 1) {

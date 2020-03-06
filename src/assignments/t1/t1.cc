@@ -76,31 +76,48 @@ static inline void wait_for_enter(const int uart) {
 static void do_route_cmd(const int uart,
                          const int clock,
                          TrackOracle& track_oracle,
-                         const uint8_t train,
-                         const Marklin::sensor_t& sensor,
-                         const int offset) {
+                         const Command::route_t& cmd) {
+    const Marklin::sensor_t sensor = {
+        .group = cmd.sensor_group,
+        .idx = (uint8_t)cmd.sensor_idx};
+    const uint8_t train = (uint8_t)cmd.train;
+
+    if (!is_valid_train(train)) {
+        log_line(uart, VT_RED "Invalid train id." VT_NOFMT);
+        return;
+    }
+
+    if (!is_valid_sensor(sensor)) {
+        log_line(uart, VT_RED "Invalid sensor." VT_NOFMT);
+        return;
+    }
+
     log_line(uart,
              VT_CYAN "Routing train %u to sensor %c%u + offset %d" VT_NOFMT,
-             train, sensor.group, sensor.idx, offset);
+             train, sensor.group, sensor.idx, cmd.offset);
+
+    if (cmd.dry_run) {
+        log_line(uart, VT_YELLOW
+                 "Found --dry-run flag, not actually routing..." VT_NOFMT);
+        return;
+    }
 
     track_oracle.set_train_speed(train, 8);
-    int stop_at_offset = offset - Calibration::stopping_distance(train, 8);
-    Marklin::track_pos_t send_stop_at_pos = {.sensor = sensor,
-                                             .offset_mm = stop_at_offset};
-    log_line(uart,
-             VT_CYAN
+    int stop_at_offset =
+        cmd.offset - Calibration::stopping_distance(train, 8);
+    const Marklin::track_pos_t send_stop_at_pos = {.sensor = sensor,
+                                                   .offset_mm = stop_at_offset};
+    log_line(uart, VT_CYAN
              "Waiting for train %u to reach sensor %c%u%c%dmm ..." VT_NOFMT,
-             train, sensor.group, sensor.idx, stop_at_offset < 0 ? '-' : '+',
-             std::abs(stop_at_offset));
+             train, sensor.group, sensor.idx,
+             stop_at_offset < 0 ? '-' : '+', std::abs(stop_at_offset));
     if (!track_oracle.wake_at_pos(train, send_stop_at_pos)) {
-        log_line(uart,
-                 VT_RED "Routing failed :'(" VT_NOFMT
-                        " stopping train %d in place.",
+        log_line(uart, VT_RED "Routing failed :'(" VT_NOFMT
+                              " stopping train %d in place.",
                  train);
         track_oracle.set_train_speed(train, 0);
     }
-    log_line(uart,
-             VT_CYAN
+    log_line(uart, VT_CYAN
              "Sending speed=0 to train %u. Waiting for train to "
              "stop..." VT_NOFMT,
              train);
@@ -188,23 +205,7 @@ static void CmdTask() {
                 Shutdown();
             } break;
             case Command::ROUTE: {
-                const Marklin::sensor_t sensor = {
-                    .group = cmd.route.sensor_group,
-                    .idx = (uint8_t)cmd.route.sensor_idx};
-                const uint8_t train = (uint8_t)cmd.route.train;
-
-                if (!is_valid_train(train)) {
-                    log_line(uart, VT_RED "Invalid train id." VT_NOFMT);
-                    continue;
-                }
-
-                if (!is_valid_sensor(sensor)) {
-                    log_line(uart, VT_RED "Invalid sensor." VT_NOFMT);
-                    continue;
-                }
-
-                do_route_cmd(uart, clock, track_oracle, train, sensor,
-                             cmd.route.offset);
+                do_route_cmd(uart, clock, track_oracle, cmd.route);
             } break;
             case Command::RV: {
                 track_oracle.reverse_train((uint8_t)cmd.rv.no);
