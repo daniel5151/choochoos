@@ -62,9 +62,9 @@ struct Res {
         struct {} reverse_train;
         struct {} set_branch_dir;
         struct {} update_sensors;
-        struct { train_descriptor_t desc; } query_train;
+        struct { bool valid; train_descriptor_t desc; } query_train;
         struct { Marklin::BranchDir dir; } query_branch;
-        Marklin::track_pos_t                             normalize;
+        Marklin::track_pos_t normalize;
         // clang-format on
     };
 };
@@ -563,6 +563,10 @@ class TrackOracleImpl {
         blocked_task = {.tid = tid, .train = train, .pos = npos};
     }
 
+    train_descriptor_t* query_train(uint8_t train) {
+        return descriptor_for(train);
+    }
+
     void tick() {
         int now = Clock::Time(clock);
         if (last_ticked_at == -1) {
@@ -662,7 +666,13 @@ void TrackOracleTask() {
                                       req.set_branch_dir.dir);
             } break;
             case MsgTag::QueryTrain: {
-                panic("TrackOracle: QueryTrain message unimplemented");
+                train_descriptor_t* td = oracle.query_train(req.query_train.id);
+                if (td != nullptr) {
+                    res.query_train.valid = true;
+                    res.query_train.desc = *td;
+                } else {
+                    res.query_train.valid = false;
+                }
             } break;
             case MsgTag::QueryBranch: {
                 panic("TrackOracle: QueryBranch message unimplemented");
@@ -753,13 +763,17 @@ void TrackOracle::update_sensors() {
 }
 
 /// Return a particular train's current state
-train_descriptor_t TrackOracle::query_train(uint8_t id) {
+std::optional<train_descriptor_t> TrackOracle::query_train(uint8_t id) {
     Req req = {.tag = MsgTag::QueryTrain, .query_train = {.id = id}};
     Res res;
     int n = Send(tid, (char*)&req, sizeof(req), (char*)&res, sizeof(res));
     if (n != sizeof(res)) panic("truncated response");
     if (res.tag != req.tag) panic("mismatched response kind");
-    return res.query_train.desc;
+    if (res.query_train.valid) {
+        return res.query_train.desc;
+    } else {
+        return std::nullopt;
+    }
 }
 
 /// Return a particular branch's state

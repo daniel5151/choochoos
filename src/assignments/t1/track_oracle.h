@@ -76,7 +76,7 @@ class TrackOracle {
     void update_sensors();
 
     /// Return a particular train's current state
-    train_descriptor_t query_train(uint8_t train_id);
+    std::optional<train_descriptor_t> query_train(uint8_t train_id);
     /// Return a particular branch's state
     Marklin::BranchDir query_branch(uint8_t branch_id);
 
