@@ -13,6 +13,7 @@
 #include "cmd.h"
 #include "marklin.h"
 #include "sysperf.h"
+#include "track_graph.h"
 #include "track_oracle.h"
 #include "ui.h"
 
@@ -76,10 +77,10 @@ static inline void wait_for_enter(const int uart) {
 static void do_route_cmd(const int uart,
                          const int clock,
                          TrackOracle& track_oracle,
+                         const TrackGraph& track_graph,
                          const Command::route_t& cmd) {
-    const Marklin::sensor_t sensor = {
-        .group = cmd.sensor_group,
-        .idx = (uint8_t)cmd.sensor_idx};
+    const Marklin::sensor_t sensor = {.group = cmd.sensor_group,
+                                      .idx = (uint8_t)cmd.sensor_idx};
     const uint8_t train = (uint8_t)cmd.train;
 
     if (!is_valid_train(train)) {
@@ -92,6 +93,9 @@ static void do_route_cmd(const int uart,
         return;
     }
 
+    // TODO use this lol
+    (void)track_graph;
+
     log_line(uart,
              VT_CYAN "Routing train %u to sensor %c%u + offset %d" VT_NOFMT,
              train, sensor.group, sensor.idx, cmd.offset);
@@ -103,21 +107,23 @@ static void do_route_cmd(const int uart,
     }
 
     track_oracle.set_train_speed(train, 8);
-    int stop_at_offset =
-        cmd.offset - Calibration::stopping_distance(train, 8);
+    int stop_at_offset = cmd.offset - Calibration::stopping_distance(train, 8);
     const Marklin::track_pos_t send_stop_at_pos = {.sensor = sensor,
                                                    .offset_mm = stop_at_offset};
-    log_line(uart, VT_CYAN
+    log_line(uart,
+             VT_CYAN
              "Waiting for train %u to reach sensor %c%u%c%dmm ..." VT_NOFMT,
-             train, sensor.group, sensor.idx,
-             stop_at_offset < 0 ? '-' : '+', std::abs(stop_at_offset));
+             train, sensor.group, sensor.idx, stop_at_offset < 0 ? '-' : '+',
+             std::abs(stop_at_offset));
     if (!track_oracle.wake_at_pos(train, send_stop_at_pos)) {
-        log_line(uart, VT_RED "Routing failed :'(" VT_NOFMT
-                              " stopping train %d in place.",
+        log_line(uart,
+                 VT_RED "Routing failed :'(" VT_NOFMT
+                        " stopping train %d in place.",
                  train);
         track_oracle.set_train_speed(train, 0);
     }
-    log_line(uart, VT_CYAN
+    log_line(uart,
+             VT_CYAN
              "Sending speed=0 to train %u. Waiting for train to "
              "stop..." VT_NOFMT,
              train);
@@ -126,7 +132,18 @@ static void do_route_cmd(const int uart,
     log_line(uart, VT_CYAN "Stopped! (hopefully)" VT_NOFMT);
 }
 
+struct CmdTaskCfg {
+    Marklin::Track track;
+};
+
 static void CmdTask() {
+    CmdTaskCfg cfg;
+    {
+        int tid;
+        int n = Receive(&tid, (char*)&cfg, sizeof(cfg));
+        assert(n == sizeof(cfg));
+        Reply(tid, nullptr, 0);
+    }
     int uart = WhoIs(Uart::SERVER_ID);
     int clock = WhoIs(Clock::SERVER_ID);
     assert(uart >= 0);
@@ -134,6 +151,10 @@ static void CmdTask() {
 
     // This looks up the oracle task in the nameserver.
     TrackOracle track_oracle = TrackOracle();
+
+    // We keep a copy track of the track graph ourselves so we can query it when
+    // routing.
+    TrackGraph track_graph(cfg.track);
 
     log_line(uart, VT_YELLOW "Ready to accept commands!" VT_NOFMT);
     print_help(uart);
@@ -205,7 +226,7 @@ static void CmdTask() {
                 Shutdown();
             } break;
             case Command::ROUTE: {
-                do_route_cmd(uart, clock, track_oracle, cmd.route);
+                do_route_cmd(uart, clock, track_oracle, track_graph, cmd.route);
             } break;
             case Command::RV: {
                 track_oracle.reverse_train((uint8_t)cmd.rv.no);
@@ -247,7 +268,12 @@ static void t1_main(int clock, int uart) {
 
     // CmdTask has higher priority than t1_main so that oracle commands it sends
     // trump sensor queries.
-    Create(1, CmdTask);
+    int cmdtask = Create(1, CmdTask);
+    {
+        CmdTaskCfg cfg = {.track = track_id};
+        int n = Send(cmdtask, (char*)&cfg, sizeof(cfg), nullptr, 0);
+        assert(n == 0);
+    }
 
     // This task is now the update_sensors task
     while (true) {
