@@ -106,6 +106,16 @@ static void do_route_cmd(const int uart,
         return;
     }
 
+    auto td_opt = track_oracle.query_train(train);
+    if (!td_opt.has_value()) {
+        log_line(
+            uart,
+            VT_RED
+            "train %u is not calibrated. Please run 'addtr %u' first." VT_NOFMT,
+            train, train);
+        return;
+    }
+
     track_oracle.set_train_speed(train, 8);
     int stop_at_offset = cmd.offset - Calibration::stopping_distance(train, 8);
     const Marklin::track_pos_t send_stop_at_pos = {.sensor = sensor,
