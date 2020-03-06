@@ -17,6 +17,7 @@ struct Command {
         STOP,
         SW,
         TR,
+        NORMALIZE,
     } kind;
     union {
         struct {
@@ -50,6 +51,11 @@ struct Command {
             size_t sensor_idx;
             int offset;
         } route;
+        struct {
+            char sensor_group;
+            size_t sensor_idx;
+            int offset;
+        } normalize;
     };
 
     /// Tries to parse a valid command from the given string

@@ -80,6 +80,10 @@ class TrackOracle {
     /// Return a particular branch's state
     Marklin::BranchDir query_branch(uint8_t branch_id);
 
+    // Return a pos representing the same position on the track, making a best
+    // effort to return a positive offset that is as small as possible.
+    Marklin::track_pos_t normalize(const Marklin::track_pos_t& pos);
+
     /// Unblock the calling task once the specified train is at the specified
     /// position on the track. Returns false on error (no route to position)
     [[nodiscard]] bool wake_at_pos(uint8_t train_id, Marklin::track_pos_t pos);

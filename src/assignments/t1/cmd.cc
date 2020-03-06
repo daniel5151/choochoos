@@ -61,6 +61,11 @@ std::optional<Command> Command::from_string(char* input) {
     } else if (sscanf(input, "addtr%u%n", &cmd.addtr.no, &chars_read) == 1) {
         if (input[5] != ' ') return std::nullopt;
         cmd.kind = Command::ADDTR;
+    } else if (sscanf(input, "n %c%u %d%n", &cmd.normalize.sensor_group,
+                      &cmd.normalize.sensor_idx, &cmd.normalize.offset,
+                      &chars_read) == 3) {
+        cmd.kind = Command::NORMALIZE;
+        cmd.normalize.sensor_group = (char)toupper(cmd.normalize.sensor_group);
     } else if (strcmp("help", input) == 0) {
         chars_read = 4;
         cmd.kind = Command::HELP;

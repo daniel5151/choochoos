@@ -131,3 +131,43 @@ Marklin::sensor_t TrackGraph::invert_sensor(
     if (node == nullptr) panic("unknown sensor %c%u", sensor.group, sensor.idx);
     return sensor_of_node(*node->reverse);
 }
+
+std::optional<std::pair<Marklin::sensor_t, int /* distance, mm */>>
+TrackGraph::prev_sensor(const Marklin::sensor_t& sensor,
+                        const Marklin::BranchState* branches,
+                        size_t branches_len) const {
+    auto prev_sensor_inv_opt =
+        next_sensor(invert_sensor(sensor), branches, branches_len);
+    if (!prev_sensor_inv_opt.has_value()) return std::nullopt;
+    auto [prev_sensor_inv, distance] = prev_sensor_inv_opt.value();
+    return std::make_pair(invert_sensor(prev_sensor_inv), distance);
+}
+
+Marklin::track_pos_t TrackGraph::normalize(const Marklin::track_pos_t& pos,
+                                           const Marklin::BranchState* branches,
+                                           size_t branches_len) const {
+    Marklin::track_pos_t ret = pos;
+    while (true) {
+        if (ret.offset_mm == 0) return ret;
+
+        if (ret.offset_mm > 0) {
+            auto next_sensor_opt =
+                next_sensor(ret.sensor, branches, branches_len);
+            if (!next_sensor_opt.has_value()) return ret;
+            auto [next_sensor, distance] = next_sensor_opt.value();
+            if (distance > ret.offset_mm) return ret;
+            ret.sensor = next_sensor;
+            ret.offset_mm -= distance;
+            assert(ret.offset_mm >= 0);
+        } else {
+            assert(ret.offset_mm < 0);
+            auto prev_sensor_opt =
+                prev_sensor(ret.sensor, branches, branches_len);
+            if (!prev_sensor_opt.has_value()) return ret;
+            auto [prev_sensor, distance] = prev_sensor_opt.value();
+            assert(distance > 0);
+            ret.sensor = prev_sensor;
+            ret.offset_mm += distance;
+        }
+    }
+}

@@ -25,9 +25,10 @@ static inline void print_help(const int uart) {
         "  q                               - quit" ENDL
         ENDL
         "debug commands:" ENDL
-        "  tr <train> <speed> - set a train to a certain speed" ENDL
-        "  sw <branch> <c|s>  - set a branch to be (c)urved or (s)traight" ENDL
-        "  rv <train>         - reverse a train (MUST BE AT SPEED ZERO!)" ENDL
+        "  tr <train> <speed>   - set a train to a certain speed" ENDL
+        "  sw <branch> <c|s>    - set a branch to be (c)urved or (s)traight" ENDL
+        "  rv <train>           - reverse a train (MUST BE AT SPEED ZERO!)" ENDL
+        "  n <sensor> <offset>  - print the position, normalized" ENDL
     );
     // clang-format on
 }
@@ -156,6 +157,19 @@ static void CmdTask() {
                 wait_for_enter(uart);
 
                 track_oracle.set_train_speed(train, 14);
+            } break;
+            case Command::NORMALIZE: {
+                Marklin::track_pos_t pos = {
+                    .sensor =
+                        {
+                            .group = cmd.normalize.sensor_group,
+                            .idx = (uint8_t)cmd.normalize.sensor_idx,
+                        },
+                    .offset_mm = cmd.normalize.offset};
+                Marklin::track_pos_t npos = track_oracle.normalize(pos);
+                log_line(uart, "Position %c%u@%d normalizes to %c%u@%d.",
+                         pos.sensor.group, pos.sensor.idx, pos.offset_mm,
+                         npos.sensor.group, npos.sensor.idx, npos.offset_mm);
             } break;
             case Command::HELP: {
                 print_help(uart);

@@ -27,6 +27,7 @@ enum class MsgTag {
     SetTrainSpeed,
     WakeAtPos,
     Tick,
+    Normalize,
 };
 
 struct Req {
@@ -44,6 +45,7 @@ struct Req {
         struct { uint8_t id; }                           query_branch;
         struct {}                                        update_sensors;
         struct {}                                        tick;
+        Marklin::track_pos_t                             normalize;
         // clang-format on
     };
 };
@@ -60,9 +62,9 @@ struct Res {
         struct {} reverse_train;
         struct {} set_branch_dir;
         struct {} update_sensors;
-
         struct { train_descriptor_t desc; } query_train;
         struct { Marklin::BranchDir dir; } query_branch;
+        Marklin::track_pos_t                             normalize;
         // clang-format on
     };
 };
@@ -554,7 +556,11 @@ class TrackOracleImpl {
             return;
         }
 
-        blocked_task = {.tid = tid, .train = train, .pos = pos};
+        auto npos = track.normalize(pos, branches, BRANCHES_LEN);
+        log_line(uart, "normalized %c%u@%d to %c%u@%d", pos.sensor.group,
+                 pos.sensor.idx, pos.offset_mm, npos.sensor.group,
+                 npos.sensor.idx, npos.offset_mm);
+        blocked_task = {.tid = tid, .train = train, .pos = npos};
     }
 
     void tick() {
@@ -572,6 +578,10 @@ class TrackOracleImpl {
 
         interpolate_acceleration(now);
         check_scheduled_wakeups();
+    }
+
+    Marklin::track_pos_t normalize(const Marklin::track_pos_t& pos) {
+        return track.normalize(pos, branches, BRANCHES_LEN);
     }
 };
 
@@ -662,6 +672,9 @@ void TrackOracleTask() {
             } break;
             case MsgTag::Tick: {
                 oracle.tick();
+            } break;
+            case MsgTag::Normalize: {
+                res.normalize = oracle.normalize(req.normalize);
             } break;
             default:
                 panic("TrackOracle: unexpected request tag: %d", (int)req.tag);
@@ -769,4 +782,13 @@ bool TrackOracle::wake_at_pos(uint8_t train_id, Marklin::track_pos_t pos) {
     if (n != sizeof(res)) panic("truncated response");
     if (res.tag != req.tag) panic("mismatched response kind");
     return res.wake_at_pos.success;
+}
+
+Marklin::track_pos_t TrackOracle::normalize(const Marklin::track_pos_t& pos) {
+    Req req = {.tag = MsgTag::Normalize, .normalize = pos};
+    Res res;
+    int n = Send(tid, (char*)&req, sizeof(req), (char*)&res, sizeof(res));
+    if (n != sizeof(res)) panic("truncated response");
+    if (res.tag != req.tag) panic("mismatched response kind");
+    return res.normalize;
 }
