@@ -79,8 +79,8 @@ static void do_route_cmd(const int uart,
                          TrackOracle& track_oracle,
                          const TrackGraph& track_graph,
                          const Command::route_t& cmd) {
-    const Marklin::sensor_t sensor = {.group = cmd.sensor_group,
-                                      .idx = (uint8_t)cmd.sensor_idx};
+    Marklin::sensor_t sensor = {.group = cmd.sensor_group,
+                                .idx = (uint8_t)cmd.sensor_idx};
     const uint8_t train = (uint8_t)cmd.train;
 
     if (!is_valid_train(train)) {
@@ -93,42 +93,73 @@ static void do_route_cmd(const int uart,
         return;
     }
 
-    log_line(uart,
-             VT_CYAN "Routing train %u to sensor %c%u + offset %d" VT_NOFMT,
-             train, sensor.group, sensor.idx, cmd.offset);
-
     auto td_opt = track_oracle.query_train(train);
     if (!td_opt.has_value()) {
         log_line(
-            uart,
-            VT_RED
+            uart, VT_RED
             "train %u is not calibrated. Please run 'addtr %u' first." VT_NOFMT,
             train, train);
         return;
     }
-    const train_descriptor_t td = td_opt.value();
-    Marklin::track_pos_t target_pos = {
-        .sensor = {.group = cmd.sensor_group, .idx = (uint8_t)cmd.sensor_idx},
-        .offset_mm = cmd.offset};
+    const train_descriptor_t& td = td_opt.value();
 
-    const track_node* path[TRACK_MAX];
+    log_line(uart, VT_CYAN "Routing train %u to sensor %c%u + %dmm" VT_NOFMT,
+             train, sensor.group, sensor.idx, cmd.offset);
+
+    // find the shortest path
+    constexpr size_t MAX_PATH_LEN = 64;  // 64 is overkill, but it's fine
+    const track_node* path[MAX_PATH_LEN];
     size_t distance = 0;
-    int path_len = track_graph.shortest_path(td.pos.sensor, target_pos.sensor,
-                                             path, TRACK_MAX, distance);
+    int path_len = 0;
+    path_len = track_graph.shortest_path(td.pos.sensor, sensor, path,
+                                         MAX_PATH_LEN, distance);
     if (path_len < 0) {
-        log_line(uart, VT_RED "No route from %c%u to %c%u" VT_NOFMT,
-                 td.pos.sensor.group, td.pos.sensor.idx,
-                 target_pos.sensor.group, target_pos.sensor.idx);
-        return;
-    } else {
-        char line[1024] = {'\0'};
-        size_t n = snprintf(line, sizeof(line),
-                            VT_CYAN "Path found (len=%d, dist=%u):", path_len,
-                            distance);
-        for (int i = 0; i < path_len; i++) {
-            n += snprintf(line, sizeof(line) - n, " %s", path[i]->name);
+        // try to invert the sensor, and re-run pathfinding
+        sensor = track_graph.invert_sensor(sensor);
+        path_len = track_graph.shortest_path(td.pos.sensor, sensor, path,
+                                             MAX_PATH_LEN, distance);
+        if (path_len < 0) {
+            log_line(uart, VT_RED "Could not find a path!" VT_NOFMT);
+            return;
         }
-        log_line(uart, "%s" VT_NOFMT, line);
+    }
+
+    // debug-print the path
+    for (size_t i = 0; i < (size_t)path_len; i++) {
+        assert(path[i] != nullptr);
+        const track_node& n = *path[i];
+        log_line(uart, "%s", n.name);
+
+        switch (n.type) {
+            case NODE_NONE:
+                panic("unexpected NODE_NONE in path!");
+            case NODE_SENSOR: {
+                continue;
+            } break;
+            case NODE_BRANCH: {
+                // determine if it needs to be switched
+                assert(i + 1 < (size_t)path_len);
+                const track_node& next_n = *path[i + 1];
+
+                if (n.edge[DIR_STRAIGHT].dest == &next_n) {
+                    log_line(uart, "set branch %d to straight", n.num);
+                } else if (n.edge[DIR_CURVED].dest == &next_n) {
+                    log_line(uart, "set branch %d to curved", n.num);
+                } else {
+                    panic("branch doesn't lead to next node in path!");
+                }
+            } break;
+            case NODE_MERGE: {
+                // we don't actually care about merges...
+                continue;
+            } break;
+            case NODE_ENTER:
+                panic("unexpected NODE_ENTER in path!");
+            case NODE_EXIT:
+                panic("unexpected NODE_EXIT in path!");
+            default:
+                panic("unknown track_node.type in path!");
+        }
     }
 
     if (cmd.dry_run) {
@@ -139,22 +170,25 @@ static void do_route_cmd(const int uart,
 
     track_oracle.set_train_speed(train, 8);
     int stop_at_offset = cmd.offset - Calibration::stopping_distance(train, 8);
-    const Marklin::track_pos_t send_stop_at_pos = {.sensor = sensor,
-                                                   .offset_mm = stop_at_offset};
-    log_line(uart,
-             VT_CYAN
-             "Waiting for train %u to reach sensor %c%u%c%dmm ..." VT_NOFMT,
+    Marklin::track_pos_t send_stop_at_pos = {.sensor = sensor,
+                                             .offset_mm = stop_at_offset};
+    log_line(uart, VT_CYAN
+             "Waiting for train %u to reach sensor %c%u %c %dmm ..." VT_NOFMT,
              train, sensor.group, sensor.idx, stop_at_offset < 0 ? '-' : '+',
              std::abs(stop_at_offset));
     if (!track_oracle.wake_at_pos(train, send_stop_at_pos)) {
-        log_line(uart,
-                 VT_RED "Routing failed :'(" VT_NOFMT
-                        " stopping train %d in place.",
-                 train);
-        track_oracle.set_train_speed(train, 0);
+        // try to route to the inverse sensor instead lol
+        send_stop_at_pos.sensor =
+            track_graph.invert_sensor(send_stop_at_pos.sensor);
+
+        if (!track_oracle.wake_at_pos(train, send_stop_at_pos)) {
+            log_line(uart, VT_RED "Routing failed :'(" VT_NOFMT
+                                  " stopping train %d in place.",
+                     train);
+            track_oracle.set_train_speed(train, 0);
+        }
     }
-    log_line(uart,
-             VT_CYAN
+    log_line(uart, VT_CYAN
              "Sending speed=0 to train %u. Waiting for train to "
              "stop..." VT_NOFMT,
              train);

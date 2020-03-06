@@ -180,10 +180,6 @@ struct search_node_t {
     int total_distance;
 };
 
-#include "ui.h"
-#include "user/tasks/clockserver.h"
-#include "user/tasks/uartserver.h"
-
 static inline size_t index_of(const track_node* node,
                               const track_node track[]) {
     return (node - track);
@@ -194,11 +190,6 @@ int TrackGraph::shortest_path(const Marklin::sensor_t& start,
                               const track_node* path[],
                               size_t max_path_len,
                               size_t& distance) const {
-    int uart = WhoIs(Uart::SERVER_ID);
-    int clock = WhoIs(Clock::SERVER_ID);
-    assert(uart >= 0);
-    assert(clock >= 0);
-
     int dist[TRACK_MAX];
     bool visited[TRACK_MAX];
     const track_node* prev[TRACK_MAX];
@@ -220,9 +211,6 @@ int TrackGraph::shortest_path(const Marklin::sensor_t& start,
     const size_t end_idx = index_of(end_node, track);
     assert(start_idx < TRACK_MAX);
     assert(end_idx < TRACK_MAX);
-
-    log_line(uart, "start=%s (idx %u) end=%s (idx %u)", start_node->name,
-             start_idx, end_node->name, end_idx);
 
     if (start_node == end_node) {
         distance = 0;
@@ -247,8 +235,6 @@ int TrackGraph::shortest_path(const Marklin::sensor_t& start,
         if (curr == nullptr) break;
         const size_t curr_idx = index_of(curr, track);
         visited[curr_idx] = true;
-        log_line(uart, "visting %s (idx %u) (dist %d)", curr->name, curr_idx,
-                 dist[curr_idx]);
 
         size_t num_edges = curr->type == NODE_BRANCH ? 2 : 1;
         for (size_t i = 0; i < num_edges; i++) {
