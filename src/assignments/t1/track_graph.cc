@@ -220,7 +220,7 @@ int TrackGraph::shortest_path(const Marklin::sensor_t& start,
     dist[start_idx] = 0;
 
     bool found = false;
-    while (!found) {
+    while (true) {
         int min_dist = INT_MAX;
         const track_node* curr = nullptr;
         for (size_t i = 0; i < TRACK_MAX; i++) {
@@ -233,6 +233,10 @@ int TrackGraph::shortest_path(const Marklin::sensor_t& start,
             }
         }
         if (curr == nullptr) break;
+        if (curr == end_node) {
+            found = true;
+            break;
+        }
         const size_t curr_idx = index_of(curr, track);
         visited[curr_idx] = true;
 
@@ -249,16 +253,17 @@ int TrackGraph::shortest_path(const Marklin::sensor_t& start,
             if (alt_dist < dist[next_idx]) {
                 dist[next_idx] = alt_dist;
                 prev[next_idx] = curr;
-                if (next == end_node) {
-                    found = true;
-                }
             }
         }
     }
 
-    if (prev[end_idx] == nullptr) {
+    if (!found) {
+        assert(prev[end_idx] == nullptr);
         return -1;
     }
+
+    assert(prev[end_idx] != nullptr);
+
     int path_len = 1;
     {
         const track_node* curr = end_node;
