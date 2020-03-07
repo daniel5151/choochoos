@@ -448,6 +448,25 @@ class TrackOracleImpl {
             if (b.get_id() == id) {
                 b.set_dir(dir);
                 marklin.update_branch(id, dir);
+
+                // re-calculate next sensor for all the trains
+                int now = Clock::Time(clock);
+                for (train_descriptor_t& td : trains) {
+                    if (td.id == 0) continue;
+
+                    auto next_sensor_opt =
+                        track.next_sensor(td.pos.sensor, branches, BRANCHES_LEN);
+                    if (next_sensor_opt.has_value()) {
+                        auto[sensor, distance] = next_sensor_opt.value();
+                        td.has_next_sensor = true;
+                        td.next_sensor = sensor;
+                        td.next_sensor_time =
+                            now + ((TICKS_PER_SEC * distance) / td.velocity);
+                    } else {
+                        td.has_next_sensor = false;
+                    }
+                }
+
                 return;
             }
         }
