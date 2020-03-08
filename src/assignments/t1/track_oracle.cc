@@ -633,7 +633,6 @@ void TrackOracleTickerTask() {
 }
 
 void TrackOracleTask() {
-    Create(0, TrackOracleTickerTask);
     int nsres = RegisterAs(TRACK_ORACLE_TASK_ID);
     assert(nsres >= 0);
 
@@ -665,6 +664,8 @@ void TrackOracleTask() {
     // respond once the oracle has been instantiated
     res.tag = req.tag;
     Reply(tid, (char*)&res, sizeof(res));
+
+    Create(0, TrackOracleTickerTask);
 
     while (true) {
         int reqlen = Receive(&tid, (char*)&req, sizeof(req));

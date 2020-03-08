@@ -85,6 +85,7 @@ class TrackOracle {
     Marklin::track_pos_t normalize(const Marklin::track_pos_t& pos);
 
     /// Unblock the calling task once the specified train is at the specified
-    /// position on the track. Returns false on error (no route to position)
+    /// position on the track. Returns false if the track's state changes such
+    /// that the train will never arrive at the desired position.
     [[nodiscard]] bool wake_at_pos(uint8_t train_id, Marklin::track_pos_t pos);
 };

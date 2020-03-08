@@ -21,23 +21,24 @@ static inline void print_help(const int uart) {
     // clang-format off
     log_line(uart,
         "t1 commands:" ENDL
-        "  addtr <train-id>                - register a train with the track" ENDL
-        "  route <train> <sensor> <offset> - route train to sensor with given offset" ENDL
+        "  addtr <train>                   - register a train with the track" ENDL
+        "  route <train> <sensor> <offset> - route train to given sensor + offset" ENDL
+        "  tr <train> <speed>              - set a train to a certain speed" ENDL
         "  q                               - quit" ENDL
         ENDL
         "debug commands:" ENDL
-        "  tr <train> <speed>   - set a train to a certain speed" ENDL
-        "  sw <branch> <c|s>    - set a branch to be (c)urved or (s)traight" ENDL
-        "  rv <train>           - reverse a train (MUST BE AT SPEED ZERO!)" ENDL
-        "  n <sensor> <offset>  - print the position, normalized" ENDL
+        "  help                   - prints this help message" ENDL
+        "  sw <branch> <c|s>      - set a branch to be (c)urved or (s)traight" ENDL
+        "  rv <train>             - reverse a train (MUST BE AT SPEED ZERO!)" ENDL
+        "  n <sensor> <offset>    - print the position, normalized" ENDL
+        "  path <sensor> <sensor> - calculate route between two sensors" ENDL
     );
     // clang-format on
 }
 
 static inline Marklin::Track query_user_for_track(const int uart) {
     while (true) {
-        log_line(uart,
-                 VT_GREEN "Enter the track you'll be using (A or B)" VT_NOFMT);
+        log_prompt(uart, "Enter the track you'll be using (A or B)");
         char buf[2];
         Ui::prompt_user(uart, buf, sizeof(buf));
 
@@ -47,7 +48,7 @@ static inline Marklin::Track query_user_for_track(const int uart) {
             case 'b':
                 return Marklin::Track::B;
             default:
-                log_line(uart, VT_RED "Invalid track value." VT_NOFMT);
+                log_error(uart,  "Invalid track value." );
         }
     }
 }
@@ -84,26 +85,26 @@ static void do_route_cmd(const int uart,
     const uint8_t train = (uint8_t)cmd.train;
 
     if (!is_valid_train(train)) {
-        log_line(uart, VT_RED "Invalid train id." VT_NOFMT);
+        log_error(uart,  "Invalid train id." );
         return;
     }
 
     if (!is_valid_sensor(sensor)) {
-        log_line(uart, VT_RED "Invalid sensor." VT_NOFMT);
+        log_error(uart,  "Invalid sensor." );
         return;
     }
 
     auto td_opt = track_oracle.query_train(train);
     if (!td_opt.has_value()) {
-        log_line(
-            uart, VT_RED
-            "train %u is not calibrated. Please run 'addtr %u' first." VT_NOFMT,
+        log_error(
+            uart,
+            "train %u is not calibrated. Please run 'addtr %u' first.",
             train, train);
         return;
     }
     const train_descriptor_t& td = td_opt.value();
 
-    log_line(uart, VT_CYAN "Routing train %u (%c%u) to sensor %c%u + %dmm" VT_NOFMT,
+    log_success(uart, "Routing train %u (%c%u) to sensor %c%u + %dmm",
              train, td.pos.sensor.group, td.pos.sensor.idx, sensor.group, sensor.idx, cmd.offset);
 
     // find the shortest path
@@ -119,7 +120,7 @@ static void do_route_cmd(const int uart,
         // of the track. if our speed is zero, then we could try to reverse, and
         // then route.
         if (td.speed != 0) {
-            log_line(uart, VT_RED "could not find path, even though the train was running (i.e: it's assumed to be in a loop)" VT_NOFMT);
+            log_error(uart,  "could not find path, even though the train was running (i.e: it's assumed to be in a loop)" );
             return;
         }
 
@@ -130,14 +131,14 @@ static void do_route_cmd(const int uart,
                                          MAX_PATH_LEN, distance);
 
         if (path_len < 0) {
-            log_line(uart, VT_RED "could not find path, even after reversing the train!" VT_NOFMT);
+            log_error(uart,  "could not find path, even after reversing the train!" );
             return;
         }
     }
 
     // FIXME: handle zero-len paths
     if (path_len == 0) {
-        log_line(uart, VT_RED "zero len paths not supported :/" VT_NOFMT);
+        log_error(uart,  "zero len paths not supported :/" );
         return;
     }
 
@@ -205,8 +206,7 @@ static void do_route_cmd(const int uart,
     }
 
     if (cmd.dry_run) {
-        log_line(uart, VT_YELLOW
-                 "Found --dry-run flag, not actually routing..." VT_NOFMT);
+        log_warning(uart, "Found --dry-run flag, not actually routing...");
         return;
     }
 
@@ -230,22 +230,21 @@ static void do_route_cmd(const int uart,
 
     track_oracle.set_train_speed(train, 8);
 
-    log_line(uart, VT_CYAN
-             "Waiting for train %u to reach sensor %c%u %c %dmm ..." VT_NOFMT,
+    log_success(uart, "Waiting for train %u to reach sensor %c%u %c %dmm ...",
              train, sensor.group, sensor.idx, stop_at_offset < 0 ? '-' : '+',
              std::abs(stop_at_offset));
 
     bool ok = track_oracle.wake_at_pos(train, send_stop_at_pos);
     assert(ok);
 
-    log_line(uart, VT_CYAN
+    log_success(uart,
              "Sending speed=0 to train %u. Waiting for train to "
-             "stop..." VT_NOFMT,
+             "stop...",
              train);
     track_oracle.set_train_speed(train, 0);
 
     Clock::Delay(clock, Calibration::stopping_time(train, 8));
-    log_line(uart, VT_CYAN "Stopped! (hopefully)" VT_NOFMT);
+    log_success(uart, "Stopped! (hopefully)");
 }
 
 struct CmdTaskCfg {
@@ -272,7 +271,7 @@ static void CmdTask() {
     // routing.
     TrackGraph track_graph(cfg.track);
 
-    log_line(uart, VT_YELLOW "Ready to accept commands!" VT_NOFMT);
+    log_success(uart, "Ready to accept commands!");
     print_help(uart);
 
     char line[80];
@@ -281,7 +280,7 @@ static void CmdTask() {
 
         std::optional<Command> cmd_opt = Command::from_string(line);
         if (!cmd_opt.has_value()) {
-            log_line(uart, VT_RED "Unrecognized command." VT_NOFMT);
+            log_error(uart,  "Unrecognized command." );
             continue;
         }
 
@@ -291,12 +290,12 @@ static void CmdTask() {
             case Command::ADDTR: {
                 const uint8_t train = (uint8_t)cmd.addtr.no;
                 if (!is_valid_train(train)) {
-                    log_line(uart, VT_RED "Invalid train id." VT_NOFMT);
+                    log_error(uart,  "Invalid train id." );
                     continue;
                 }
 
                 log_line(
-                    uart, VT_YELLOW
+                    uart, VT_CYAN
                     "Place the train somewhere on the track." VT_NOFMT ENDL
                     "It's okay if the train is running, we'll send a stop "
                     "command." ENDL VT_GREEN
@@ -330,11 +329,11 @@ static void CmdTask() {
             } break;
             case Command::GO: {
                 // IMPROVEMENT: actually implement go command
-                log_line(uart, VT_RED "Invalid command." VT_NOFMT);
+                log_error(uart,  "Invalid command." );
             } break;
             case Command::LIGHT: {
                 // IMPROVEMENT: actually implement light command
-                log_line(uart, VT_RED "Invalid command." VT_NOFMT);
+                log_error(uart,  "Invalid command." );
             } break;
             case Command::Q: {
                 Uart::Putstr(uart, COM2, VT_RESET);
@@ -346,16 +345,16 @@ static void CmdTask() {
             } break;
             case Command::RV: {
                 track_oracle.reverse_train((uint8_t)cmd.rv.no);
-                log_line(uart, VT_CYAN "Manually reversed train %u" VT_NOFMT,
+                log_success(uart, "Manually reversed train %u",
                          cmd.rv.no);
             } break;
             case Command::STOP: {
                 // IMPROVEMENT: actually implement stop command
-                log_line(uart, VT_RED "Invalid command." VT_NOFMT);
+                log_error(uart,  "Invalid command." );
             } break;
             case Command::SW: {
                 track_oracle.set_branch_dir((uint8_t)cmd.sw.no, cmd.sw.dir);
-                log_line(uart, VT_CYAN "Manually set branch %u to %s" VT_NOFMT,
+                log_success(uart, "Manually set branch %u to %s",
                          cmd.sw.no,
                          cmd.sw.dir == Marklin::BranchDir::Straight ? "straight"
                                                                     : "curved");
@@ -363,8 +362,8 @@ static void CmdTask() {
             case Command::TR: {
                 track_oracle.set_train_speed((uint8_t)cmd.tr.no,
                                              (uint8_t)cmd.tr.speed);
-                log_line(uart,
-                         VT_CYAN "Manually set train %u to speed %u" VT_NOFMT,
+                log_success(uart,
+                          "Manually set train %u to speed %u",
                          cmd.tr.no, cmd.tr.speed);
             } break;
             case Command::PATH: {
@@ -373,21 +372,21 @@ static void CmdTask() {
                 int path_len = track_graph.shortest_path(
                     cmd.path.source, cmd.path.dest, path, TRACK_MAX, distance);
                 if (path_len < 0) {
-                    log_line(uart, VT_RED "No route from %c%u to %c%u" VT_NOFMT,
+                    log_error(uart,  "No route from %c%u to %c%u" ,
                              cmd.path.source.group, cmd.path.source.idx,
                              cmd.path.dest.group, cmd.path.dest.idx);
                     break;
                 } else {
                     char line[1024] = {'\0'};
                     size_t n = snprintf(line, sizeof(line),
-                                        VT_CYAN "Path found (len=%d, dist=%u):",
+                                        "Path found (len=%d, dist=%u):",
                                         path_len, distance);
                     for (int i = 0; i < path_len; i++) {
                         assert(path[i] != nullptr);
                         n += snprintf(line + n, sizeof(line) - n, " %s",
                                       path[i]->name);
                     }
-                    log_line(uart, "%s" VT_NOFMT, line);
+                    log_success(uart, "%s", line);
                 }
             } break;
             default:
@@ -398,6 +397,8 @@ static void CmdTask() {
 
 static void t1_main(int clock, int uart) {
     (void)clock;
+
+    Ui::render_initial_screen(uart, term_size);
 
     // determine which track to use
     Marklin::Track track_id = query_user_for_track(uart);
@@ -440,8 +441,6 @@ void FirstUserTask() {
         },
         [](void* d, const char* s) { Uart::Putstr(*(int*)d, COM2, s); });
     assert(term_size.success);
-
-    Ui::render_initial_screen(uart, term_size);
 
     // spawn the perf task
     {
