@@ -428,7 +428,7 @@ class TrackOracleImpl {
         if (td_opt == nullptr) return false;
         train_descriptor_t& td = *td_opt;
 
-        if (td.speed == 0) {
+        if (td.speed != 0) {
             log_warning(uart,
                         "attempted to reverse train with non zero speed!");
             return false;
