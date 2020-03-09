@@ -58,9 +58,9 @@ struct Res {
         struct {} init;
         struct {} calibrate_train;
         struct { bool success; } wake_at_pos;
-        struct {} set_train_speed;
-        struct {} set_train_light;
-        struct {} reverse_train;
+        struct { bool success; } set_train_speed;
+        struct { bool success; } set_train_light;
+        struct { bool success; } reverse_train;
         struct {} set_branch_dir;
         struct {} update_sensors;
         struct { bool valid; train_descriptor_t desc; } query_train;
@@ -132,7 +132,7 @@ class TrackOracleImpl {
                 track.next_sensor(t.next_sensor, branches, BRANCHES_LEN);
 
             if (next_sensor_opt.has_value()) {
-                auto [next_sensor, _] = next_sensor_opt.value();
+                auto[next_sensor, _] = next_sensor_opt.value();
                 if (Marklin::sensor_eq(sensor, next_sensor)) {
                     return &t;
                 }
@@ -386,14 +386,16 @@ class TrackOracleImpl {
         Ui::render_train_descriptor(uart, *train);
     }
 
-    void set_train_speed(uint8_t id, uint8_t speed) {
+    bool set_train_speed(uint8_t id, uint8_t speed) {
+        // send marklin command
         auto train = Marklin::TrainState(id);
         train.set_speed(speed);
         train.set_light(true);
         marklin.update_train(train);
 
+        // update train state (if the train is registered)
         train_descriptor_t* td_opt = descriptor_for(id);
-        if (td_opt == nullptr) return;  // TODO: make this an assertion fail?
+        if (td_opt == nullptr) return false;
         train_descriptor_t& td = *td_opt;
 
         uint8_t old_speed = td.speed;
@@ -410,20 +412,27 @@ class TrackOracleImpl {
             td.speed_changed_at = now;
         }
         Ui::render_train_descriptor(uart, td);
+
+        return true;
     }
 
-    void reverse_train(uint8_t id) {
-        train_descriptor_t* td_opt = descriptor_for(id);
-        if (td_opt == nullptr) return;  // TODO: make this an assertion fail?
-        train_descriptor_t& td = *td_opt;
-
-        assert(td.speed == 0);
-
+    bool reverse_train(uint8_t id) {
         // send the reverse command
         auto train = Marklin::TrainState(id);
         train.set_speed(15);
         train.set_light(true);
         marklin.update_train(train);
+
+        // update the train state (if the train is registered)
+        train_descriptor_t* td_opt = descriptor_for(id);
+        if (td_opt == nullptr) return false;
+        train_descriptor_t& td = *td_opt;
+
+        if (td.speed == 0) {
+            log_warning(uart,
+                        "attempted to reverse train with non zero speed!");
+            return false;
+        }
 
         const Marklin::track_pos_t old_pos = td.pos;
         td.pos.sensor = track.invert_sensor(old_pos.sensor);
@@ -441,6 +450,8 @@ class TrackOracleImpl {
         }
 
         Ui::render_train_descriptor(uart, td);
+
+        return true;
     }
 
     void set_branch_dir(uint8_t id, Marklin::BranchDir dir) {
@@ -454,8 +465,8 @@ class TrackOracleImpl {
                 for (train_descriptor_t& td : trains) {
                     if (td.id == 0) continue;
 
-                    auto next_sensor_opt =
-                        track.next_sensor(td.pos.sensor, branches, BRANCHES_LEN);
+                    auto next_sensor_opt = track.next_sensor(
+                        td.pos.sensor, branches, BRANCHES_LEN);
                     if (next_sensor_opt.has_value()) {
                         auto[sensor, distance] = next_sensor_opt.value();
                         td.has_next_sensor = true;
@@ -684,14 +695,15 @@ void TrackOracleTask() {
                 continue;  // IMPORTANT! MUST NOT IMMEDIATELY RESPOND TO TASK!
             } break;
             case MsgTag::SetTrainSpeed: {
-                oracle.set_train_speed(req.set_train_speed.id,
-                                       req.set_train_speed.speed);
+                res.set_train_speed.success = oracle.set_train_speed(
+                    req.set_train_speed.id, req.set_train_speed.speed);
             } break;
             case MsgTag::SetTrainLight: {
                 panic("TrackOracle: SetTrainLight message unimplemented");
             } break;
             case MsgTag::ReverseTrain: {
-                oracle.reverse_train(req.reverse_train.id);
+                res.reverse_train.success =
+                    oracle.reverse_train(req.reverse_train.id);
             } break;
             case MsgTag::SetBranchDir: {
                 oracle.set_branch_dir(req.set_branch_dir.id,
@@ -764,22 +776,34 @@ void TrackOracle::calibrate_train(uint8_t train_id) {
 }
 
 /// Update a train's speed
-void TrackOracle::set_train_speed(uint8_t id, uint8_t speed) {
+bool TrackOracle::set_train_speed(uint8_t id, uint8_t speed) {
     Req req = {.tag = MsgTag::SetTrainSpeed,
                .set_train_speed = {.id = id, .speed = speed}};
-    send_with_assert_empty_response(this->tid, req);
+    Res res;
+    int n = Send(tid, (char*)&req, sizeof(req), (char*)&res, sizeof(res));
+    if (n != sizeof(res)) panic("truncated response");
+    if (res.tag != req.tag) panic("mismatched response kind");
+    return res.set_train_speed.success;
 }
 /// Update a train's lights
-void TrackOracle::set_train_light(uint8_t id, bool active) {
+bool TrackOracle::set_train_light(uint8_t id, bool active) {
     Req req = {.tag = MsgTag::SetTrainSpeed,
                .set_train_light = {.id = id, .active = active}};
-    send_with_assert_empty_response(this->tid, req);
+    Res res;
+    int n = Send(tid, (char*)&req, sizeof(req), (char*)&res, sizeof(res));
+    if (n != sizeof(res)) panic("truncated response");
+    if (res.tag != req.tag) panic("mismatched response kind");
+    return res.set_train_light.success;
 }
 
 /// Reverse a train's direction (via speed 15)
-void TrackOracle::reverse_train(uint8_t id) {
+bool TrackOracle::reverse_train(uint8_t id) {
     Req req = {.tag = MsgTag::ReverseTrain, .reverse_train = {.id = id}};
-    send_with_assert_empty_response(this->tid, req);
+    Res res;
+    int n = Send(tid, (char*)&req, sizeof(req), (char*)&res, sizeof(res));
+    if (n != sizeof(res)) panic("truncated response");
+    if (res.tag != req.tag) panic("mismatched response kind");
+    return res.reverse_train.success;
 }
 
 /// Update a branch's direction

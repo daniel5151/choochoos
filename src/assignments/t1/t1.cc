@@ -390,9 +390,9 @@ static void CmdTask() {
                     break;
                 } else {
                     char line[1024] = {'\0'};
-                    size_t n = snprintf(
-                        line, sizeof(line),
-                        "Path found (len=%d, dist=%u):", path_len, distance);
+                    size_t n = snprintf(line, sizeof(line),
+                                        "Path found (len=%d, dist=%u):",
+                                        path_len, distance);
                     for (int i = 0; i < path_len; i++) {
                         assert(path[i] != nullptr);
                         n += snprintf(line + n, sizeof(line) - n, " %s",

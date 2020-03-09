@@ -61,12 +61,13 @@ class TrackOracle {
     /// for it to hit a sensor (thereby determining it's position and direction)
     void calibrate_train(uint8_t train_id);
 
-    /// Update a train's speed
-    void set_train_speed(uint8_t train_id, uint8_t speed);
-    /// Update a train's lights
-    void set_train_light(uint8_t train_id, bool active);
-    /// Reverse a train's direction (via speed 15)
-    void reverse_train(uint8_t train_id);
+    /// Update a train's speed. returns false if the train isn't registered
+    bool set_train_speed(uint8_t train_id, uint8_t speed);
+    /// Update a train's lights. returns false if the train isn't registered
+    bool set_train_light(uint8_t train_id, bool active);
+    /// Reverse a train's direction. returns false if the train isn't
+    /// registered, or if the train has a non-zero speed (NOT VELOCITY!).
+    bool reverse_train(uint8_t train_id);
 
     /// Update a branch's direction
     void set_branch_dir(uint8_t branch_id, Marklin::BranchDir dir);
