@@ -18,17 +18,18 @@
 
 enum class MsgTag {
     CalibrateTrain,
-    UpdateSensors,
     InitTrack,
+    MakeLoop,
+    Normalize,
     QueryBranch,
     QueryTrain,
     ReverseTrain,
     SetBranchDir,
     SetTrainLight,
     SetTrainSpeed,
-    WakeAtPos,
     Tick,
-    Normalize,
+    UpdateSensors,
+    WakeAtPos,
 };
 
 struct Req {
@@ -46,6 +47,7 @@ struct Req {
         struct { uint8_t id; }                           query_branch;
         struct {}                                        update_sensors;
         struct {}                                        tick;
+        struct {}                                        make_loop;
         Marklin::track_pos_t                             normalize;
         // clang-format on
     };
@@ -66,6 +68,7 @@ struct Res {
         struct { bool valid; train_descriptor_t desc; } query_train;
         struct { Marklin::BranchDir dir; } query_branch;
         Marklin::track_pos_t normalize;
+        struct {} make_loop;
         // clang-format on
     };
 };
@@ -297,6 +300,14 @@ class TrackOracleImpl {
 
         marklin.flush();
 
+        make_loop();
+
+        log_line(uart, "Track has been initialized!");
+    }
+
+    void make_loop() {
+        // TODO: make the loops vary between the two tracks
+
         // set all the branches to curved
         for (size_t i = 0; auto& b : this->branches) {
             const uint8_t id = Marklin::VALID_SWITCHES[i++];
@@ -317,8 +328,6 @@ class TrackOracleImpl {
         marklin.update_branches(this->branches,
                                 sizeof(Marklin::VALID_SWITCHES));
         marklin.flush();
-
-        log_line(uart, "Track has been initialized!");
     }
 
     void calibrate_train(uint8_t id) {
@@ -739,6 +748,9 @@ void TrackOracleTask() {
             case MsgTag::Normalize: {
                 res.normalize = oracle.normalize(req.normalize);
             } break;
+            case MsgTag::MakeLoop: {
+                oracle.make_loop();
+            } break;
             default:
                 panic("TrackOracle: unexpected request tag: %d", (int)req.tag);
         }
@@ -824,6 +836,11 @@ void TrackOracle::set_branch_dir(uint8_t id, Marklin::BranchDir dir) {
 
 void TrackOracle::update_sensors() {
     Req req = {.tag = MsgTag::UpdateSensors, .update_sensors = {}};
+    send_with_assert_empty_response(this->tid, req);
+}
+
+void TrackOracle::make_loop() {
+    Req req = {.tag = MsgTag::MakeLoop, .make_loop = {}};
     send_with_assert_empty_response(this->tid, req);
 }
 

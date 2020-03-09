@@ -80,6 +80,9 @@ class TrackOracle {
     /// appropriately
     void update_sensors();
 
+    /// reset the track's switches to have a loop
+    void make_loop();
+
     /// Return a particular train's current state
     std::optional<train_descriptor_t> query_train(uint8_t train_id);
     /// Return a particular branch's state

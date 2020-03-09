@@ -24,6 +24,7 @@ static inline void print_help(const int uart) {
         "  addtr <train>                   - register a train with the track" ENDL
         "  route <train> <sensor> <offset> - route train to given sensor + offset" ENDL
         "  tr <train> <speed>              - set a train to a certain speed" ENDL
+        "  mkloop                          - reset track to have a loop" ENDL
         "  q                               - quit" ENDL
         ENDL
         "debug commands:" ENDL
@@ -400,6 +401,10 @@ static void CmdTask() {
                     }
                     log_success(uart, "%s", line);
                 }
+            } break;
+            case Command::MKLOOP: {
+                track_oracle.make_loop();
+                log_success(uart, "Created a loop!");
             } break;
             default:
                 panic("somehow parsed an invalid command!");

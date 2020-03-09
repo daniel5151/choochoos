@@ -19,14 +19,15 @@ struct Command {
         GO,
         HELP,
         LIGHT,
+        MKLOOP,
+        NORMALIZE,
+        PATH,
         Q,
         ROUTE,
         RV,
         STOP,
         SW,
         TR,
-        NORMALIZE,
-        PATH,
     } kind;
     union {
         struct {
@@ -64,6 +65,8 @@ struct Command {
             Marklin::sensor_t source;
             Marklin::sensor_t dest;
         } path;
+        struct {
+        } mkloop;
     };
 
     /// Tries to parse a valid command from the given string

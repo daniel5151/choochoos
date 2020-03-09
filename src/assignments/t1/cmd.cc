@@ -83,6 +83,9 @@ std::optional<Command> Command::from_string(char* input) {
     } else if (strcmp("help", input) == 0) {
         chars_read = 4;
         cmd.kind = Command::HELP;
+    } else if (strcmp("mkloop", input) == 0) {
+        chars_read = 6;
+        cmd.kind = Command::MKLOOP;
     } else if (strcmp("q", input) == 0) {
         cmd.kind = Command::Q;
     } else if (strcmp("s", input) == 0) {
