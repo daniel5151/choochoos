@@ -15,7 +15,35 @@ static const StaticCalibrationData calibration;
 int expected_velocity(uint8_t train, uint8_t speed) {
     int idx = calibration_index_of_train((int)train);
     if (idx < 0) panic("no index for train %u", train);
-    if (speed == 0) return 0;
+    switch (speed) {
+        case 0:
+            return 0;
+        // these are the speeds we've actually measured
+        case 8:
+        case 14: {
+            const speed_level_t& speed_data =
+                calibration.data.trains[idx].speeds[speed];
+            assert(speed_data.measured_velocity);
+            return speed_data.expected_velocity_mmps;
+        }
+        default: {
+            auto& speed_8 = calibration.data.trains[idx].speeds[8];
+            auto& speed_14 = calibration.data.trains[idx].speeds[14];
+            assert(speed_8.measured_velocity);
+            assert(speed_14.measured_velocity);
+            int speed_8_vel = speed_8.expected_velocity_mmps;
+            int speed_14_vel = speed_14.expected_velocity_mmps;
+
+            if (speed > 8) {
+                // 8 < speed < 14: interpolate between the two measured speeds
+                return speed_8_vel +
+                       (speed - 8) * (speed_14_vel - speed_8_vel) / (14 - 8);
+            }
+
+            // 0 < speed < 8: interpolate between 0 and speed_8_vel
+            return speed * speed_8_vel / 8;
+        }
+    }
 
     const speed_level_t& speed_data =
         calibration.data.trains[idx].speeds[speed];
