@@ -48,7 +48,7 @@ static inline Marklin::Track query_user_for_track(const int uart) {
             case 'b':
                 return Marklin::Track::B;
             default:
-                log_error(uart,  "Invalid track value." );
+                log_error(uart, "Invalid track value.");
         }
     }
 }
@@ -85,27 +85,27 @@ static void do_route_cmd(const int uart,
     const uint8_t train = (uint8_t)cmd.train;
 
     if (!is_valid_train(train)) {
-        log_error(uart,  "Invalid train id." );
+        log_error(uart, "Invalid train id.");
         return;
     }
 
     if (!is_valid_sensor(sensor)) {
-        log_error(uart,  "Invalid sensor." );
+        log_error(uart, "Invalid sensor.");
         return;
     }
 
     auto td_opt = track_oracle.query_train(train);
     if (!td_opt.has_value()) {
-        log_error(
-            uart,
-            "train %u is not calibrated. Please run 'addtr %u' first.",
-            train, train);
+        log_error(uart,
+                  "train %u is not calibrated. Please run 'addtr %u' first.",
+                  train, train);
         return;
     }
     const train_descriptor_t& td = td_opt.value();
 
-    log_success(uart, "Routing train %u (%c%u) to sensor %c%u + %dmm",
-             train, td.pos.sensor.group, td.pos.sensor.idx, sensor.group, sensor.idx, cmd.offset);
+    log_success(uart, "Routing train %u (%c%u) to sensor %c%u + %dmm", train,
+                td.pos.sensor.group, td.pos.sensor.idx, sensor.group,
+                sensor.idx, cmd.offset);
 
     // find the shortest path
     constexpr size_t MAX_PATH_LEN = 64;  // 64 is overkill, but it's fine
@@ -120,7 +120,9 @@ static void do_route_cmd(const int uart,
         // of the track. if our speed is zero, then we could try to reverse, and
         // then route.
         if (td.speed != 0) {
-            log_error(uart,  "could not find path, even though the train was running (i.e: it's assumed to be in a loop)" );
+            log_error(uart,
+                      "could not find path, even though the train was running "
+                      "(i.e: it's assumed to be in a loop)");
             return;
         }
 
@@ -128,17 +130,18 @@ static void do_route_cmd(const int uart,
         // `td` *magically* updates due to spooky pointer action at a distance
 
         path_len = track_graph.shortest_path(td.pos.sensor, sensor, path,
-                                         MAX_PATH_LEN, distance);
+                                             MAX_PATH_LEN, distance);
 
         if (path_len < 0) {
-            log_error(uart,  "could not find path, even after reversing the train!" );
+            log_error(uart,
+                      "could not find path, even after reversing the train!");
             return;
         }
     }
 
     // FIXME: handle zero-len paths
     if (path_len == 0) {
-        log_error(uart,  "zero len paths not supported :/" );
+        log_error(uart, "zero len paths not supported :/");
         return;
     }
 
@@ -231,16 +234,16 @@ static void do_route_cmd(const int uart,
     track_oracle.set_train_speed(train, 8);
 
     log_success(uart, "Waiting for train %u to reach sensor %c%u %c %dmm ...",
-             train, sensor.group, sensor.idx, stop_at_offset < 0 ? '-' : '+',
-             std::abs(stop_at_offset));
+                train, sensor.group, sensor.idx, stop_at_offset < 0 ? '-' : '+',
+                std::abs(stop_at_offset));
 
     bool ok = track_oracle.wake_at_pos(train, send_stop_at_pos);
     assert(ok);
 
     log_success(uart,
-             "Sending speed=0 to train %u. Waiting for train to "
-             "stop...",
-             train);
+                "Sending speed=0 to train %u. Waiting for train to "
+                "stop...",
+                train);
     track_oracle.set_train_speed(train, 0);
 
     Clock::Delay(clock, Calibration::stopping_time(train, 8));
@@ -280,7 +283,7 @@ static void CmdTask() {
 
         std::optional<Command> cmd_opt = Command::from_string(line);
         if (!cmd_opt.has_value()) {
-            log_error(uart,  "Unrecognized command." );
+            log_error(uart, "Unrecognized command.");
             continue;
         }
 
@@ -290,7 +293,7 @@ static void CmdTask() {
             case Command::ADDTR: {
                 const uint8_t train = (uint8_t)cmd.addtr.no;
                 if (!is_valid_train(train)) {
-                    log_error(uart,  "Invalid train id." );
+                    log_error(uart, "Invalid train id.");
                     continue;
                 }
 
@@ -306,7 +309,8 @@ static void CmdTask() {
                 track_oracle.calibrate_train(train);
 
                 // log_line(uart,
-                //          VT_GREEN "Press [ENTER] to start the train" VT_NOFMT);
+                //          VT_GREEN "Press [ENTER] to start the train"
+                //          VT_NOFMT);
                 // wait_for_enter(uart);
 
                 // track_oracle.set_train_speed(train, 14);
@@ -329,11 +333,11 @@ static void CmdTask() {
             } break;
             case Command::GO: {
                 // IMPROVEMENT: actually implement go command
-                log_error(uart,  "Invalid command." );
+                log_error(uart, "Invalid command.");
             } break;
             case Command::LIGHT: {
                 // IMPROVEMENT: actually implement light command
-                log_error(uart,  "Invalid command." );
+                log_error(uart, "Invalid command.");
             } break;
             case Command::Q: {
                 Uart::Putstr(uart, COM2, VT_RESET);
@@ -345,26 +349,24 @@ static void CmdTask() {
             } break;
             case Command::RV: {
                 track_oracle.reverse_train((uint8_t)cmd.rv.no);
-                log_success(uart, "Manually reversed train %u",
-                         cmd.rv.no);
+                log_success(uart, "Manually reversed train %u", cmd.rv.no);
             } break;
             case Command::STOP: {
                 // IMPROVEMENT: actually implement stop command
-                log_error(uart,  "Invalid command." );
+                log_error(uart, "Invalid command.");
             } break;
             case Command::SW: {
                 track_oracle.set_branch_dir((uint8_t)cmd.sw.no, cmd.sw.dir);
-                log_success(uart, "Manually set branch %u to %s",
-                         cmd.sw.no,
-                         cmd.sw.dir == Marklin::BranchDir::Straight ? "straight"
-                                                                    : "curved");
+                log_success(uart, "Manually set branch %u to %s", cmd.sw.no,
+                            cmd.sw.dir == Marklin::BranchDir::Straight
+                                ? "straight"
+                                : "curved");
             } break;
             case Command::TR: {
                 track_oracle.set_train_speed((uint8_t)cmd.tr.no,
                                              (uint8_t)cmd.tr.speed);
-                log_success(uart,
-                          "Manually set train %u to speed %u",
-                         cmd.tr.no, cmd.tr.speed);
+                log_success(uart, "Manually set train %u to speed %u",
+                            cmd.tr.no, cmd.tr.speed);
             } break;
             case Command::PATH: {
                 size_t distance = 0;
@@ -372,15 +374,15 @@ static void CmdTask() {
                 int path_len = track_graph.shortest_path(
                     cmd.path.source, cmd.path.dest, path, TRACK_MAX, distance);
                 if (path_len < 0) {
-                    log_error(uart,  "No route from %c%u to %c%u" ,
-                             cmd.path.source.group, cmd.path.source.idx,
-                             cmd.path.dest.group, cmd.path.dest.idx);
+                    log_error(uart, "No route from %c%u to %c%u",
+                              cmd.path.source.group, cmd.path.source.idx,
+                              cmd.path.dest.group, cmd.path.dest.idx);
                     break;
                 } else {
                     char line[1024] = {'\0'};
-                    size_t n = snprintf(line, sizeof(line),
-                                        "Path found (len=%d, dist=%u):",
-                                        path_len, distance);
+                    size_t n = snprintf(
+                        line, sizeof(line),
+                        "Path found (len=%d, dist=%u):", path_len, distance);
                     for (int i = 0; i < path_len; i++) {
                         assert(path[i] != nullptr);
                         n += snprintf(line + n, sizeof(line) - n, " %s",
@@ -395,7 +397,7 @@ static void CmdTask() {
     }
 }
 
-static void t1_main(int clock, int uart) {
+static void t1_main(int clock, int uart, const TermSize& term_size) {
     (void)clock;
 
     Ui::render_initial_screen(uart, term_size);
@@ -449,5 +451,5 @@ void FirstUserTask() {
         Send(tid, (char*)&cfg, sizeof(cfg), nullptr, 0);
     }
 
-    t1_main(clock, uart);
+    t1_main(clock, uart, term_size);
 }
