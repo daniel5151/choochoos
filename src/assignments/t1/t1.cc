@@ -127,7 +127,10 @@ static void do_route_cmd(const int uart,
         }
 
         track_oracle.reverse_train(train);
-        // `td` *magically* updates due to spooky pointer action at a distance
+
+        td_opt = track_oracle.query_train(train);
+        assert(td_opt.has_value());
+        const train_descriptor_t& td = td_opt.value();
 
         path_len = track_graph.shortest_path(td.pos.sensor, sensor, path,
                                              MAX_PATH_LEN, distance);
