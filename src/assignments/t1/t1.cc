@@ -102,7 +102,7 @@ static void do_route_cmd(const int uart,
                   train, train);
         return;
     }
-    train_descriptor_t& td = td_opt.value();
+    const train_descriptor_t& td = td_opt.value();
 
     log_success(uart, "Routing train %u (%c%u) to sensor %c%u + %dmm", train,
                 td.pos.sensor.group, td.pos.sensor.idx, sensor.group,
@@ -218,7 +218,7 @@ static void do_route_cmd(const int uart,
     }
 
     int stopping_distance = Calibration::stopping_distance(train, 8);
-    int slowdown_distance = 1500;
+    int slowdown_distance = 2000;
 
     // send the stop command (speed=0) `stopping_distance`mm before the target
     // sensor, or `total_path_distance` - `stopping_distance` _after_ the
@@ -226,21 +226,32 @@ static void do_route_cmd(const int uart,
     Marklin::track_pos_t send_stop_at_pos = td.pos;
     send_stop_at_pos.offset_mm +=
         ((int)total_path_distance - stopping_distance);
+    send_stop_at_pos = track_oracle.normalize(send_stop_at_pos);
 
     // if the path is long enough, set the speed to 14 initially, and then set
     // the speed to 8 `slowdown_distance`mm before we send the stop command.
-    Marklin::track_pos_t send_slow_at_pos = send_stop_at_pos;
-    send_slow_at_pos.offset_mm -= slowdown_distance;
+    Marklin::track_pos_t send_slow_at_pos = td.pos;
+    send_slow_at_pos.offset_mm +=
+        ((int)total_path_distance - stopping_distance - slowdown_distance);
+    send_slow_at_pos = track_oracle.normalize(send_slow_at_pos);
 
     ///////////////////////////////
 
     if ((int)total_path_distance > slowdown_distance + stopping_distance) {
+        log_success(uart,
+                    "Set speed to 14. Waiting for train %u to reach sensor "
+                    "%c%u %c %dmm ...",
+                    train, send_slow_at_pos.sensor.group,
+                    send_slow_at_pos.sensor.idx,
+                    send_slow_at_pos.offset_mm < 0 ? '-' : '+',
+                    std::abs(send_slow_at_pos.offset_mm));
         // let 'er eat at 14
         track_oracle.set_train_speed(train, 14);
 
         bool ok = track_oracle.wake_at_pos(train, send_slow_at_pos);
         if (!ok) {
             log_error(uart, "wake_at_pos for slow-down failed unexpectedly!");
+            track_oracle.set_train_speed(train, 0);
             return;
         }
     }
@@ -250,13 +261,15 @@ static void do_route_cmd(const int uart,
     log_success(
         uart,
         "Set speed to 8. Waiting for train %u to reach sensor %c%u %c %dmm ...",
-        train, sensor.group, sensor.idx, cmd.offset < 0 ? '-' : '+',
-        std::abs(cmd.offset));
+        train, send_stop_at_pos.sensor.group, send_stop_at_pos.sensor.idx,
+        send_stop_at_pos.offset_mm < 0 ? '-' : '+',
+        std::abs(send_stop_at_pos.offset_mm));
 
     bool ok = track_oracle.wake_at_pos(train, send_stop_at_pos);
 
     if (!ok) {
         log_error(uart, "wake_at_pos for stop failed unexpectedly!");
+        track_oracle.set_train_speed(train, 0);
         return;
     }
 
