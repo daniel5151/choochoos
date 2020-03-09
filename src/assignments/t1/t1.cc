@@ -102,7 +102,7 @@ static void do_route_cmd(const int uart,
                   train, train);
         return;
     }
-    const train_descriptor_t& td = td_opt.value();
+    train_descriptor_t& td = td_opt.value();
 
     log_success(uart, "Routing train %u (%c%u) to sensor %c%u + %dmm", train,
                 td.pos.sensor.group, td.pos.sensor.idx, sensor.group,
@@ -111,11 +111,11 @@ static void do_route_cmd(const int uart,
     // find the shortest path
     constexpr size_t MAX_PATH_LEN = 64;  // 64 is overkill, but it's fine
     const track_node* path[MAX_PATH_LEN];
-    size_t distance = 0;
+    size_t total_path_distance = 0;
     int path_len = 0;
 
     path_len = track_graph.shortest_path(td.pos.sensor, sensor, path,
-                                         MAX_PATH_LEN, distance);
+                                         MAX_PATH_LEN, total_path_distance);
     if (path_len < 0) {
         // that's okay, all this means is that we might be stopped at a terminal
         // of the track. if our speed is zero, then we could try to reverse, and
@@ -134,7 +134,7 @@ static void do_route_cmd(const int uart,
         const train_descriptor_t& td = td_opt.value();
 
         path_len = track_graph.shortest_path(td.pos.sensor, sensor, path,
-                                             MAX_PATH_LEN, distance);
+                                             MAX_PATH_LEN, total_path_distance);
 
         if (path_len < 0) {
             log_error(uart,
@@ -217,17 +217,24 @@ static void do_route_cmd(const int uart,
         return;
     }
 
-    int stop_at_offset = cmd.offset - Calibration::stopping_distance(train, 8);
-    Marklin::track_pos_t send_stop_at_pos = {.sensor = sensor,
-                                             .offset_mm = stop_at_offset};
+    int stopping_distance = Calibration::stopping_distance(train, 8);
+    int slowdown_distance = 1500;
 
-    // TODO: use velocity-change data
+    // send the stop command (speed=0) `stopping_distance`mm before the target
+    // sensor, or `total_path_distance` - `stopping_distance` _after_ the
+    // starting position.
+    Marklin::track_pos_t send_stop_at_pos = td.pos;
+    send_stop_at_pos.offset_mm +=
+        ((int)total_path_distance - stopping_distance);
+
+    // if the path is long enough, set the speed to 14 initially, and then set
+    // the speed to 8 `slowdown_distance`mm before we send the stop command.
     Marklin::track_pos_t send_slow_at_pos = send_stop_at_pos;
-    send_slow_at_pos.offset_mm -= 1000;
+    send_slow_at_pos.offset_mm -= slowdown_distance;
 
     ///////////////////////////////
 
-    if (distance > std::abs(send_slow_at_pos.offset_mm)) {
+    if ((int)total_path_distance > slowdown_distance + stopping_distance) {
         // let 'er eat at 14
         track_oracle.set_train_speed(train, 14);
 
@@ -240,9 +247,11 @@ static void do_route_cmd(const int uart,
 
     track_oracle.set_train_speed(train, 8);
 
-    log_success(uart, "Waiting for train %u to reach sensor %c%u %c %dmm ...",
-                train, sensor.group, sensor.idx, stop_at_offset < 0 ? '-' : '+',
-                std::abs(stop_at_offset));
+    log_success(
+        uart,
+        "Set speed to 8. Waiting for train %u to reach sensor %c%u %c %dmm ...",
+        train, sensor.group, sensor.idx, cmd.offset < 0 ? '-' : '+',
+        std::abs(cmd.offset));
 
     bool ok = track_oracle.wake_at_pos(train, send_stop_at_pos);
 
@@ -391,9 +400,9 @@ static void CmdTask() {
                     break;
                 } else {
                     char line[1024] = {'\0'};
-                    size_t n = snprintf(line, sizeof(line),
-                                        "Path found (len=%d, dist=%u):",
-                                        path_len, distance);
+                    size_t n = snprintf(
+                        line, sizeof(line),
+                        "Path found (len=%d, dist=%u):", path_len, distance);
                     for (int i = 0; i < path_len; i++) {
                         assert(path[i] != nullptr);
                         n += snprintf(line + n, sizeof(line) - n, " %s",
