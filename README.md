@@ -19,3 +19,5 @@ Additional debug statements can be enabled by invoking `make DEBUG=1` (though yo
 ## Documentation
 
 Documentation for each assignment can be found under the `docs/` folder, and can be built (from markdown sources) via `make docs`. _Note:_ building the docs requires [pandoc](https://pandoc.org/installing.html) installed.
+
+The TC1 docs are available in [t1.pdf](./t1.pdf).

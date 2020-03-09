@@ -151,3 +151,6 @@ k4.pdf: docs/k4/k4.md docs/k4/trainctl.md
 
 kernel.pdf: docs/k4/kernel.md
 	pandoc --toc --from markdown --to pdf $^ > kernel.pdf
+
+t1.pdf: docs/t1/t1.md
+	pandoc --toc --from markdown --to pdf $^ > t1.pdf
