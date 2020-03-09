@@ -135,7 +135,7 @@ class TrackOracleImpl {
                 track.next_sensor(t.next_sensor, branches, BRANCHES_LEN);
 
             if (next_sensor_opt.has_value()) {
-                auto[next_sensor, _] = next_sensor_opt.value();
+                auto [next_sensor, _] = next_sensor_opt.value();
                 if (Marklin::sensor_eq(sensor, next_sensor)) {
                     return &t;
                 }
@@ -256,7 +256,8 @@ class TrackOracleImpl {
                 td.accelerating = false;
                 log_line(uart, "train %u finished accelerating", td.id);
             } else {
-                // TODO maybe still do an ewma?
+                // interpolate the train's velocity to be between its old
+                // velocity and its expected steady-state velocity.
                 td.velocity = td.old_velocity +
                               (how_long_ive_been_accelerating *
                                (steady_state_velocity - td.old_velocity)) /
@@ -547,13 +548,31 @@ class TrackOracleImpl {
             if (dt_ticks <= 0) continue;
             int new_velocity_mmps = (TICKS_PER_SEC * distance_mm) / dt_ticks;
 
-            if (now - td.speed_changed_at <
-                Calibration::acceleration_time(td.id, td.old_velocity,
-                                               td.speed)) {
+            int how_long_ive_been_accelerating = now - td.speed_changed_at;
+            int acceleration_time = Calibration::acceleration_time(
+                td.id, td.old_velocity, td.speed);
+
+            if (how_long_ive_been_accelerating < acceleration_time) {
                 // If the train is accelerating, we are super uncertain of its
                 // velocity, so we set our velocity to the ovserved velocity
                 // directly.
                 td.velocity = new_velocity_mmps;
+
+                // given that we've observed the train going at speed v1 at time
+                // t1, and we expect the train to reach speed v2 at time t2, we
+                // can update old_velocity such that as we interpolate
+                // velocities during acceleration, the velocities  are
+                // interpolated to be between v1 and v2
+                int v1 = new_velocity_mmps;
+                int t1 = how_long_ive_been_accelerating;
+                int v2 = Calibration::expected_velocity(td.id, td.speed);
+                int t2 = acceleration_time;
+
+                int v0 = v1 - ((v2 - v1) * t1) / (t2 - t1);
+                log_line(uart,
+                         "interpolating v0: v1=%d v2=%d t1=%d t2=%d -> v0=%d",
+                         v1, v2, t1, t2, v0);
+                td.old_velocity = std::min(1000, std::max(v0, 0));
             } else {
                 // Once a train has been cruising at the same speed level for a
                 // time, we assume the train's velocity is close to constant. So
