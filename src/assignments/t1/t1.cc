@@ -231,7 +231,10 @@ static void do_route_cmd(const int uart,
         track_oracle.set_train_speed(train, 14);
 
         bool ok = track_oracle.wake_at_pos(train, send_slow_at_pos);
-        assert(ok);
+        if (!ok) {
+            log_error(uart, "wake_at_pos for slow-down failed unexpectedly!");
+            return;
+        }
     }
 
     track_oracle.set_train_speed(train, 8);
@@ -241,7 +244,11 @@ static void do_route_cmd(const int uart,
                 std::abs(stop_at_offset));
 
     bool ok = track_oracle.wake_at_pos(train, send_stop_at_pos);
-    assert(ok);
+
+    if (!ok) {
+        log_error(uart, "wake_at_pos for stop failed unexpectedly!");
+        return;
+    }
 
     log_success(uart,
                 "Sending speed=0 to train %u. Waiting for train to "
