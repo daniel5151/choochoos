@@ -111,12 +111,17 @@ std::optional<int> TrackGraph::distance_between(
     for (size_t i = 0; curr != end; i++) {
         if (i > MAX_ITERS) return std::nullopt;
         const track_edge* edge = next_edge(*curr, branches, branches_len);
-        assert(edge != nullptr);
+        if (edge == nullptr) {
+            // we've run out of track - there's no path to new_sensor given the
+            // current track state.
+            return std::nullopt;
+        }
         debug("  %s->%s: %dmm", curr->name, edge->dest->name, edge->dist);
         curr = edge->dest;
         distance += edge->dist;
 
         if (curr == start) {
+            // we've hit a cycle, and we'll never reach new_sensor
             return std::nullopt;
         }
     }

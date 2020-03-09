@@ -250,7 +250,7 @@ static void do_route_cmd(const int uart,
     track_oracle.set_train_speed(train, 0);
 
     Clock::Delay(clock, Calibration::stopping_time(train, 8));
-    log_success(uart, "Stopped! (hopefully)");
+    log_success(uart, "Stopped!");
 }
 
 struct CmdTaskCfg {
