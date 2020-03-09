@@ -26,8 +26,12 @@ struct train_descriptor_t {
     Marklin::track_pos_t pos;
     int pos_observed_at;
     int speed_changed_at;
+
+    // when the train changes speed levels, accelerating is set to true and its
+    // old speed level and velocity are remembered.
     bool accelerating;
     uint8_t old_speed;
+    int old_velocity;
 
     bool has_next_sensor;
     Marklin::sensor_t next_sensor;

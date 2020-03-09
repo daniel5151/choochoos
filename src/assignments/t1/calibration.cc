@@ -3,6 +3,8 @@
 
 #include "user/debug.h"
 
+#include <cstdlib>  // abs
+
 /* private */ class StaticCalibrationData {
    public:
     calibration_data_t data;
@@ -73,11 +75,15 @@ int stopping_time(uint8_t train, uint8_t speed) {
     return 300;  // 3 seconds
 }
 
-int acceleration_time(uint8_t train, uint8_t target_speed) {
-    // TODO measure this?
-    (void)train;
-    (void)target_speed;
-    return 300;  // 3 seconds
+int acceleration_time(uint8_t train,
+                      int current_velocity,
+                      uint8_t target_speed) {
+    int v_expected = expected_velocity(train, target_speed);
+    int max_change_in_velocity = expected_velocity(train, 14);
+    int change_in_velocity = std::abs(v_expected - current_velocity);
+    int time_to_accelerate_to_full_speed = 300;  // 3 seconds, rough estimate
+    return time_to_accelerate_to_full_speed * change_in_velocity /
+           max_change_in_velocity;
 }
 
 }  // namespace Calibration
