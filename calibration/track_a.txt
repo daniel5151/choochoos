@@ -1,0 +1,456 @@
+NODE name=A1 type=s num=0 rev=A2
+EDGE src=A1 dest=MR12 dist=231
+EDGE src=BR12 dest=A2 dist=231
+NODE name=A2 type=s num=1 rev=A1
+EDGE src=A2 dest=EX5 dist=504
+EDGE src=EN5 dest=A1 dist=504
+NODE name=A3 type=s num=2 rev=A4
+EDGE src=A3 dest=BR14 dist=43
+EDGE src=MR14 dest=A4 dist=43
+NODE name=A4 type=s num=3 rev=A3
+EDGE src=A4 dest=B16 dist=437
+EDGE src=B15 dest=A3 dist=437
+NODE name=A5 type=s num=4 rev=A6
+EDGE src=A5 dest=MR3 dist=231
+EDGE src=BR3 dest=A6 dist=231
+NODE name=A6 type=s num=5 rev=A5
+EDGE src=A6 dest=B10 dist=642
+EDGE src=B9 dest=A5 dist=642
+NODE name=A7 type=s num=6 rev=A8
+EDGE src=A7 dest=B12 dist=470
+EDGE src=B11 dest=A8 dist=470
+NODE name=A8 type=s num=7 rev=A7
+EDGE src=A8 dest=MR2 dist=229
+EDGE src=BR2 dest=A7 dist=229
+NODE name=A9 type=s num=8 rev=A10
+EDGE src=A9 dest=B8 dist=289
+EDGE src=B7 dest=A10 dist=289
+NODE name=A10 type=s num=9 rev=A9
+EDGE src=A10 dest=MR1 dist=229
+EDGE src=BR1 dest=A9 dist=229
+NODE name=A11 type=s num=10 rev=A12
+EDGE src=A11 dest=MR1 dist=518
+EDGE src=BR1 dest=A12 dist=518
+NODE name=A12 type=s num=11 rev=A11
+EDGE src=A12 dest=EX8 dist=43
+EDGE src=EN8 dest=A11 dist=43
+NODE name=A13 type=s num=12 rev=A14
+EDGE src=A13 dest=MR4 dist=236
+EDGE src=BR4 dest=A14 dist=236
+NODE name=A14 type=s num=13 rev=A13
+EDGE src=A14 dest=EX4 dist=325
+EDGE src=EN4 dest=A13 dist=325
+NODE name=A15 type=s num=14 rev=A16
+EDGE src=A15 dest=EX6 dist=144
+EDGE src=EN6 dest=A16 dist=144
+NODE name=A16 type=s num=15 rev=A15
+EDGE src=A16 dest=MR4 dist=417
+EDGE src=BR4 dest=A15 dist=417
+NODE name=B1 type=s num=16 rev=B2
+EDGE src=B1 dest=D14 dist=404
+EDGE src=D13 dest=B2 dist=404
+NODE name=B2 type=s num=17 rev=B1
+EDGE src=B2 dest=MR16 dist=231
+EDGE src=BR16 dest=B1 dist=231
+NODE name=B3 type=s num=18 rev=B4
+EDGE src=B3 dest=C2 dist=201
+EDGE src=C1 dest=B4 dist=201
+NODE name=B4 type=s num=19 rev=B3
+EDGE src=B4 dest=MR16 dist=239
+EDGE src=BR16 dest=B3 dist=239
+NODE name=B5 type=s num=20 rev=B6
+EDGE src=B5 dest=D3 dist=404
+EDGE src=D4 dest=B6 dist=404
+NODE name=B6 type=s num=21 rev=B5
+EDGE src=B6 dest=MR13 dist=231
+EDGE src=BR13 dest=B5 dist=231
+NODE name=B7 type=s num=22 rev=B8
+EDGE src=B7 dest=A10 dist=289
+EDGE src=A9 dest=B8 dist=289
+NODE name=B8 type=s num=23 rev=B7
+EDGE src=B8 dest=EX7 dist=43
+EDGE src=EN7 dest=B7 dist=43
+NODE name=B9 type=s num=24 rev=B10
+EDGE src=B9 dest=A5 dist=642
+EDGE src=A6 dest=B10 dist=642
+NODE name=B10 type=s num=25 rev=B9
+EDGE src=B10 dest=EX9 dist=50
+EDGE src=EN9 dest=B9 dist=50
+NODE name=B11 type=s num=26 rev=B12
+EDGE src=B11 dest=A8 dist=470
+EDGE src=A7 dest=B12 dist=470
+NODE name=B12 type=s num=27 rev=B11
+EDGE src=B12 dest=EX10 dist=50
+EDGE src=EN10 dest=B11 dist=50
+NODE name=B13 type=s num=28 rev=B14
+EDGE src=B13 dest=MR154 dist=239
+EDGE src=BR154 dest=B14 dist=239
+NODE name=B14 type=s num=29 rev=B13
+EDGE src=B14 dest=D16 dist=201
+EDGE src=D15 dest=B13 dist=201
+NODE name=B15 type=s num=30 rev=B16
+EDGE src=B15 dest=A3 dist=437
+EDGE src=A4 dest=B16 dist=437
+NODE name=B16 type=s num=31 rev=B15
+EDGE src=B16 dest=BR15 dist=50
+EDGE src=MR15 dest=B15 dist=50
+NODE name=C1 type=s num=32 rev=C2
+EDGE src=C1 dest=B4 dist=201
+EDGE src=B3 dest=C2 dist=201
+NODE name=C2 type=s num=33 rev=C1
+EDGE src=C2 dest=MR153 dist=246
+EDGE src=BR153 dest=C1 dist=246
+NODE name=C3 type=s num=34 rev=C4
+EDGE src=C3 dest=EX3 dist=514
+EDGE src=EN3 dest=C4 dist=514
+NODE name=C4 type=s num=35 rev=C3
+EDGE src=C4 dest=MR5 dist=239
+EDGE src=BR5 dest=C3 dist=239
+NODE name=C5 type=s num=36 rev=C6
+EDGE src=C5 dest=BR6 dist=61
+EDGE src=MR6 dest=C6 dist=61
+NODE name=C6 type=s num=37 rev=C5
+EDGE src=C6 dest=MR15 dist=433
+EDGE src=BR15 dest=C5 dist=433
+NODE name=C7 type=s num=38 rev=C8
+EDGE src=C7 dest=MR18 dist=231
+EDGE src=BR18 dest=C8 dist=231
+NODE name=C8 type=s num=39 rev=C7
+EDGE src=C8 dest=BR3 dist=128
+EDGE src=MR3 dest=C7 dist=128
+NODE name=C9 type=s num=40 rev=C10
+EDGE src=C9 dest=MR15 dist=326
+EDGE src=BR15 dest=C10 dist=326
+NODE name=C10 type=s num=41 rev=C9
+EDGE src=C10 dest=BR16 dist=128
+EDGE src=MR16 dest=C9 dist=128
+NODE name=C11 type=s num=42 rev=C12
+EDGE src=C11 dest=BR13 dist=120
+EDGE src=MR13 dest=C12 dist=120
+NODE name=C12 type=s num=43 rev=C11
+EDGE src=C12 dest=MR14 dist=333
+EDGE src=BR14 dest=C11 dist=333
+NODE name=C13 type=s num=44 rev=C14
+EDGE src=C13 dest=E7 dist=875
+EDGE src=E8 dest=C14 dist=875
+NODE name=C14 type=s num=45 rev=C13
+EDGE src=C14 dest=BR11 dist=43
+EDGE src=MR11 dest=C13 dist=43
+NODE name=C15 type=s num=46 rev=C16
+EDGE src=C15 dest=D12 dist=404
+EDGE src=D11 dest=C16 dist=404
+NODE name=C16 type=s num=47 rev=C15
+EDGE src=C16 dest=MR6 dist=239
+EDGE src=BR6 dest=C15 dist=239
+NODE name=D1 type=s num=48 rev=D2
+EDGE src=D1 dest=MR155 dist=246
+EDGE src=BR155 dest=D2 dist=246
+NODE name=D2 type=s num=49 rev=D1
+EDGE src=D2 dest=E4 dist=201
+EDGE src=E3 dest=D1 dist=201
+NODE name=D3 type=s num=50 rev=D4
+EDGE src=D3 dest=MR10 dist=239
+EDGE src=BR10 dest=D4 dist=239
+NODE name=D4 type=s num=51 rev=D3
+EDGE src=D4 dest=B6 dist=404
+EDGE src=B5 dest=D3 dist=404
+NODE name=D5 type=s num=52 rev=D6
+EDGE src=D5 dest=E6 dist=376
+EDGE src=E5 dest=D6 dist=376
+NODE name=D6 type=s num=53 rev=D5
+EDGE src=D6 dest=MR9 dist=239
+EDGE src=BR9 dest=D5 dist=239
+NODE name=D7 type=s num=54 rev=D8
+EDGE src=D7 dest=MR9 dist=309
+EDGE src=BR9 dest=D8 dist=309
+NODE name=D8 type=s num=55 rev=D7
+EDGE src=D8 dest=E8 dist=384
+EDGE src=E7 dest=D7 dist=384
+NODE name=D9 type=s num=56 rev=D10
+EDGE src=D9 dest=E12 dist=369
+EDGE src=E11 dest=D10 dist=369
+NODE name=D10 type=s num=57 rev=D9
+EDGE src=D10 dest=MR8 dist=316
+EDGE src=BR8 dest=D9 dist=316
+NODE name=D11 type=s num=58 rev=D12
+EDGE src=D11 dest=C16 dist=404
+EDGE src=C15 dest=D12 dist=404
+NODE name=D12 type=s num=59 rev=D11
+EDGE src=D12 dest=MR7 dist=231
+EDGE src=BR7 dest=D11 dist=231
+NODE name=D13 type=s num=60 rev=D14
+EDGE src=D13 dest=B2 dist=404
+EDGE src=B1 dest=D14 dist=404
+NODE name=D14 type=s num=61 rev=D13
+EDGE src=D14 dest=MR17 dist=239
+EDGE src=BR17 dest=D13 dist=239
+NODE name=D15 type=s num=62 rev=D16
+EDGE src=D15 dest=B13 dist=201
+EDGE src=B14 dest=D16 dist=201
+NODE name=D16 type=s num=63 rev=D15
+EDGE src=D16 dest=MR17 dist=246
+EDGE src=BR17 dest=D15 dist=246
+NODE name=E1 type=s num=64 rev=E2
+EDGE src=E1 dest=MR156 dist=239
+EDGE src=BR156 dest=E2 dist=239
+NODE name=E2 type=s num=65 rev=E1
+EDGE src=E2 dest=E15 dist=201
+EDGE src=E16 dest=E1 dist=201
+NODE name=E3 type=s num=66 rev=E4
+EDGE src=E3 dest=D1 dist=201
+EDGE src=D2 dest=E4 dist=201
+NODE name=E4 type=s num=67 rev=E3
+EDGE src=E4 dest=MR10 dist=239
+EDGE src=BR10 dest=E3 dist=239
+NODE name=E5 type=s num=68 rev=E6
+EDGE src=E5 dest=D6 dist=376
+EDGE src=D5 dest=E6 dist=376
+NODE name=E6 type=s num=69 rev=E5
+EDGE src=E6 dest=BR10 dist=50
+EDGE src=MR10 dest=E5 dist=50
+NODE name=E7 type=s num=70 rev=E8
+EDGE src=E7 dest=D7 dist=384
+EDGE src=D8 dest=E8 dist=384
+NODE name=E8 type=s num=71 rev=E7
+EDGE src=E8 dest=C14 dist=875
+EDGE src=C13 dest=E7 dist=875
+NODE name=E9 type=s num=72 rev=E10
+EDGE src=E9 dest=MR8 dist=239
+EDGE src=BR8 dest=E10 dist=239
+NODE name=E10 type=s num=73 rev=E9
+EDGE src=E10 dest=E13 dist=376
+EDGE src=E14 dest=E9 dist=376
+NODE name=E11 type=s num=74 rev=E12
+EDGE src=E11 dest=D10 dist=369
+EDGE src=D9 dest=E12 dist=369
+NODE name=E12 type=s num=75 rev=E11
+EDGE src=E12 dest=BR7 dist=50
+EDGE src=MR7 dest=E11 dist=50
+NODE name=E13 type=s num=76 rev=E14
+EDGE src=E13 dest=BR17 dist=43
+EDGE src=MR17 dest=E14 dist=43
+NODE name=E14 type=s num=77 rev=E13
+EDGE src=E14 dest=E9 dist=376
+EDGE src=E10 dest=E13 dist=376
+NODE name=E15 type=s num=78 rev=E16
+EDGE src=E15 dest=MR13 dist=246
+EDGE src=BR13 dest=E16 dist=246
+NODE name=E16 type=s num=79 rev=E15
+EDGE src=E16 dest=E1 dist=201
+EDGE src=E2 dest=E15 dist=201
+NODE name=BR1 type=b num=1 rev=MR1
+EDGE src=BR1 dest=A12 dist=518
+EDGE src=A11 dest=MR1 dist=518
+EDGE src=BR1 dest=A9 dist=229
+EDGE src=A10 dest=MR1 dist=229
+NODE name=MR1 type=m num=1 rev=BR1
+EDGE src=MR1 dest=MR2 dist=188
+EDGE src=BR2 dest=BR1 dist=188
+NODE name=BR2 type=b num=2 rev=MR2
+EDGE src=BR2 dest=BR1 dist=188
+EDGE src=MR1 dest=MR2 dist=188
+EDGE src=BR2 dest=A7 dist=229
+EDGE src=A8 dest=MR2 dist=229
+NODE name=MR2 type=m num=2 rev=BR2
+EDGE src=MR2 dest=MR3 dist=185
+EDGE src=BR3 dest=BR2 dist=185
+NODE name=BR3 type=b num=3 rev=MR3
+EDGE src=BR3 dest=A6 dist=231
+EDGE src=A5 dest=MR3 dist=231
+EDGE src=BR3 dest=BR2 dist=185
+EDGE src=MR2 dest=MR3 dist=185
+NODE name=MR3 type=m num=3 rev=BR3
+EDGE src=MR3 dest=C7 dist=128
+EDGE src=C8 dest=BR3 dist=128
+NODE name=BR4 type=b num=4 rev=MR4
+EDGE src=BR4 dest=A15 dist=417
+EDGE src=A16 dest=MR4 dist=417
+EDGE src=BR4 dest=A14 dist=236
+EDGE src=A13 dest=MR4 dist=236
+NODE name=MR4 type=m num=4 rev=BR4
+EDGE src=MR4 dest=MR12 dist=185
+EDGE src=BR12 dest=BR4 dist=185
+NODE name=BR5 type=b num=5 rev=MR5
+EDGE src=BR5 dest=C3 dist=239
+EDGE src=C4 dest=MR5 dist=239
+EDGE src=BR5 dest=MR7 dist=371
+EDGE src=BR7 dest=MR5 dist=371
+NODE name=MR5 type=m num=5 rev=BR5
+EDGE src=MR5 dest=BR18 dist=155
+EDGE src=MR18 dest=BR5 dist=155
+NODE name=BR6 type=b num=6 rev=MR6
+EDGE src=BR6 dest=C15 dist=239
+EDGE src=C16 dest=MR6 dist=239
+EDGE src=BR6 dest=MR18 dist=371
+EDGE src=BR18 dest=MR6 dist=371
+NODE name=MR6 type=m num=6 rev=BR6
+EDGE src=MR6 dest=C6 dist=61
+EDGE src=C5 dest=BR6 dist=61
+NODE name=BR7 type=b num=7 rev=MR7
+EDGE src=BR7 dest=D11 dist=231
+EDGE src=D12 dest=MR7 dist=231
+EDGE src=BR7 dest=MR5 dist=371
+EDGE src=BR5 dest=MR7 dist=371
+NODE name=MR7 type=m num=7 rev=BR7
+EDGE src=MR7 dest=E11 dist=50
+EDGE src=E12 dest=BR7 dist=50
+NODE name=BR8 type=b num=8 rev=MR8
+EDGE src=BR8 dest=D9 dist=316
+EDGE src=D10 dest=MR8 dist=316
+EDGE src=BR8 dest=E10 dist=239
+EDGE src=E9 dest=MR8 dist=239
+NODE name=MR8 type=m num=8 rev=BR8
+EDGE src=MR8 dest=BR9 dist=155
+EDGE src=MR9 dest=BR8 dist=155
+NODE name=BR9 type=b num=9 rev=MR9
+EDGE src=BR9 dest=D8 dist=309
+EDGE src=D7 dest=MR9 dist=309
+EDGE src=BR9 dest=D5 dist=239
+EDGE src=D6 dest=MR9 dist=239
+NODE name=MR9 type=m num=9 rev=BR9
+EDGE src=MR9 dest=BR8 dist=155
+EDGE src=MR8 dest=BR9 dist=155
+NODE name=BR10 type=b num=10 rev=MR10
+EDGE src=BR10 dest=D4 dist=239
+EDGE src=D3 dest=MR10 dist=239
+EDGE src=BR10 dest=E3 dist=239
+EDGE src=E4 dest=MR10 dist=239
+NODE name=MR10 type=m num=10 rev=BR10
+EDGE src=MR10 dest=E5 dist=50
+EDGE src=E6 dest=BR10 dist=50
+NODE name=BR11 type=b num=11 rev=MR11
+EDGE src=BR11 dest=BR12 dist=188
+EDGE src=MR12 dest=MR11 dist=188
+EDGE src=BR11 dest=MR14 dist=495
+EDGE src=BR14 dest=MR11 dist=495
+NODE name=MR11 type=m num=11 rev=BR11
+EDGE src=MR11 dest=C13 dist=43
+EDGE src=C14 dest=BR11 dist=43
+NODE name=BR12 type=b num=12 rev=MR12
+EDGE src=BR12 dest=A2 dist=231
+EDGE src=A1 dest=MR12 dist=231
+EDGE src=BR12 dest=BR4 dist=185
+EDGE src=MR4 dest=MR12 dist=185
+NODE name=MR12 type=m num=12 rev=BR12
+EDGE src=MR12 dest=MR11 dist=188
+EDGE src=BR11 dest=BR12 dist=188
+NODE name=BR13 type=b num=13 rev=MR13
+EDGE src=BR13 dest=B5 dist=231
+EDGE src=B6 dest=MR13 dist=231
+EDGE src=BR13 dest=E16 dist=246
+EDGE src=E15 dest=MR13 dist=246
+NODE name=MR13 type=m num=13 rev=BR13
+EDGE src=MR13 dest=C12 dist=120
+EDGE src=C11 dest=BR13 dist=120
+NODE name=BR14 type=b num=14 rev=MR14
+EDGE src=BR14 dest=MR11 dist=495
+EDGE src=BR11 dest=MR14 dist=495
+EDGE src=BR14 dest=C11 dist=333
+EDGE src=C12 dest=MR14 dist=333
+NODE name=MR14 type=m num=14 rev=BR14
+EDGE src=MR14 dest=A4 dist=43
+EDGE src=A3 dest=BR14 dist=43
+NODE name=BR15 type=b num=15 rev=MR15
+EDGE src=BR15 dest=C5 dist=433
+EDGE src=C6 dest=MR15 dist=433
+EDGE src=BR15 dest=C10 dist=326
+EDGE src=C9 dest=MR15 dist=326
+NODE name=MR15 type=m num=15 rev=BR15
+EDGE src=MR15 dest=B15 dist=50
+EDGE src=B16 dest=BR15 dist=50
+NODE name=BR16 type=b num=16 rev=MR16
+EDGE src=BR16 dest=B1 dist=231
+EDGE src=B2 dest=MR16 dist=231
+EDGE src=BR16 dest=B3 dist=239
+EDGE src=B4 dest=MR16 dist=239
+NODE name=MR16 type=m num=16 rev=BR16
+EDGE src=MR16 dest=C9 dist=128
+EDGE src=C10 dest=BR16 dist=128
+NODE name=BR17 type=b num=17 rev=MR17
+EDGE src=BR17 dest=D13 dist=239
+EDGE src=D14 dest=MR17 dist=239
+EDGE src=BR17 dest=D15 dist=246
+EDGE src=D16 dest=MR17 dist=246
+NODE name=MR17 type=m num=17 rev=BR17
+EDGE src=MR17 dest=E14 dist=43
+EDGE src=E13 dest=BR17 dist=43
+NODE name=BR18 type=b num=18 rev=MR18
+EDGE src=BR18 dest=C8 dist=231
+EDGE src=C7 dest=MR18 dist=231
+EDGE src=BR18 dest=MR6 dist=371
+EDGE src=BR6 dest=MR18 dist=371
+NODE name=MR18 type=m num=18 rev=BR18
+EDGE src=MR18 dest=BR5 dist=155
+EDGE src=MR5 dest=BR18 dist=155
+NODE name=BR153 type=b num=153 rev=MR153
+EDGE src=BR153 dest=EX1 dist=253
+EDGE src=EN1 dest=MR153 dist=253
+EDGE src=BR153 dest=C1 dist=246
+EDGE src=C2 dest=MR153 dist=246
+NODE name=MR153 type=m num=153 rev=BR153
+EDGE src=MR153 dest=MR154 dist=0
+EDGE src=BR154 dest=BR153 dist=0
+NODE name=BR154 type=b num=154 rev=MR154
+EDGE src=BR154 dest=BR153 dist=0
+EDGE src=MR153 dest=MR154 dist=0
+EDGE src=BR154 dest=B14 dist=239
+EDGE src=B13 dest=MR154 dist=239
+NODE name=MR154 type=m num=154 rev=BR154
+EDGE src=MR154 dest=BR156 dist=0
+EDGE src=MR156 dest=BR154 dist=0
+NODE name=BR155 type=b num=155 rev=MR155
+EDGE src=BR155 dest=EX2 dist=282
+EDGE src=EN2 dest=MR155 dist=282
+EDGE src=BR155 dest=D2 dist=246
+EDGE src=D1 dest=MR155 dist=246
+NODE name=MR155 type=m num=155 rev=BR155
+EDGE src=MR155 dest=MR156 dist=0
+EDGE src=BR156 dest=BR155 dist=0
+NODE name=BR156 type=b num=156 rev=MR156
+EDGE src=BR156 dest=BR155 dist=0
+EDGE src=MR155 dest=MR156 dist=0
+EDGE src=BR156 dest=E2 dist=239
+EDGE src=E1 dest=MR156 dist=239
+NODE name=MR156 type=m num=156 rev=BR156
+EDGE src=MR156 dest=BR154 dist=0
+EDGE src=MR154 dest=BR156 dist=0
+NODE name=EN1 type=n num=0 rev=EX1
+EDGE src=EN1 dest=MR153 dist=253
+EDGE src=BR153 dest=EX1 dist=253
+NODE name=EX1 type=x num=0 rev=EN1
+NODE name=EN2 type=n num=0 rev=EX2
+EDGE src=EN2 dest=MR155 dist=282
+EDGE src=BR155 dest=EX2 dist=282
+NODE name=EX2 type=x num=0 rev=EN2
+NODE name=EN3 type=n num=0 rev=EX3
+EDGE src=EN3 dest=C4 dist=514
+EDGE src=C3 dest=EX3 dist=514
+NODE name=EX3 type=x num=0 rev=EN3
+NODE name=EN4 type=n num=0 rev=EX4
+EDGE src=EN4 dest=A13 dist=325
+EDGE src=A14 dest=EX4 dist=325
+NODE name=EX4 type=x num=0 rev=EN4
+NODE name=EN5 type=n num=0 rev=EX5
+EDGE src=EN5 dest=A1 dist=504
+EDGE src=A2 dest=EX5 dist=504
+NODE name=EX5 type=x num=0 rev=EN5
+NODE name=EN6 type=n num=0 rev=EX6
+EDGE src=EN6 dest=A16 dist=144
+EDGE src=A15 dest=EX6 dist=144
+NODE name=EX6 type=x num=0 rev=EN6
+NODE name=EN7 type=n num=0 rev=EX7
+EDGE src=EN7 dest=B7 dist=43
+EDGE src=B8 dest=EX7 dist=43
+NODE name=EX7 type=x num=0 rev=EN7
+NODE name=EN8 type=n num=0 rev=EX8
+EDGE src=EN8 dest=A11 dist=43
+EDGE src=A12 dest=EX8 dist=43
+NODE name=EX8 type=x num=0 rev=EN8
+NODE name=EN9 type=n num=0 rev=EX9
+EDGE src=EN9 dest=B9 dist=50
+EDGE src=B10 dest=EX9 dist=50
+NODE name=EX9 type=x num=0 rev=EN9
+NODE name=EN10 type=n num=0 rev=EX10
+EDGE src=EN10 dest=B11 dist=50
+EDGE src=B12 dest=EX10 dist=50
+NODE name=EX10 type=x num=0 rev=EN10
