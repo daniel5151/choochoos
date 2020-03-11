@@ -8,9 +8,6 @@
 #include "user/syscalls.h"
 #include "user/tasks/clockserver.h"
 
-#define USER_TICKS_PER_SEC 100    // 10ms
-#define TIMER_TICKS_PER_SEC 2000  // 2 kHz
-
 namespace Clock {
 const char* SERVER_ID = "ClockServer";
 struct DelayedTask {
@@ -58,7 +55,9 @@ void Notifier() {
     }
 }
 
-static void enqueue_task(PriorityQueue<DelayedTask, 32>& pq, int tid, int tick_threshold) {
+static void enqueue_task(PriorityQueue<DelayedTask, 32>& pq,
+                         int tid,
+                         int tick_threshold) {
     // Delayed tasks with a smaller tick_threshold should be woken
     // up first, so they should have a higher priority.
     int priority = -tick_threshold;

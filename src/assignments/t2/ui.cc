@@ -4,6 +4,7 @@
 
 #include "common/bwio.h"
 #include "common/ts7200.h"
+#include "user/tasks/clockserver.h"
 #include "user/tasks/uartserver.h"
 
 namespace Ui {
@@ -46,8 +47,8 @@ void render_train_descriptor(int uart, const train_descriptor_t& td) {
     }
     if (td.has_error) {
         char sign = td.time_error < 0 ? '-' : '+';
-        int error_sec = std::abs(td.time_error) / TICKS_PER_SEC;
-        int error_dec = std::abs(td.time_error) % TICKS_PER_SEC;
+        int error_sec = std::abs(td.time_error) / Clock::TICKS_PER_SEC;
+        int error_dec = std::abs(td.time_error) % Clock::TICKS_PER_SEC;
 
         n += snprintf(line + n, sizeof(line) - n, " error=%c%d.%02ds/%c%dmm",
                       sign, error_sec, error_dec, sign,
@@ -58,9 +59,8 @@ void render_train_descriptor(int uart, const train_descriptor_t& td) {
     Uart::Putstr(uart, COM2, line);
 }
 
-
 void prompt_user(int uart, char* buf, size_t len) {
-    Uart::Drain(uart, COM2); // clear any input entered while prompt was busy
+    Uart::Drain(uart, COM2);  // clear any input entered while prompt was busy
     Uart::Putstr(uart, COM2, VT_ROWCOL(5, 1) VT_CLEARLN "> ");
     Uart::Getline(uart, COM2, buf, len);
     Uart::Printf(uart, COM2, VT_ROWCOL(5, 1) VT_CLEARLN "Processing...");

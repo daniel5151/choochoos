@@ -171,7 +171,7 @@ class TrackOracleImpl {
             // TODO if our velocity measurements are way off, this distance
             // could be WAY off - we should cap this at 2 sensor distances from
             // the last observed sensor.
-            int distance_travelled_mm = td.velocity * dt / TICKS_PER_SEC;
+            int distance_travelled_mm = td.velocity * dt / Clock::TICKS_PER_SEC;
 
             Marklin::track_pos_t new_pos = td.pos;
             new_pos.offset_mm += distance_travelled_mm;
@@ -198,7 +198,7 @@ class TrackOracleImpl {
 
             int distance_to_target_mm = distance_to_target_opt.value();
             int ticks_until_target =
-                (TICKS_PER_SEC * distance_to_target_mm) / td.velocity;
+                (Clock::TICKS_PER_SEC * distance_to_target_mm) / td.velocity;
 
             log_line(
                 uart,
@@ -462,7 +462,7 @@ class TrackOracleImpl {
                 td.has_next_sensor = true;
                 td.next_sensor = sensor;
                 td.next_sensor_time =
-                    now + ((TICKS_PER_SEC * distance) / td.velocity);
+                    now + ((Clock::TICKS_PER_SEC * distance) / td.velocity);
             } else {
                 td.has_next_sensor = false;
             }
@@ -515,7 +515,8 @@ class TrackOracleImpl {
             int distance_mm = distance_opt.value();
             int dt_ticks = now - td.pos_observed_at;
             if (dt_ticks <= 0) continue;
-            int new_velocity_mmps = (TICKS_PER_SEC * distance_mm) / dt_ticks;
+            int new_velocity_mmps =
+                (Clock::TICKS_PER_SEC * distance_mm) / dt_ticks;
 
             int how_long_ive_been_accelerating = now - td.speed_changed_at;
             int acceleration_time = Calibration::acceleration_time(
@@ -557,7 +558,8 @@ class TrackOracleImpl {
                 Marklin::sensor_eq(sensor, td.next_sensor)) {
                 td.has_error = true;
                 td.time_error = now - td.next_sensor_time;
-                td.distance_error = td.velocity * td.time_error / TICKS_PER_SEC;
+                td.distance_error =
+                    td.velocity * td.time_error / Clock::TICKS_PER_SEC;
             } else {
                 // TODO if we miss a sensor, we could probably still extrapolate
                 // this error
@@ -570,7 +572,7 @@ class TrackOracleImpl {
                 td.has_next_sensor = true;
                 td.next_sensor = sensor;
                 td.next_sensor_time =
-                    now + ((TICKS_PER_SEC * distance) / td.velocity);
+                    now + ((Clock::TICKS_PER_SEC * distance) / td.velocity);
             } else {
                 td.has_next_sensor = false;
             }
@@ -581,8 +583,8 @@ class TrackOracleImpl {
                      "dt=%d.%02ds dx/dt=%dmm/s",
                      td.id, old_pos.sensor.group, old_pos.sensor.idx,
                      new_pos.sensor.group, new_pos.sensor.idx, distance_mm,
-                     dt_ticks / TICKS_PER_SEC, dt_ticks % TICKS_PER_SEC,
-                     new_velocity_mmps);
+                     dt_ticks / Clock::TICKS_PER_SEC,
+                     dt_ticks % Clock::TICKS_PER_SEC, new_velocity_mmps);
         }
         tick();
     }

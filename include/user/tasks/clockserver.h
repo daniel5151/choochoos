@@ -1,6 +1,8 @@
 #pragma once
 
 namespace Clock {
+constexpr int TICKS_PER_SEC = 100;  // 10ms
+
 void Server();
 
 int Time(int tid);
