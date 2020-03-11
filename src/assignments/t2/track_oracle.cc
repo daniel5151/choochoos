@@ -92,7 +92,6 @@ class TrackOracleImpl {
     TrackGraph track;
 
     const Ui ui;
-    const int uart;
     const int clock;
     const Marklin::Controller marklin;
 
@@ -135,7 +134,7 @@ class TrackOracleImpl {
             auto next_sensor_opt = track.next_sensor(t.next_sensor);
 
             if (next_sensor_opt.has_value()) {
-                auto [next_sensor, _] = next_sensor_opt.value();
+                auto[next_sensor, _] = next_sensor_opt.value();
                 if (Marklin::sensor_eq(sensor, next_sensor)) {
                     return &t;
                 }
@@ -185,10 +184,9 @@ class TrackOracleImpl {
             auto distance_to_target_opt = distance_between(new_pos, wake.pos);
             if (!distance_to_target_opt.has_value()) {
                 // wake up the task, and remove it from the blocked list
-                log_line(uart,
-                         VT_YELLOW "WARNING" VT_NOFMT
-                                   " wake_at_pos: no route from %c%u@%d to "
-                                   "%c%u@%d for train %u",
+                log_line(ui, VT_YELLOW "WARNING" VT_NOFMT
+                                       " wake_at_pos: no route from %c%u@%d to "
+                                       "%c%u@%d for train %u",
                          new_pos.sensor.group, new_pos.sensor.idx,
                          new_pos.offset_mm, wake.pos.sensor.group,
                          wake.pos.sensor.idx, wake.pos.offset_mm, td.id);
@@ -204,7 +202,7 @@ class TrackOracleImpl {
                 (Clock::TICKS_PER_SEC * distance_to_target_mm) / td.velocity;
 
             log_line(
-                uart,
+                ui,
                 "train %d velocity=%dmm/s distance to target=%dmm "
                 "(%c%u@%d->%c%u@%d) ticks_until_target=%d",
                 td.id, td.velocity, distance_to_target_mm, new_pos.sensor.group,
@@ -232,10 +230,9 @@ class TrackOracleImpl {
             if (!td.accelerating) continue;
 
             if (td.old_speed == td.speed) {
-                log_line(uart,
-                         VT_YELLOW "WARNING" VT_NOFMT
-                                   " interpolate_acceleration: "
-                                   "old_speed=new_speed=%u for train %u",
+                log_line(ui, VT_YELLOW "WARNING" VT_NOFMT
+                                       " interpolate_acceleration: "
+                                       "old_speed=new_speed=%u for train %u",
                          td.speed, td.id);
                 td.accelerating = false;
                 continue;
@@ -254,7 +251,7 @@ class TrackOracleImpl {
                 how_long_it_takes_to_accelerate) {
                 td.velocity = steady_state_velocity;
                 td.accelerating = false;
-                log_line(uart, "train %u finished accelerating", td.id);
+                log_line(ui, "train %u finished accelerating", td.id);
             } else {
                 // interpolate the train's velocity to be between its old
                 // velocity and its expected steady-state velocity.
@@ -278,7 +275,6 @@ class TrackOracleImpl {
     TrackOracleImpl(int uart_tid, int clock_tid, Marklin::Track track_id)
         : track(track_id),
           ui(),
-          uart{uart_tid},
           clock{clock_tid},
           marklin(uart_tid),
           last_ticked_at{-1},
@@ -286,12 +282,12 @@ class TrackOracleImpl {
         memset(trains, 0, sizeof(train_descriptor_t) * MAX_TRAINS);
 
         // TODO: actually have different inits for different tracks
-        log_line(uart, "Initializing Track...");
+        log_line(ui, "Initializing Track...");
 
         // ensure the track is on
         marklin.send_go();
 
-        log_line(uart, "Stopping all trains...");
+        log_line(ui, "Stopping all trains...");
         auto train = Marklin::TrainState(0);
         train.set_speed(0);
         train.set_light(false);
@@ -304,12 +300,12 @@ class TrackOracleImpl {
 
         make_loop();
 
-        log_line(uart, "Track has been initialized!");
+        log_line(ui, "Track has been initialized!");
     }
 
     void make_loop() {
         track.make_loop();
-        log_line(uart, "Setting switch positions...");
+        log_line(ui, "Setting switch positions...");
         marklin.update_branches(track.get_branches(), TrackGraph::BRANCHES_LEN);
         marklin.flush();
     }
@@ -325,11 +321,11 @@ class TrackOracleImpl {
         if (train == nullptr)
             panic("Cannot track more than %u trains!", MAX_TRAINS);
 
-        log_line(uart, "Stopping train %hhu...", id);
+        log_line(ui, "Stopping train %hhu...", id);
         set_train_speed(id, 0);
         Clock::Delay(clock, 200);  // make sure it's slowed down
 
-        log_line(uart, "Waiting for train to hit a sensor...");
+        log_line(ui, "Waiting for train to hit a sensor...");
 
         // give it some gas
         set_train_speed(id, 8);
@@ -346,7 +342,7 @@ class TrackOracleImpl {
             if (sensor_opt.has_value()) {
                 sensor = sensor_opt.value();
 
-                log_line(uart, "Train hit sensor %c%hhu!", sensor.group,
+                log_line(ui, "Train hit sensor %c%hhu!", sensor.group,
                          sensor.idx);
                 break;
             }
@@ -379,7 +375,7 @@ class TrackOracleImpl {
             .distance_error = 0,
         };
 
-        log_line(uart, "Done calibrating train %hhu...", id);
+        log_line(ui, "Done calibrating train %hhu...", id);
         ui.render_train_descriptor(*train);
     }
 
@@ -427,8 +423,7 @@ class TrackOracleImpl {
         train_descriptor_t& td = *td_opt;
 
         if (td.speed != 0) {
-            log_warning(uart,
-                        "attempted to reverse train with non zero speed!");
+            log_warning(ui, "attempted to reverse train with non zero speed!");
             return false;
         }
 
@@ -438,7 +433,7 @@ class TrackOracleImpl {
 
         auto next_sensor_opt = track.next_sensor(td.pos.sensor);
         if (next_sensor_opt.has_value()) {
-            auto [sensor, distance] = next_sensor_opt.value();
+            auto[sensor, distance] = next_sensor_opt.value();
             td.has_next_sensor = true;
             td.next_sensor = sensor;
             td.next_sensor_time = INT_MAX;  // speed is zero after all
@@ -462,7 +457,7 @@ class TrackOracleImpl {
 
             auto next_sensor_opt = track.next_sensor(td.pos.sensor);
             if (next_sensor_opt.has_value()) {
-                auto [sensor, distance] = next_sensor_opt.value();
+                auto[sensor, distance] = next_sensor_opt.value();
                 td.has_next_sensor = true;
                 td.next_sensor = sensor;
                 td.next_sensor_time =
@@ -483,7 +478,7 @@ class TrackOracleImpl {
 
             train_descriptor_t* td_opt = attribute_sensor(sensor);
             if (td_opt == nullptr) {
-                log_line(uart,
+                log_line(ui,
                          "could not attribute sensor %c%hhu to any train, "
                          "treating as spurious.",
                          sensor.group, sensor.idx);
@@ -506,8 +501,7 @@ class TrackOracleImpl {
             };
             auto distance_opt = distance_between(old_pos, new_pos);
             if (!distance_opt.has_value()) {
-                log_line(uart,
-                         VT_YELLOW
+                log_line(ui, VT_YELLOW
                          "WARNING" VT_NOFMT
                          " cannot calculate distance between %c%u@%d and "
                          "%c%u@%d despite being attributed to train %d",
@@ -543,7 +537,7 @@ class TrackOracleImpl {
                 int t2 = acceleration_time;
 
                 int v0 = v1 - ((v2 - v1) * t1) / (t2 - t1);
-                log_line(uart,
+                log_line(ui,
                          "interpolating v0: v1=%d v2=%d t1=%d t2=%d -> v0=%d",
                          v1, v2, t1, t2, v0);
                 td.old_velocity = std::min(1000, std::max(v0, 0));
@@ -572,7 +566,7 @@ class TrackOracleImpl {
 
             auto next_sensor_opt = track.next_sensor(sensor);
             if (next_sensor_opt.has_value()) {
-                auto [sensor, distance] = next_sensor_opt.value();
+                auto[sensor, distance] = next_sensor_opt.value();
                 td.has_next_sensor = true;
                 td.next_sensor = sensor;
                 td.next_sensor_time =
@@ -582,7 +576,7 @@ class TrackOracleImpl {
             }
 
             ui.render_train_descriptor(td);
-            log_line(uart,
+            log_line(ui,
                      "observed train %d from %c%02hhu->%c%02hhu dx=%dmm "
                      "dt=%d.%02ds dx/dt=%dmm/s (query sent at t=%d)",
                      td.id, old_pos.sensor.group, old_pos.sensor.idx,
@@ -600,9 +594,8 @@ class TrackOracleImpl {
         }
 
         if (descriptor_for(train) == nullptr) {
-            log_line(uart,
-                     VT_YELLOW "WARNING" VT_NOFMT
-                               " wake_at_pos: uncalibrated train %u",
+            log_line(ui, VT_YELLOW "WARNING" VT_NOFMT
+                                   " wake_at_pos: uncalibrated train %u",
                      train);
             Res res = {.tag = MsgTag::WakeAtPos,
                        .wake_at_pos = {.success = false}};
@@ -611,7 +604,7 @@ class TrackOracleImpl {
         }
 
         auto npos = track.normalize(pos);
-        log_line(uart, "normalized %c%u@%d to %c%u@%d", pos.sensor.group,
+        log_line(ui, "normalized %c%u@%d to %c%u@%d", pos.sensor.group,
                  pos.sensor.idx, pos.offset_mm, npos.sensor.group,
                  npos.sensor.idx, npos.offset_mm);
         blocked_task = {.tid = tid, .train = train, .pos = npos};
@@ -629,14 +622,15 @@ class TrackOracleImpl {
             int delay = now - last_ticked_at;
             if (delay > max_tick_delay && delay < 100) {
                 max_tick_delay = delay;
-                log_line(uart, "max tick delay updated to %d ticks", delay);
+                log_line(ui, "max tick delay updated to %d ticks", delay);
             }
             last_ticked_at = now;
         }
 
         interpolate_acceleration(now);
         check_scheduled_wakeups();
-        Uart::Flush(uart, COM2);
+
+        // Uart::Flush(uart, COM2);
     }
 
     Marklin::track_pos_t normalize(const Marklin::track_pos_t& pos) {
@@ -684,7 +678,9 @@ static void TrackOracleTask() {
     assert(clock >= 0);
     assert(uart >= 0);
 
-    log_line(uart, "Spawned TrackOracleTask!");
+    const Ui ui = Ui();
+
+    log_line(ui, "Spawned TrackOracleTask!");
 
     int tid;
     Req req;

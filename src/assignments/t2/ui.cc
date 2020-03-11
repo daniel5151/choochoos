@@ -85,7 +85,9 @@ Ui::Ui() {
     // read the term's dimensions
     Uart::Drain(uart, COM2);
     bool ok = query_term_size(&this->term_size, &this->uart, getc, putc);
-    if (!ok) { panic("could not read terminal dimensions"); };
+    if (!ok) {
+        panic("could not read terminal dimensions");
+    };
 
     // check if the sysperf task needs to be spawned
     if (WhoIs(SYS_PERF_TASK_NAME) < 0) {
@@ -152,4 +154,9 @@ void Ui::prompt_user(char* buf, size_t len) const {
     Uart::Putstr(uart, COM2, VT_ROWCOL(5, 1) VT_CLEARLN "> ");
     Uart::Getline(uart, COM2, buf, len);
     Uart::Printf(uart, COM2, VT_ROWCOL(5, 1) VT_CLEARLN "Processing...");
+}
+
+void Ui::shutdown() const {
+    Uart::Putstr(uart, COM2, VT_RESET);
+    Uart::Flush(uart, COM2);
 }
