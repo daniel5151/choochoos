@@ -5,9 +5,11 @@
 #include "marklin.h"
 #include "track_data_new.h"
 
-static constexpr size_t BRANCHES_LEN = sizeof(Marklin::VALID_SWITCHES);
-
 class TrackGraph {
+   public:
+    static constexpr size_t BRANCHES_LEN = sizeof(Marklin::VALID_SWITCHES);
+
+   private:
     track_node track[TRACK_MAX];
     Marklin::BranchState branches[BRANCHES_LEN];
 
@@ -16,6 +18,10 @@ class TrackGraph {
 
    public:
     TrackGraph(Marklin::Track t);
+
+    void make_loop();
+    void set_branch_dir(uint8_t id, Marklin::BranchDir dir);
+    const Marklin::BranchState* get_branches() const;
 
     std::optional<int /* mm */> distance_between(
         const Marklin::sensor_t& old_sensor,

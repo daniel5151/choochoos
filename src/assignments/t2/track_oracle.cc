@@ -74,7 +74,6 @@ struct Res {
 };
 
 static constexpr size_t MAX_TRAINS = 6;
-static constexpr size_t BRANCHES_LEN = sizeof(Marklin::VALID_SWITCHES);
 static const char* TRACK_ORACLE_TASK_ID = "TRACK_ORACLE";
 
 // EWMA with alpha = 1/4
@@ -89,7 +88,7 @@ struct wakeup_t {
 
 class TrackOracleImpl {
    private:
-    const TrackGraph track;
+    TrackGraph track;
     const int uart;
     const int clock;
     const Marklin::Controller marklin;
@@ -130,8 +129,7 @@ class TrackOracleImpl {
             }
 
             // wait, maybe we missed a sensor!
-            auto next_sensor_opt =
-                track.next_sensor(t.next_sensor, branches, BRANCHES_LEN);
+            auto next_sensor_opt = track.next_sensor(t.next_sensor);
 
             if (next_sensor_opt.has_value()) {
                 auto [next_sensor, _] = next_sensor_opt.value();
@@ -148,8 +146,8 @@ class TrackOracleImpl {
     std::optional<int> distance_between(
         const Marklin::track_pos_t& old_pos,
         const Marklin::track_pos_t& new_pos) const {
-        auto distance_opt = track.distance_between(
-            old_pos.sensor, new_pos.sensor, this->branches, BRANCHES_LEN);
+        auto distance_opt =
+            track.distance_between(old_pos.sensor, new_pos.sensor);
         if (!distance_opt.has_value()) return std::nullopt;
         return distance_opt.value() + (new_pos.offset_mm - old_pos.offset_mm);
     }
@@ -306,27 +304,9 @@ class TrackOracleImpl {
     }
 
     void make_loop() {
-        // TODO: make the loops vary between the two tracks
-
-        // set all the branches to curved
-        for (size_t i = 0; auto& b : this->branches) {
-            const uint8_t id = Marklin::VALID_SWITCHES[i++];
-
-            b.set_id(id);
-            b.set_dir(Marklin::BranchDir::Curved);
-
-            // ...but make outer-ring branches straight
-            for (size_t except_id : {6, 7, 8, 9, 14, 15}) {
-                if (id == except_id) {
-                    b.set_dir(Marklin::BranchDir::Straight);
-                    break;
-                }
-            }
-        }
-
+        track.make_loop();
         log_line(uart, "Setting switch positions...");
-        marklin.update_branches(this->branches,
-                                sizeof(Marklin::VALID_SWITCHES));
+        marklin.update_branches(track.get_branches(), TrackGraph::BRANCHES_LEN);
         marklin.flush();
     }
 
@@ -452,8 +432,7 @@ class TrackOracleImpl {
         td.pos.sensor = track.invert_sensor(old_pos.sensor);
         td.pos.offset_mm = -old_pos.offset_mm;
 
-        auto next_sensor_opt =
-            track.next_sensor(td.pos.sensor, branches, BRANCHES_LEN);
+        auto next_sensor_opt = track.next_sensor(td.pos.sensor);
         if (next_sensor_opt.has_value()) {
             auto [sensor, distance] = next_sensor_opt.value();
             td.has_next_sensor = true;
@@ -469,34 +448,25 @@ class TrackOracleImpl {
     }
 
     void set_branch_dir(uint8_t id, Marklin::BranchDir dir) {
-        for (auto& b : this->branches) {
-            if (b.get_id() == id) {
-                b.set_dir(dir);
-                marklin.update_branch(id, dir);
+        track.set_branch_dir(id, dir);
+        marklin.update_branch(id, dir);
 
-                // re-calculate next sensor for all the trains
-                int now = Clock::Time(clock);
-                for (train_descriptor_t& td : trains) {
-                    if (td.id == 0) continue;
+        // re-calculate next sensor for all the trains
+        int now = Clock::Time(clock);
+        for (train_descriptor_t& td : trains) {
+            if (td.id == 0) continue;
 
-                    auto next_sensor_opt = track.next_sensor(
-                        td.pos.sensor, branches, BRANCHES_LEN);
-                    if (next_sensor_opt.has_value()) {
-                        auto [sensor, distance] = next_sensor_opt.value();
-                        td.has_next_sensor = true;
-                        td.next_sensor = sensor;
-                        td.next_sensor_time =
-                            now + ((TICKS_PER_SEC * distance) / td.velocity);
-                    } else {
-                        td.has_next_sensor = false;
-                    }
-                }
-
-                return;
+            auto next_sensor_opt = track.next_sensor(td.pos.sensor);
+            if (next_sensor_opt.has_value()) {
+                auto [sensor, distance] = next_sensor_opt.value();
+                td.has_next_sensor = true;
+                td.next_sensor = sensor;
+                td.next_sensor_time =
+                    now + ((TICKS_PER_SEC * distance) / td.velocity);
+            } else {
+                td.has_next_sensor = false;
             }
         }
-
-        panic("called set_branch_dir with invalid branch id");
     }
 
     void update_sensors() {
@@ -594,8 +564,7 @@ class TrackOracleImpl {
                 td.has_error = false;
             }
 
-            auto next_sensor_opt =
-                track.next_sensor(sensor, branches, BRANCHES_LEN);
+            auto next_sensor_opt = track.next_sensor(sensor);
             if (next_sensor_opt.has_value()) {
                 auto [sensor, distance] = next_sensor_opt.value();
                 td.has_next_sensor = true;
@@ -634,7 +603,7 @@ class TrackOracleImpl {
             return;
         }
 
-        auto npos = track.normalize(pos, branches, BRANCHES_LEN);
+        auto npos = track.normalize(pos);
         log_line(uart, "normalized %c%u@%d to %c%u@%d", pos.sensor.group,
                  pos.sensor.idx, pos.offset_mm, npos.sensor.group,
                  npos.sensor.idx, npos.offset_mm);
@@ -663,7 +632,7 @@ class TrackOracleImpl {
     }
 
     Marklin::track_pos_t normalize(const Marklin::track_pos_t& pos) {
-        return track.normalize(pos, branches, BRANCHES_LEN);
+        return track.normalize(pos);
     }
 };
 

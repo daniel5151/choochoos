@@ -18,6 +18,43 @@ TrackGraph::TrackGraph(Marklin::Track t) {
         default:
             assert(false);
     }
+
+    make_loop();
+}
+
+void TrackGraph::make_loop() {
+    // TODO: make the loops vary between the two tracks
+
+    // set all the branches to curved
+    for (size_t i = 0; auto& b : this->branches) {
+        const uint8_t id = Marklin::VALID_SWITCHES[i++];
+
+        b.set_id(id);
+        b.set_dir(Marklin::BranchDir::Curved);
+
+        // ...but make outer-ring branches straight
+        for (size_t except_id : {6, 7, 8, 9, 14, 15}) {
+            if (id == except_id) {
+                b.set_dir(Marklin::BranchDir::Straight);
+                break;
+            }
+        }
+    }
+}
+
+void TrackGraph::set_branch_dir(uint8_t id, Marklin::BranchDir dir) {
+    for (auto& b : this->branches) {
+        if (b.get_id() == id) {
+            b.set_dir(dir);
+            return;
+        }
+    }
+
+    panic("called set_branch_dir with invalid branch id");
+}
+
+const Marklin::BranchState* TrackGraph::get_branches() const {
+    return this->branches;
 }
 
 inline static bool node_is_sensor(const track_node& node,
@@ -134,8 +171,7 @@ Marklin::sensor_t TrackGraph::invert_sensor(
 
 std::optional<std::pair<Marklin::sensor_t, int /* distance, mm */>>
 TrackGraph::prev_sensor(const Marklin::sensor_t& sensor) const {
-    auto prev_sensor_inv_opt =
-        next_sensor(invert_sensor(sensor), branches, BRANCHES_LEN);
+    auto prev_sensor_inv_opt = next_sensor(invert_sensor(sensor));
     if (!prev_sensor_inv_opt.has_value()) return std::nullopt;
     auto [prev_sensor_inv, distance] = prev_sensor_inv_opt.value();
     return std::make_pair(invert_sensor(prev_sensor_inv), distance);
