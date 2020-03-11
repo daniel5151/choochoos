@@ -6,11 +6,6 @@
 
 #include "marklin.h"
 
-struct sensor_time_t {
-    Marklin::sensor_t sensor;
-    int time;
-};
-
 /// Aggregate type describing a particular train's current state
 struct train_descriptor_t {
     // Fixed params
