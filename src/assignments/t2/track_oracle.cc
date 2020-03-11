@@ -88,6 +88,8 @@ struct wakeup_t {
 class TrackOracleImpl {
    private:
     TrackGraph track;
+
+    const Ui ui;
     const int uart;
     const int clock;
     const Marklin::Controller marklin;
@@ -259,7 +261,7 @@ class TrackOracleImpl {
                                (steady_state_velocity - td.old_velocity)) /
                                   how_long_it_takes_to_accelerate;
             }
-            Ui::render_train_descriptor(uart, td);
+            ui.render_train_descriptor(td);
         }
     }
 
@@ -273,6 +275,7 @@ class TrackOracleImpl {
 
     TrackOracleImpl(int uart_tid, int clock_tid, Marklin::Track track_id)
         : track(track_id),
+          ui(),
           uart{uart_tid},
           clock{clock_tid},
           marklin(uart_tid),
@@ -375,7 +378,7 @@ class TrackOracleImpl {
         };
 
         log_line(uart, "Done calibrating train %hhu...", id);
-        Ui::render_train_descriptor(uart, *train);
+        ui.render_train_descriptor(*train);
     }
 
     bool set_train_speed(uint8_t id, uint8_t speed) {
@@ -404,7 +407,7 @@ class TrackOracleImpl {
             td.accelerating = true;
             td.speed_changed_at = now;
         }
-        Ui::render_train_descriptor(uart, td);
+        ui.render_train_descriptor(td);
 
         return true;
     }
@@ -441,7 +444,7 @@ class TrackOracleImpl {
             td.has_next_sensor = false;
         }
 
-        Ui::render_train_descriptor(uart, td);
+        ui.render_train_descriptor(td);
 
         return true;
     }
@@ -576,7 +579,7 @@ class TrackOracleImpl {
                 td.has_next_sensor = false;
             }
 
-            Ui::render_train_descriptor(uart, td);
+            ui.render_train_descriptor(td);
             log_line(uart,
                      "observed train %d from %c%02hhu->%c%02hhu dx=%dmm "
                      "dt=%d.%02ds dx/dt=%dmm/s",

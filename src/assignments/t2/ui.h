@@ -24,9 +24,24 @@
 #define log_error(uart, fmt, ...) \
     log_colored_line(uart, VT_RED, fmt, ##__VA_ARGS__)
 
-namespace Ui {
-void render_initial_screen(int uart, const TermSize& term_size);
-void render_train_descriptor(int uart, const train_descriptor_t& td);
-void prompt_user(int uart, char* buf, size_t len);
+/// Encapsulates all UI rendering logic
+class Ui {
+private:
+    int uart;
+    term_size_t term_size;
 
-}  // namespace Ui
+public:
+    /// Creates a new Ui instance.
+    ///
+    /// Panics if the UART server hasn't been instantiated.
+    Ui();
+
+    /// Paints all static elements onto the screen
+    void render_initial_screen() const;
+
+    /// Render the train descriptor onto the screen
+    void render_train_descriptor(const train_descriptor_t& td) const;
+
+    /// Paint the command prompt, and wait for user to enter a command
+    void prompt_user(char* buf, size_t len) const;
+};

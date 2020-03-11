@@ -37,28 +37,25 @@
 #define VT_HIDECUR VT_ESC "?25l"
 #define VT_SHOWCUR VT_ESC "?25h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 #include <stdbool.h>
 
 typedef struct {
-    bool success;
     unsigned int width;
     unsigned int height;
-} TermSize;
+} term_size_t;
 
 typedef char (*getc_f)(void* arg);
 typedef void (*puts_f)(void* arg, const char* s);
 
-/// Use VT_GETPOS to query the terminal's size.
+#ifdef __cplusplus
+extern "C" {
+#endif
+/// Use VT_GETPOS to query the terminal's size. Returns bool indicating success.
 ///
 /// NOTE: whatever stream getc is backed by should be drained prior to calling
 /// this method. i.e: the first byte getc returns should be the start of the
 /// VT100 response.
-TermSize query_term_size(void* arg, getc_f getc, puts_f puts);
-
+bool query_term_size(term_size_t* size, void* arg, getc_f getc, puts_f puts);
 #ifdef __cplusplus
 }
 #endif

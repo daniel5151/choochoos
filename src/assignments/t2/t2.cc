@@ -12,7 +12,6 @@
 #include "calibration.h"
 #include "cmd.h"
 #include "marklin.h"
-#include "sysperf.h"
 #include "track_graph.h"
 #include "track_oracle.h"
 #include "ui.h"
@@ -37,23 +36,6 @@ static inline void print_help(const int uart) {
     // clang-format on
 }
 
-static inline Marklin::Track query_user_for_track(const int uart) {
-    while (true) {
-        log_prompt(uart, "Enter the track you'll be using (A or B)");
-        char buf[2];
-        Ui::prompt_user(uart, buf, sizeof(buf));
-
-        switch (tolower(buf[0])) {
-            case 'a':
-                return Marklin::Track::A;
-            case 'b':
-                return Marklin::Track::B;
-            default:
-                log_error(uart, "Invalid track value.");
-        }
-    }
-}
-
 static inline bool is_valid_train(const uint8_t no) {
     for (uint8_t valid_id : Marklin::VALID_TRAINS) {
         if (no == valid_id) {
@@ -71,9 +53,9 @@ static inline bool is_valid_sensor(const Marklin::sensor_t& sensor) {
     return true;
 }
 
-static inline void wait_for_enter(const int uart) {
+static inline void wait_for_enter(const Ui& ui) {
     char dummy;
-    Ui::prompt_user(uart, &dummy, sizeof(dummy));
+    ui.prompt_user(&dummy, sizeof(dummy));
 }
 
 static void do_route_cmd(const int uart,
@@ -300,6 +282,8 @@ static void CmdTask() {
     assert(uart >= 0);
     assert(clock >= 0);
 
+    Ui ui = Ui();
+
     // This looks up the oracle task in the nameserver.
     TrackOracle track_oracle = TrackOracle();
 
@@ -312,7 +296,7 @@ static void CmdTask() {
 
     char line[80];
     while (true) {
-        Ui::prompt_user(uart, line, sizeof(line));
+        ui.prompt_user(line, sizeof(line));
 
         std::optional<Command> cmd_opt = Command::from_string(line);
         if (!cmd_opt.has_value()) {
@@ -336,7 +320,7 @@ static void CmdTask() {
                     "It's okay if the train is running, we'll send a stop "
                     "command." ENDL VT_GREEN
                     "Press [ENTER] once the train is on the track." VT_NOFMT);
-                wait_for_enter(uart);
+                wait_for_enter(ui);
 
                 // register the train with the oracle
                 track_oracle.calibrate_train(train);
@@ -434,13 +418,36 @@ static void CmdTask() {
     }
 }
 
-static void t1_main(int clock, int uart, const TermSize& term_size) {
-    (void)clock;
+void FirstUserTask() {
+    int clock = Create(1000, Clock::Server);
+    int uart = Create(1000, Uart::Server);
 
-    Ui::render_initial_screen(uart, term_size);
+    assert(clock >= 0);
+    assert(uart >= 0);
+
+    Ui ui = Ui();
+
+    ui.render_initial_screen();
 
     // determine which track to use
-    Marklin::Track track_id = query_user_for_track(uart);
+    std::optional<Marklin::Track> track_id_opt;
+    while (!track_id_opt.has_value()) {
+        log_prompt(uart, "Enter the track you'll be using (A or B)");
+        char buf[2];
+        ui.prompt_user(buf, sizeof(buf));
+
+        switch (tolower(buf[0])) {
+            case 'a':
+                track_id_opt = Marklin::Track::A;
+                break;
+            case 'b':
+                track_id_opt = Marklin::Track::B;
+                break;
+            default:
+                log_error(uart, "Invalid track value.");
+        }
+    }
+    const Marklin::Track track_id = track_id_opt.value();
 
     // create the track oracle (which also initializes the track)
     TrackOracle track_oracle = TrackOracle(track_id);
@@ -454,35 +461,4 @@ static void t1_main(int clock, int uart, const TermSize& term_size) {
         int n = Send(cmdtask, (char*)&cfg, sizeof(cfg), nullptr, 0);
         assert(n == 0);
     }
-}
-
-void FirstUserTask() {
-    int clock = Create(1000, Clock::Server);
-    int uart = Create(1000, Uart::Server);
-
-    assert(clock >= 0);
-    assert(uart >= 0);
-
-    // clear the terminal
-    Uart::Putstr(uart, COM2, VT_CLEAR);
-
-    // read the term's dimensions
-    Uart::Drain(uart, COM2);
-    TermSize term_size = query_term_size(
-        &uart,
-        [](void* d) {
-            const int uart = *(int*)d;
-            return (char)Uart::Getc(uart, COM2);
-        },
-        [](void* d, const char* s) { Uart::Putstr(*(int*)d, COM2, s); });
-    assert(term_size.success);
-
-    // spawn the perf task
-    {
-        int tid = Create(0, SysPerf::Task);
-        SysPerf::TaskCfg cfg = {.term_size = term_size};
-        Send(tid, (char*)&cfg, sizeof(cfg), nullptr, 0);
-    }
-
-    t1_main(clock, uart, term_size);
 }
