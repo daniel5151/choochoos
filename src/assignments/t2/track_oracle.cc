@@ -48,7 +48,7 @@ struct Req {
         struct {}                                        update_sensors;
         struct {}                                        tick;
         struct {}                                        make_loop;
-        Marklin::track_pos_t                             normalize;
+        struct { Marklin::track_pos_t pos; }             normalize;
         // clang-format on
     };
 };
@@ -67,7 +67,7 @@ struct Res {
         struct {} update_sensors;
         struct { bool valid; train_descriptor_t desc; } query_train;
         struct { Marklin::BranchDir dir; } query_branch;
-        Marklin::track_pos_t normalize;
+        struct { Marklin::track_pos_t pos; } normalize;
         struct {} make_loop;
         // clang-format on
     };
@@ -735,7 +735,7 @@ void TrackOracleTask() {
                 oracle.tick();
             } break;
             case MsgTag::Normalize: {
-                res.normalize = oracle.normalize(req.normalize);
+                res.normalize.pos = oracle.normalize(req.normalize.pos);
             } break;
             case MsgTag::MakeLoop: {
                 oracle.make_loop();
@@ -870,10 +870,10 @@ bool TrackOracle::wake_at_pos(uint8_t train_id, Marklin::track_pos_t pos) {
 }
 
 Marklin::track_pos_t TrackOracle::normalize(const Marklin::track_pos_t& pos) {
-    Req req = {.tag = MsgTag::Normalize, .normalize = pos};
+    Req req = {.tag = MsgTag::Normalize, .normalize = {.pos = pos}};
     Res res;
     int n = Send(tid, (char*)&req, sizeof(req), (char*)&res, sizeof(res));
     if (n != sizeof(res)) panic("truncated response");
     if (res.tag != req.tag) panic("mismatched response kind");
-    return res.normalize;
+    return res.normalize.pos;
 }
