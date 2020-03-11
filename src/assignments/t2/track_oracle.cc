@@ -32,23 +32,25 @@ enum class MsgTag {
     WakeAtPos,
 };
 
+static constexpr size_t NB = 2 * Marklin::NUM_SENSOR_GROUPS;
+
 struct Req {
     MsgTag tag;
     union {
         // clang-format off
-        struct { Marklin::Track track; }                       init;
-        struct { uint8_t id; }                                 calibrate_train;
-        struct { uint8_t id; Marklin::track_pos_t pos; }       wake_at_pos;
-        struct { uint8_t id; uint8_t speed; }                  set_train_speed;
-        struct { uint8_t id; bool active; }                    set_train_light;
-        struct { uint8_t id; }                                 reverse_train;
-        struct { uint8_t id; Marklin::BranchDir dir; }         set_branch_dir;
-        struct { uint8_t id; }                                 query_train;
-        struct { uint8_t id; }                                 query_branch;
-        struct {}                                              tick;
-        struct {}                                              make_loop;
-        struct { Marklin::track_pos_t pos; }                   normalize;
-        struct { char bytes[2 * Marklin::NUM_SENSOR_GROUPS]; } sensor_results;
+        struct { Marklin::Track track; }                 init;
+        struct { uint8_t id; }                           calibrate_train;
+        struct { uint8_t id; Marklin::track_pos_t pos; } wake_at_pos;
+        struct { uint8_t id; uint8_t speed; }            set_train_speed;
+        struct { uint8_t id; bool active; }              set_train_light;
+        struct { uint8_t id; }                           reverse_train;
+        struct { uint8_t id; Marklin::BranchDir dir; }   set_branch_dir;
+        struct { uint8_t id; }                           query_train;
+        struct { uint8_t id; }                           query_branch;
+        struct {}                                        tick;
+        struct {}                                        make_loop;
+        struct { Marklin::track_pos_t pos; }             normalize;
+        struct { int sent_at; char bytes[NB]; }          sensor_results;
         // clang-format on
     };
 };
@@ -471,7 +473,7 @@ class TrackOracleImpl {
         }
     }
 
-    void update_sensors(const char bytes[2 * Marklin::NUM_SENSOR_GROUPS]) {
+    void update_sensors(int query_sent_at, const char bytes[NB]) {
         Marklin::SensorData sensor_data;
         memcpy(&sensor_data.raw, bytes, 2 * Marklin::NUM_SENSOR_GROUPS);
 
@@ -582,11 +584,12 @@ class TrackOracleImpl {
             ui.render_train_descriptor(td);
             log_line(uart,
                      "observed train %d from %c%02hhu->%c%02hhu dx=%dmm "
-                     "dt=%d.%02ds dx/dt=%dmm/s",
+                     "dt=%d.%02ds dx/dt=%dmm/s (query sent at t=%d)",
                      td.id, old_pos.sensor.group, old_pos.sensor.idx,
                      new_pos.sensor.group, new_pos.sensor.idx, distance_mm,
                      dt_ticks / Clock::TICKS_PER_SEC,
-                     dt_ticks % Clock::TICKS_PER_SEC, new_velocity_mmps);
+                     dt_ticks % Clock::TICKS_PER_SEC, new_velocity_mmps,
+                     query_sent_at);
         }
         tick();
     }
@@ -658,10 +661,14 @@ static void TrackOracleSensorQueryLoop() {
     assert(tid >= 0);
     int uart = WhoIs(Uart::SERVER_ID);
     assert(uart >= 0);
+    int clock = WhoIs(Clock::SERVER_ID);
+    assert(clock >= 0);
+
     Marklin::Controller marklin(uart);
     Req req = {.tag = MsgTag::SensorResults,
-               .sensor_results = {.bytes = {'\0'}}};
+               .sensor_results = {.sent_at = -1, .bytes = {'\0'}}};
     while (true) {
+        req.sensor_results.sent_at = Clock::Time(clock);
         marklin.query_sensors(req.sensor_results.bytes);
         Send(tid, (char*)&req, sizeof(req), nullptr, 0);
     }
@@ -749,7 +756,8 @@ static void TrackOracleTask() {
                 panic("TrackOracle: QueryBranch message unimplemented");
             } break;
             case MsgTag::SensorResults: {
-                oracle.update_sensors(req.sensor_results.bytes);
+                oracle.update_sensors(req.sensor_results.sent_at,
+                                      req.sensor_results.bytes);
             } break;
             case MsgTag::Tick: {
                 oracle.tick();
