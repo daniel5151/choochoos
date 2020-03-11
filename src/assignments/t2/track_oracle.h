@@ -69,10 +69,6 @@ class TrackOracle {
     /// Update a branch's direction
     void set_branch_dir(uint8_t branch_id, Marklin::BranchDir dir);
 
-    /// query the marklin for sensor data, updating the internal model
-    /// appropriately
-    void update_sensors();
-
     /// reset the track's switches to have a loop
     void make_loop();
 

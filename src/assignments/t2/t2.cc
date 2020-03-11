@@ -442,21 +442,17 @@ static void t1_main(int clock, int uart, const TermSize& term_size) {
     // determine which track to use
     Marklin::Track track_id = query_user_for_track(uart);
 
-    // create the track oracle (which also instantiates the track)
+    // create the track oracle (which also initializes the track)
     TrackOracle track_oracle = TrackOracle(track_id);
+    (void)track_oracle;
 
-    // CmdTask has higher priority than t1_main so that oracle commands it sends
-    // trump sensor queries.
+    // CmdTask has higher priority than the track oracle's sensor query loop so
+    // that the oracle commands it sends trump sensor queries.
     int cmdtask = Create(1, CmdTask);
     {
         CmdTaskCfg cfg = {.track = track_id};
         int n = Send(cmdtask, (char*)&cfg, sizeof(cfg), nullptr, 0);
         assert(n == 0);
-    }
-
-    // This task is now the update_sensors task
-    while (true) {
-        track_oracle.update_sensors();
     }
 }
 

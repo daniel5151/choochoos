@@ -28,7 +28,7 @@ enum class MsgTag {
     SetTrainLight,
     SetTrainSpeed,
     Tick,
-    UpdateSensors,
+    SensorResults,
     WakeAtPos,
 };
 
@@ -36,19 +36,19 @@ struct Req {
     MsgTag tag;
     union {
         // clang-format off
-        struct { Marklin::Track track; }                 init;
-        struct { uint8_t id; }                           calibrate_train;
-        struct { uint8_t id; Marklin::track_pos_t pos; } wake_at_pos;
-        struct { uint8_t id; uint8_t speed; }            set_train_speed;
-        struct { uint8_t id; bool active; }              set_train_light;
-        struct { uint8_t id; }                           reverse_train;
-        struct { uint8_t id; Marklin::BranchDir dir; }   set_branch_dir;
-        struct { uint8_t id; }                           query_train;
-        struct { uint8_t id; }                           query_branch;
-        struct {}                                        update_sensors;
-        struct {}                                        tick;
-        struct {}                                        make_loop;
-        struct { Marklin::track_pos_t pos; }             normalize;
+        struct { Marklin::Track track; }                       init;
+        struct { uint8_t id; }                                 calibrate_train;
+        struct { uint8_t id; Marklin::track_pos_t pos; }       wake_at_pos;
+        struct { uint8_t id; uint8_t speed; }                  set_train_speed;
+        struct { uint8_t id; bool active; }                    set_train_light;
+        struct { uint8_t id; }                                 reverse_train;
+        struct { uint8_t id; Marklin::BranchDir dir; }         set_branch_dir;
+        struct { uint8_t id; }                                 query_train;
+        struct { uint8_t id; }                                 query_branch;
+        struct {}                                              tick;
+        struct {}                                              make_loop;
+        struct { Marklin::track_pos_t pos; }                   normalize;
+        struct { char bytes[2 * Marklin::NUM_SENSOR_GROUPS]; } sensor_results;
         // clang-format on
     };
 };
@@ -64,7 +64,6 @@ struct Res {
         struct { bool success; } set_train_light;
         struct { bool success; } reverse_train;
         struct {} set_branch_dir;
-        struct {} update_sensors;
         struct { bool valid; train_descriptor_t desc; } query_train;
         struct { Marklin::BranchDir dir; } query_branch;
         struct { Marklin::track_pos_t pos; } normalize;
@@ -469,9 +468,9 @@ class TrackOracleImpl {
         }
     }
 
-    void update_sensors() {
+    void update_sensors(const char bytes[2 * Marklin::NUM_SENSOR_GROUPS]) {
         Marklin::SensorData sensor_data;
-        marklin.query_sensors(sensor_data.raw);
+        memcpy(&sensor_data.raw, bytes, 2 * Marklin::NUM_SENSOR_GROUPS);
 
         int now = Clock::Time(clock);
         while (auto sensor_opt = sensor_data.next_sensor()) {
@@ -631,6 +630,7 @@ class TrackOracleImpl {
 
         interpolate_acceleration(now);
         check_scheduled_wakeups();
+        Uart::Flush(uart, COM2);
     }
 
     Marklin::track_pos_t normalize(const Marklin::track_pos_t& pos) {
@@ -638,7 +638,7 @@ class TrackOracleImpl {
     }
 };
 
-void TrackOracleTickerTask() {
+static void TrackOracleTickerTask() {
     int tid = MyParentTid();
     assert(tid >= 0);
     int clock = WhoIs(Clock::SERVER_ID);
@@ -646,11 +646,25 @@ void TrackOracleTickerTask() {
     const Req req = {.tag = MsgTag::Tick, .tick = {}};
     while (true) {
         Send(tid, (char*)&req, sizeof(req), nullptr, 0);
-        Clock::Delay(clock, 1);
+        Clock::Delay(clock, 10);
     }
 }
 
-void TrackOracleTask() {
+static void TrackOracleSensorQueryLoop() {
+    int tid = MyParentTid();
+    assert(tid >= 0);
+    int uart = WhoIs(Uart::SERVER_ID);
+    assert(uart >= 0);
+    Marklin::Controller marklin(uart);
+    Req req = {.tag = MsgTag::SensorResults,
+               .sensor_results = {.bytes = {'\0'}}};
+    while (true) {
+        marklin.query_sensors(req.sensor_results.bytes);
+        Send(tid, (char*)&req, sizeof(req), nullptr, 0);
+    }
+}
+
+static void TrackOracleTask() {
     int nsres = RegisterAs(TRACK_ORACLE_TASK_ID);
     assert(nsres >= 0);
 
@@ -683,7 +697,10 @@ void TrackOracleTask() {
     res.tag = req.tag;
     Reply(tid, (char*)&res, sizeof(res));
 
-    Create(0, TrackOracleTickerTask);
+    int ticker = Create(0, TrackOracleTickerTask);
+    assert(ticker >= 0);
+    int query_loop = Create(0, TrackOracleSensorQueryLoop);
+    assert(query_loop >= 0);
 
     while (true) {
         int reqlen = Receive(&tid, (char*)&req, sizeof(req));
@@ -728,8 +745,8 @@ void TrackOracleTask() {
             case MsgTag::QueryBranch: {
                 panic("TrackOracle: QueryBranch message unimplemented");
             } break;
-            case MsgTag::UpdateSensors: {
-                oracle.update_sensors();
+            case MsgTag::SensorResults: {
+                oracle.update_sensors(req.sensor_results.bytes);
             } break;
             case MsgTag::Tick: {
                 oracle.tick();
@@ -820,11 +837,6 @@ bool TrackOracle::reverse_train(uint8_t id) {
 void TrackOracle::set_branch_dir(uint8_t id, Marklin::BranchDir dir) {
     Req req = {.tag = MsgTag::SetBranchDir,
                .set_branch_dir = {.id = id, .dir = dir}};
-    send_with_assert_empty_response(this->tid, req);
-}
-
-void TrackOracle::update_sensors() {
-    Req req = {.tag = MsgTag::UpdateSensors, .update_sensors = {}};
     send_with_assert_empty_response(this->tid, req);
 }
 
