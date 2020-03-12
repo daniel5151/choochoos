@@ -21,7 +21,6 @@ TrackGraph::TrackGraph(Marklin::Track t) {
 
     make_loop();
 }
-
 void TrackGraph::make_loop() {
     // TODO: make the loops vary between the two tracks
 
@@ -61,6 +60,14 @@ inline static bool node_is_sensor(const track_node& node,
                                   const Marklin::sensor_t& sensor) {
     return node.type == NODE_SENSOR &&
            node.num == (sensor.group - 'A') * 16 + (sensor.idx - 1);
+}
+
+inline const track_node* TrackGraph::node_of_sensor(
+    const Marklin::sensor_t& sensor) const {
+    for (auto& n : track) {
+        if (node_is_sensor(n, sensor)) return &n;
+    }
+    return nullptr;
 }
 
 // precondition: node.type == NODE_SENSOR
@@ -103,10 +110,7 @@ const track_edge* TrackGraph::next_edge(const track_node& node) const {
 
 std::optional<std::pair<Marklin::sensor_t, int>> TrackGraph::next_sensor(
     const Marklin::sensor_t& sensor) const {
-    const track_node* curr = nullptr;
-    for (auto& node : track) {
-        if (node_is_sensor(node, sensor)) curr = &node;
-    }
+    const track_node* curr = node_of_sensor(sensor);
     if (curr == nullptr) return std::nullopt;
     int distance = 0;
     while (true) {
@@ -124,12 +128,8 @@ std::optional<int> TrackGraph::distance_between(
     const Marklin::sensor_t& new_sensor) const {
     debug("distance_between(%c%hhu %c%hhu)", old_sensor.group, old_sensor.idx,
           new_sensor.group, new_sensor.idx);
-    const track_node* start = nullptr;
-    const track_node* end = nullptr;
-    for (auto& node : track) {
-        if (node_is_sensor(node, old_sensor)) start = &node;
-        if (node_is_sensor(node, new_sensor)) end = &node;
-    }
+    const track_node* start = node_of_sensor(old_sensor);
+    const track_node* end = node_of_sensor(new_sensor);
     assert(start != nullptr);
     assert(end != nullptr);
 
@@ -161,10 +161,7 @@ std::optional<int> TrackGraph::distance_between(
 
 Marklin::sensor_t TrackGraph::invert_sensor(
     const Marklin::sensor_t& sensor) const {
-    const track_node* node = nullptr;
-    for (auto& n : track) {
-        if (node_is_sensor(n, sensor)) node = &n;
-    }
+    const track_node* node = node_of_sensor(sensor);
     if (node == nullptr) panic("unknown sensor %c%u", sensor.group, sensor.idx);
     return sensor_of_node(*node->reverse);
 }
@@ -185,7 +182,10 @@ Marklin::track_pos_t TrackGraph::normalize(
 
         if (ret.offset_mm > 0) {
             auto next_sensor_opt = next_sensor(ret.sensor);
-            if (!next_sensor_opt.has_value()) return ret;
+            if (!next_sensor_opt.has_value()) {
+                ret.offset_mm = std::min(ret.offset_mm, max_offset(ret.sensor));
+                return ret;
+            }
             auto [next_sensor, distance] = next_sensor_opt.value();
             if (distance > ret.offset_mm) return ret;
             ret.sensor = next_sensor;
@@ -229,12 +229,8 @@ int TrackGraph::shortest_path(const Marklin::sensor_t& start,
         prev[i] = nullptr;
     }
 
-    const track_node* start_node = nullptr;
-    const track_node* end_node = nullptr;
-    for (auto& n : track) {
-        if (node_is_sensor(n, start)) start_node = &n;
-        if (node_is_sensor(n, end)) end_node = &n;
-    }
+    const track_node* start_node = node_of_sensor(start);
+    const track_node* end_node = node_of_sensor(end);
     assert(start_node != nullptr);
     assert(end_node != nullptr);
     const size_t start_idx = index_of(start_node, track);
@@ -323,4 +319,19 @@ int TrackGraph::shortest_path(const Marklin::sensor_t& start,
     distance = (size_t)dist[end_idx];
 
     return (int)path_len;
+}
+
+int TrackGraph::max_offset(const Marklin::sensor_t& sensor) const {
+    const track_node* curr = node_of_sensor(sensor);
+    assert(curr != nullptr);
+    int distance = 0;
+    int seen_sensors = 0;
+    while (seen_sensors < 2) {
+        const track_edge* edge = next_edge(*curr);
+        if (edge == nullptr) break;
+        distance += edge->dist;
+        curr = edge->dest;
+        if (curr->type == NODE_SENSOR) seen_sensors++;
+    }
+    return distance;
 }

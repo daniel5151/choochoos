@@ -170,16 +170,8 @@ class TrackOracleImpl {
             // use td.pos, td.pos_observed_at + Clock::Time, and td.velocity to
             // extrapolate the train's current position
 
-            int dt = Clock::Time(clock) - td.pos_observed_at;
-            assert(dt >= 0);
-
-            // TODO if our velocity measurements are way off, this distance
-            // could be WAY off - we should cap this at 2 sensor distances from
-            // the last observed sensor.
-            int distance_travelled_mm = td.velocity * dt / Clock::TICKS_PER_SEC;
-
-            Marklin::track_pos_t new_pos = td.pos;
-            new_pos.offset_mm += distance_travelled_mm;
+            int now = Clock::Time(clock);
+            Marklin::track_pos_t new_pos = extrapolate_pos(td, now);
             // FIXME: implement offset normalization
             // (i.e: if offset is > next sensor)
             // required to be robust against broken sensors!
@@ -268,6 +260,16 @@ class TrackOracleImpl {
             }
             ui.render_train_descriptor(td);
         }
+    }
+
+    Marklin::track_pos_t extrapolate_pos(const train_descriptor_t& td,
+                                         int now) {
+        Marklin::track_pos_t pos = td.pos;
+        int dt = now - td.pos_observed_at;
+        int distance_mm = td.velocity * dt / Clock::TICKS_PER_SEC;
+        pos.offset_mm =
+            std::min(pos.offset_mm + distance_mm, track.max_offset(pos.sensor));
+        return pos;
     }
 
    public:

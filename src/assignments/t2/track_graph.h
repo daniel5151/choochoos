@@ -15,6 +15,7 @@ class TrackGraph {
 
     Marklin::BranchDir branch_dir(const track_node& branch) const;
     const track_edge* next_edge(const track_node& node) const;
+    const track_node* node_of_sensor(const Marklin::sensor_t& sensor) const;
 
    public:
     TrackGraph(Marklin::Track t);
@@ -41,4 +42,8 @@ class TrackGraph {
                                     const track_node* path[],
                                     size_t max_path_len,
                                     size_t& distance) const;
+
+    // computes how far ahead of a sensor a position can be, assuming that only
+    // one sensor failure can be tolerated.
+    int max_offset(const Marklin::sensor_t& sensor) const;
 };
