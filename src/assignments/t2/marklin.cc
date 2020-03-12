@@ -10,6 +10,8 @@ namespace Marklin {
 void Controller::send_go() const { Uart::Putc(uart, COM1, 0x60); }
 void Controller::send_stop() const { Uart::Putc(uart, COM1, 0x61); }
 
+// TODO these calls aren't atomic - two tasks updating a train may interleave
+// the bytes sent to the track.
 void Controller::update_train(TrainState tr) const {
     Uart::Putc(uart, COM1, (char)tr.raw);
     Uart::Putc(uart, COM1, (char)tr.no);
@@ -31,12 +33,11 @@ void Controller::update_branches(const BranchState* branches, size_t n) const {
 }
 
 void Controller::query_sensors(char data[2 * NUM_SENSOR_GROUPS]) const {
+    Uart::Drain(uart, COM1);
     Uart::Putc(uart, COM1, (char)(128 + NUM_SENSOR_GROUPS));
     // TODO?: make this resilient against dropped bytes
     Uart::Getn(uart, COM1, NUM_SENSOR_GROUPS * 2, data);
 }
 
-void Controller::flush() const {
-    Uart::Flush(uart, COM1);
-}
-}
+void Controller::flush() const { Uart::Flush(uart, COM1); }
+}  // namespace Marklin
