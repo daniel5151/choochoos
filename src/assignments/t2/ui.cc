@@ -109,22 +109,23 @@ void Ui::render_initial_screen() const {
     memset(sep, '-', term_size.width);
     sep[term_size.width] = '\0';
 
-    int scroll_start = MAX_TRAINS + 5;
+    int scroll_start = MAX_TRAINS + 6;
     int scroll_end = term_size.height;
     int sep_row = scroll_start - 1;
 
     Uart::Printf(uart, COM2,
                  VT_CLEAR VT_SET_SCROLL_FMT VT_ROWCOL_FMT
-                 "%s" ENDL VT_ROWCOL_FMT "%s" ENDL VT_ROWCOL_FMT,
-                 scroll_start, scroll_end, sep_row, 1, sep, sep_row - 2, 1, sep,
-                 term_size.height, 1);
+                 "%s" ENDL VT_ROWCOL_FMT "%s" ENDL VT_ROWCOL_FMT
+                 "%s" ENDL VT_ROWCOL_FMT,
+                 scroll_start, scroll_end, 2, 1, sep, sep_row, 1, sep,
+                 sep_row - 2, 1, sep, term_size.height, 1);
 }
 
 /// Render the train descriptor onto the screen
 void Ui::render_train_descriptor(const train_descriptor_t& td) const {
     char line[256] = {0};
 
-    int row = 3;  // TODO when rendering multiple trains, make this variable
+    int row = 3 + (int)td.index;
     int col = 1;
 
     size_t n = snprintf(
@@ -156,9 +157,9 @@ void Ui::render_train_descriptor(const train_descriptor_t& td) const {
 /// Paint the command prompt, and wait for user to enter a command
 void Ui::prompt_user(char* buf, size_t len) const {
     Uart::Drain(uart, COM2);  // clear any input entered while prompt was busy
-    Uart::Putstr(uart, COM2, VT_ROWCOL(5, 1) VT_CLEARLN "> ");
+    Uart::Putstr(uart, COM2, VT_ROWCOL(6, 1) VT_CLEARLN "> ");
     Uart::Getline(uart, COM2, buf, len);
-    Uart::Printf(uart, COM2, VT_ROWCOL(5, 1) VT_CLEARLN "Processing...");
+    Uart::Printf(uart, COM2, VT_ROWCOL(6, 1) VT_CLEARLN "Processing...");
 }
 
 void Ui::shutdown() const {
