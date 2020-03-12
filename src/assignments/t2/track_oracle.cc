@@ -341,15 +341,24 @@ class TrackOracleImpl {
         marklin.query_sensors(sensor_data.raw);  // clear residual sensor data
         Marklin::sensor_t sensor;
 
-        while (true) {
+        bool found = false;
+        while (!found) {
             marklin.query_sensors(sensor_data.raw);
 
-            auto sensor_opt = sensor_data.next_sensor();
-            if (sensor_opt.has_value()) {
+            while (auto sensor_opt = sensor_data.next_sensor()) {
                 sensor = sensor_opt.value();
+                train_descriptor_t* td = attribute_sensor(sensor);
+                if (td != nullptr) {
+                    log_line(ui,
+                             "Saw sensor %c%u while calibrating train %u, but "
+                             "attributed it to train %u",
+                             sensor.group, sensor.idx, id, td->id);
+                    continue;
+                }
 
                 log_line(ui, "Train hit sensor %c%hhu!", sensor.group,
                          sensor.idx);
+                found = true;
                 break;
             }
         }
