@@ -10,26 +10,27 @@ namespace Marklin {
 void Controller::send_go() const { Uart::Putc(uart, COM1, 0x60); }
 void Controller::send_stop() const { Uart::Putc(uart, COM1, 0x61); }
 
-// TODO these calls aren't atomic - two tasks updating a train may interleave
-// the bytes sent to the track.
 void Controller::update_train(TrainState tr) const {
-    Uart::Putc(uart, COM1, (char)tr.raw);
-    Uart::Putc(uart, COM1, (char)tr.no);
+    char msg[] = {(char)tr.raw, (char)tr.no, '\0'};
+    Uart::Putstr(uart, COM1, msg);
 }
 
 void Controller::update_branch(uint8_t id, BranchDir dir) const {
-    Uart::Putc(uart, COM1, dir == BranchDir::Curved ? 0x22 : 0x21);
-    Uart::Putc(uart, COM1, (char)id);
-    Uart::Putc(uart, COM1, 0x20);
+    char d = dir == BranchDir::Curved ? 0x22 : 0x21;
+    char msg[] = {d, (char)id, 0x20, '\0'};
+    Uart::Putstr(uart, COM1, msg);
 }
 
 void Controller::update_branches(const BranchState* branches, size_t n) const {
+    assert(n < 1024);  // don't blow the stack
+    char msg[2 * n + 1];
     for (size_t i = 0; i < n; i++) {
         const BranchState& b = branches[i];
-        Uart::Putc(uart, COM1, b.dir == BranchDir::Curved ? 0x22 : 0x21);
-        Uart::Putc(uart, COM1, (char)b.no);
+        msg[2 * i] = b.dir == BranchDir::Curved ? 0x22 : 0x21;
+        msg[2 * i + 1] = (char)b.no;
     }
-    Uart::Putc(uart, COM1, 0x20);
+    msg[2 * n] = '\0';
+    Uart::Putstr(uart, COM1, msg);
 }
 
 void Controller::query_sensors(char data[2 * NUM_SENSOR_GROUPS]) const {
