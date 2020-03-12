@@ -7,6 +7,10 @@
 
 namespace Marklin {
 
+Controller::Controller(int uart_tid) : uart{uart_tid} {
+    Uart::Drain(uart, COM1);
+}
+
 void Controller::send_go() const { Uart::Putc(uart, COM1, 0x60); }
 void Controller::send_stop() const { Uart::Putc(uart, COM1, 0x61); }
 
@@ -34,7 +38,6 @@ void Controller::update_branches(const BranchState* branches, size_t n) const {
 }
 
 void Controller::query_sensors(char data[2 * NUM_SENSOR_GROUPS]) const {
-    Uart::Drain(uart, COM1);
     Uart::Putc(uart, COM1, (char)(128 + NUM_SENSOR_GROUPS));
     // TODO?: make this resilient against dropped bytes
     Uart::Getn(uart, COM1, NUM_SENSOR_GROUPS * 2, data);

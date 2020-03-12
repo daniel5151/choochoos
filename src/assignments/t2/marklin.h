@@ -114,7 +114,7 @@ class Controller {
 
    public:
     /// Construct a new MarklinUART.
-    Controller(int uart_tid) : uart{uart_tid} {}
+    Controller(int uart_tid);
 
     /// Sends the Go command.
     void send_go() const;
