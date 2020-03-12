@@ -58,7 +58,8 @@ void SysPerfTask() {
             i += sprintf(outbuf + i, "%s", BLOCK_CHARS[p]);
         }
 
-        Uart::Printf(uart, COM2, VT_SAVE VT_TOPLEFT VT_HIDECUR
+        Uart::Printf(uart, COM2,
+                     VT_SAVE VT_TOPLEFT VT_HIDECUR
                      "CPU Usage (%02lu%%) %s" VT_SHOWCUR VT_RESTORE,
                      (100 - perf.idle_time_pct), outbuf);
 
@@ -72,6 +73,8 @@ void SysPerfTask() {
 Ui::Ui() {
     this->uart = WhoIs(Uart::SERVER_ID);
     assert(this->uart >= 0);
+    this->clock = WhoIs(Clock::SERVER_ID);
+    assert(this->clock >= 0);
 
     auto getc = [](void* d) {
         const int uart = *(int*)d;
@@ -110,7 +113,8 @@ void Ui::render_initial_screen() const {
     int scroll_end = term_size.height;
     int sep_row = scroll_start - 1;
 
-    Uart::Printf(uart, COM2, VT_CLEAR VT_SET_SCROLL_FMT VT_ROWCOL_FMT
+    Uart::Printf(uart, COM2,
+                 VT_CLEAR VT_SET_SCROLL_FMT VT_ROWCOL_FMT
                  "%s" ENDL VT_ROWCOL_FMT "%s" ENDL VT_ROWCOL_FMT,
                  scroll_start, scroll_end, sep_row, 1, sep, sep_row - 2, 1, sep,
                  term_size.height, 1);
@@ -124,7 +128,8 @@ void Ui::render_train_descriptor(const train_descriptor_t& td) const {
     int col = 1;
 
     size_t n = snprintf(
-        line, sizeof(line), VT_SAVE VT_ROWCOL_FMT VT_CLEARLN
+        line, sizeof(line),
+        VT_SAVE VT_ROWCOL_FMT VT_CLEARLN
         "[%5d] train=%2hhu spd=%2d vel=%4dmm/s pos=%c%02hhu ofst=%3dmm",
         row, col, td.pos_observed_at, td.id, td.speed, td.velocity,
         td.pos.sensor.group, td.pos.sensor.idx, td.pos.offset_mm);

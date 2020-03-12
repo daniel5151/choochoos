@@ -3,14 +3,16 @@
 #include "common/vt_escapes.h"
 #include "track_oracle.h"
 
-#define log_line(ui, fmt, ...)     \
-    Uart::Printf(ui._uart(), COM2, \
-                 VT_SAVE VT_ROWCOL(999, 1) fmt ENDL VT_RESTORE, ##__VA_ARGS__)
+#define log_line(ui, fmt, ...)                                           \
+    Uart::Printf(ui._uart(), COM2,                                       \
+                 VT_SAVE VT_ROWCOL(999, 1) "[%5d] " fmt ENDL VT_RESTORE, \
+                 Clock::Time(ui._clock()), ##__VA_ARGS__)
 
-#define log_colored_line(ui, color, fmt, ...)                                  \
-    Uart::Printf(ui._uart(), COM2,                                             \
-                 VT_SAVE VT_ROWCOL(999, 1) color fmt VT_NOFMT ENDL VT_RESTORE, \
-                 ##__VA_ARGS__)
+#define log_colored_line(ui, color, fmt, ...)           \
+    Uart::Printf(ui._uart(), COM2,                      \
+                 VT_SAVE VT_ROWCOL(999, 1) color        \
+                 "[%5d] " fmt VT_NOFMT ENDL VT_RESTORE, \
+                 Clock::Time(ui._clock()), ##__VA_ARGS__)
 
 #define log_success(ui, fmt, ...) \
     log_colored_line(ui, VT_CYAN, fmt, ##__VA_ARGS__)
@@ -27,6 +29,7 @@
 class Ui {
    private:
     int uart;
+    int clock;
     term_size_t term_size;
 
    public:
@@ -48,5 +51,6 @@ class Ui {
     void shutdown() const;
 
     /// HACK: remove once we find a good way to do a variadic log method
-    int _uart() const { return uart; };
+    inline int _uart() const { return uart; };
+    inline int _clock() const { return clock; };
 };
