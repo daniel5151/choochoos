@@ -10,6 +10,7 @@
 struct train_descriptor_t {
     // Fixed params
     uint8_t id;
+    size_t index;
     uint8_t speed;
     bool reversed;
     bool lights;
