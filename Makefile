@@ -1,4 +1,4 @@
-CURRENT_ASSIGNMENT = t2
+CURRENT_ASSIGNMENT = t1
 
 TARGET ?= $(CURRENT_ASSIGNMENT)
 
@@ -7,7 +7,8 @@ TARGET ?= $(CURRENT_ASSIGNMENT)
 XDIR ?= /u/cs452/public/xdev
 XBINDIR = $(XDIR)/bin
 XLIBDIR1 = $(XDIR)/lib/gcc/arm-none-eabi/*
-XLIBDIR2 = $(XDIR)/arm-none-eabi/lib
+XLIBDIR2 = $(XDIR)/lib/arm-none-eabi/lib
+XLIBDIR3 = $(XDIR)/arm-none-eabi/lib
 
 CC = $(XBINDIR)/arm-none-eabi-gcc
 CXX = $(XBINDIR)/arm-none-eabi-g++
@@ -44,7 +45,7 @@ ifdef NENABLE_CACHES
 endif
 
 ifdef DEBUG
-    COMMON_FLAGS += -Og -g
+    COMMON_FLAGS += -O0 -g
 else
     COMMON_FLAGS += -g -Werror -DRELEASE_MODE
 	ifdef NO_OPTIMIZATION
@@ -72,7 +73,8 @@ LDFLAGS =                   \
     -Tts7200_redboot.ld     \
     --orphan-handling=place \
     -L $(XLIBDIR1)          \
-    -L $(XLIBDIR2)
+    -L $(XLIBDIR2)			\
+    -L $(XLIBDIR3)
 LIBRARIES = -lstdc++ -lc -lgcc # order matters!
 
 #------------- [*src|*include|build|bin] dirs -------------#
@@ -87,6 +89,11 @@ SRCS = $(shell find $(SRC_DIR) \
                             \( -name '*.c' -or -name '*.cc' -or -name '*.s' \) \
                             ! -path "$(ALL_USER_SRCS_GLOB)" \
                             -or -path "$(USER_SRC_DIR)/**" -and -not -name '*.h' )
+
+ifdef HACKY_STATICLIB_USERSPACE
+	SRCS += hax.c
+endif
+
 OBJS = $(patsubst $(SRC_DIR)/%,$(BUILD_DIR)/%,\
         $(patsubst %.c,%.o,\
         $(patsubst %.cc,%.o,\
@@ -105,6 +112,15 @@ build: $(TARGET).elf
 clean:
 	rm -rf $(BUILD_DIR)
 	rm -rf *.elf
+
+ifdef HACKY_STATICLIB_USERSPACE
+# the nameserver task lives under the kernel directory (since it's implicitly spawned), but
+# it's really more of a userspace thing...
+.PHONY: userspace
+userspace: $(OBJS)
+	rm -f libuserspace.a
+	ar rcs libuserspace.a $(filter-out build/kernel/% build/user/syscalls.o,$(OBJS)) # build/kernel/tasks/nameserver.o
+endif
 
 $(TARGET).elf: $(OBJS)
 	$(LD) $(LDFLAGS) $(OBJS) -o $@ $(LIBRARIES) -Map $(BUILD_DIR)/$@.map
